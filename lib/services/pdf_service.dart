@@ -214,7 +214,7 @@ class PdfService {
                         padding: const pw.EdgeInsets.only(top: 4),
                         child: pw.Text(
                           operationCommander != null
-                              ? operationCommander.fullNameWithRank
+                              ? operationCommander.fullName
                               : '',
                           textAlign: pw.TextAlign.center,
                         ),

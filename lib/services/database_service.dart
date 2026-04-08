@@ -133,16 +133,15 @@ class DatabaseService {
   }
 
   Future<void> initializeDefaultThreats() async {
-    if (threatsBox.isNotEmpty) return;
+    // Reseed if old keys exist (lowercase names from previous version)
+    final needsReseed = threatsBox.isEmpty ||
+        threatsBox.containsKey('Pożar') && !threatsBox.containsKey('Miejscowe Zagrożenie') ||
+        threatsBox.containsKey('Miejscowe zagrożenie') ||
+        threatsBox.containsKey('Fałszywy alarm');
+    if (!needsReseed) return;
+    await threatsBox.clear();
     final defaults = {
-      'Pożar': [
-        'Pożar budynku',
-        'Pożar traw',
-        'Pożar lasu',
-        'Pożar samochodu',
-        'Pożar śmietnika',
-      ],
-      'Miejscowe zagrożenie': [
+      'Miejscowe Zagrożenie': [
         'Kolizja',
         'Wypadek',
         'Plama oleju',
@@ -150,7 +149,14 @@ class DatabaseService {
         'Powalone drzewo',
         'Uwięzienie zwierzęcia',
       ],
-      'Fałszywy alarm': <String>[],
+      'Pożar': [
+        'Pożar budynku',
+        'Pożar traw',
+        'Pożar lasu',
+        'Pożar samochodu',
+        'Pożar śmietnika',
+      ],
+      'Fałszywy Alarm': <String>[],
     };
     for (final entry in defaults.entries) {
       await threatsBox.put(
