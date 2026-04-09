@@ -214,6 +214,7 @@ class _StepBasicInfoState extends ConsumerState<StepBasicInfo>
                 ),
               ),
               textCapitalization: TextCapitalization.words,
+              maxLength: 50,
               onChanged: (v) =>
                   widget.onChanged(addressLocality: v.trim()),
               validator: (v) => v == null || v.trim().isEmpty
@@ -233,7 +234,7 @@ class _StepBasicInfoState extends ConsumerState<StepBasicInfo>
                       widget.onChanged(addressStreet: v)),
                 ),
               ),
-              maxLength: 200,
+              maxLength: 100,
               onChanged: (v) =>
                   widget.onChanged(addressStreet: v.trim()),
             ),

@@ -385,7 +385,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 labelText: 'Miejscowość',
                 hintText: 'np. Kielno',
               ),
-              maxLength: 100,
+              maxLength: 50,
               textCapitalization: TextCapitalization.words,
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {

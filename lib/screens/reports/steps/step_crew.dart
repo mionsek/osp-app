@@ -107,6 +107,7 @@ class _StepCrewState extends ConsumerState<StepCrew>
               widget.onChanged();
             },
             onAddNew: () => _showAddFirefighterDialog(context, ref),
+            onAutoCreateFromText: _autoCreateFirefighterFromText,
           ),
           const SizedBox(height: 12),
 
@@ -123,6 +124,7 @@ class _StepCrewState extends ConsumerState<StepCrew>
               widget.onChanged();
             },
             onAddNew: () => _showAddFirefighterDialog(context, ref),
+            onAutoCreateFromText: _autoCreateFirefighterFromText,
           ),
           const SizedBox(height: 12),
 
@@ -155,6 +157,7 @@ class _StepCrewState extends ConsumerState<StepCrew>
                   widget.onChanged();
                 },
                 onAddNew: () => _showAddFirefighterDialog(context, ref),
+                onAutoCreateFromText: _autoCreateFirefighterFromText,
               ),
             );
           }),
@@ -220,6 +223,22 @@ class _StepCrewState extends ConsumerState<StepCrew>
       }
     }
     return ids;
+  }
+
+  String? _autoCreateFirefighterFromText(String text) {
+    final parts = text.trim().split(RegExp(r'\s+'));
+    if (parts.length < 2) return null;
+    final firstName = parts.first;
+    final lastName = parts.sublist(1).join(' ');
+    if (firstName.length < 2 || lastName.length < 2) return null;
+    final ff = Firefighter(
+      id: const Uuid().v4(),
+      firstName: firstName,
+      lastName: lastName,
+      rank: '',
+    );
+    ref.read(firefightersProvider.notifier).add(ff);
+    return ff.id;
   }
 
   void _showAddFirefighterDialog(BuildContext context, WidgetRef ref) {
@@ -288,6 +307,7 @@ class _SeatSelector extends StatefulWidget {
   final Set<String> assignedInThisVehicle;
   final ValueChanged<String?> onChanged;
   final VoidCallback onAddNew;
+  final String? Function(String text) onAutoCreateFromText;
 
   const _SeatSelector({
     required this.seatNumber,
@@ -298,6 +318,7 @@ class _SeatSelector extends StatefulWidget {
     required this.assignedInThisVehicle,
     required this.onChanged,
     required this.onAddNew,
+    required this.onAutoCreateFromText,
   });
 
   @override
@@ -306,9 +327,51 @@ class _SeatSelector extends StatefulWidget {
 
 class _SeatSelectorState extends State<_SeatSelector> {
   final _searchController = TextEditingController();
+  FocusNode? _autoFocusNode;
+  TextEditingController? _autoTextController;
+
+  void _attachFocusListener(TextEditingController tc, FocusNode fn) {
+    if (_autoFocusNode != fn) {
+      _autoFocusNode?.removeListener(_onFocusChange);
+      _autoFocusNode = fn;
+      _autoTextController = tc;
+      fn.addListener(_onFocusChange);
+    }
+  }
+
+  void _onFocusChange() {
+    if (_autoFocusNode?.hasFocus == false) {
+      _tryAutoResolve();
+    }
+  }
+
+  void _tryAutoResolve() {
+    final text = _autoTextController?.text.trim() ?? '';
+    if (text.isEmpty) return;
+    if (widget.selectedId != null && widget.selectedId!.isNotEmpty) return;
+
+    // Try exact match by full name
+    final match = widget.firefighters.where(
+      (f) => f.fullName.toLowerCase() == text.toLowerCase(),
+    ).firstOrNull;
+
+    if (match != null) {
+      widget.onChanged(match.id);
+      return;
+    }
+
+    // Auto-create if text looks like a name (has a space)
+    if (text.contains(' ')) {
+      final id = widget.onAutoCreateFromText(text);
+      if (id != null) {
+        widget.onChanged(id);
+      }
+    }
+  }
 
   @override
   void dispose() {
+    _autoFocusNode?.removeListener(_onFocusChange);
     _searchController.dispose();
     super.dispose();
   }
@@ -384,6 +447,7 @@ class _SeatSelectorState extends State<_SeatSelector> {
               },
               fieldViewBuilder:
                   (context, textController, focusNode, onFieldSubmitted) {
+                _attachFocusListener(textController, focusNode);
                 if (selectedFF != null &&
                     textController.text != selectedFF.fullName) {
                   textController.text = selectedFF.fullName;
@@ -392,7 +456,8 @@ class _SeatSelectorState extends State<_SeatSelector> {
                   controller: textController,
                   focusNode: focusNode,
                   decoration: InputDecoration(
-                    hintText: 'Wpisz imię lub wybierz...',
+                    hintText: 'Wpisz imię i nazwisko...',
+                    helperText: 'np. Jan Kowalski — ratownik zostanie utworzony automatycznie',
                     suffixIcon: IconButton(
                       icon: const Icon(Icons.person_add),
                       onPressed: widget.onAddNew,

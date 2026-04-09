@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../models/models.dart';
+import '../../models/sync_state.dart';
 import '../../providers/providers.dart';
 import '../../services/pdf_service.dart';
 
@@ -16,6 +17,7 @@ class ReportDetailScreen extends ConsumerWidget {
     final report = db.getReport(reportId);
     final firefighters = ref.watch(firefightersProvider);
     final config = ref.watch(unitConfigProvider);
+    final syncState = ref.watch(syncStateProvider);
 
     if (report == null) {
       return Scaffold(
@@ -34,6 +36,11 @@ class ReportDetailScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.home),
+          onPressed: () => context.go('/home'),
+          tooltip: 'Menu główne',
+        ),
         title: Text('Wyjazd ${report.reportNumber}'),
         actions: [
           IconButton(
@@ -53,6 +60,55 @@ class ReportDetailScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // Sync status banner
+            if (syncState.isConnected)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: syncState.isSyncing
+                      ? Colors.blue[50]
+                      : syncState.status == SyncStatus.error
+                          ? Colors.red[50]
+                          : Colors.green[50],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      syncState.isSyncing
+                          ? Icons.sync
+                          : syncState.status == SyncStatus.error
+                              ? Icons.cloud_off
+                              : Icons.cloud_done,
+                      size: 18,
+                      color: syncState.isSyncing
+                          ? Colors.blue
+                          : syncState.status == SyncStatus.error
+                              ? Colors.red
+                              : Colors.green,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      syncState.isSyncing
+                          ? 'Synchronizacja z Google Drive...'
+                          : syncState.status == SyncStatus.error
+                              ? 'Błąd synchronizacji'
+                              : syncState.lastSyncTime != null
+                                  ? 'Zapisano na Google Drive'
+                                  : 'Połączono z Google Drive',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: syncState.isSyncing
+                            ? Colors.blue[800]
+                            : syncState.status == SyncStatus.error
+                                ? Colors.red[800]
+                                : Colors.green[800],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -138,6 +194,19 @@ class ReportDetailScreen extends ConsumerWidget {
                   PdfService.generateAndShare(report, config, firefighters),
               icon: const Icon(Icons.share),
               label: const Text('Udostępnij / Wyślij'),
+            ),
+            const SizedBox(height: 16),
+            const Divider(),
+            const SizedBox(height: 8),
+            TextButton.icon(
+              onPressed: () => context.go('/reports'),
+              icon: const Icon(Icons.list),
+              label: const Text('Lista wyjazdów'),
+            ),
+            TextButton.icon(
+              onPressed: () => context.go('/home'),
+              icon: const Icon(Icons.home),
+              label: const Text('Wróć do menu głównego'),
             ),
           ],
         ),

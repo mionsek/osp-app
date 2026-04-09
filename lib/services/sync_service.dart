@@ -66,8 +66,10 @@ class SyncService {
     final folderId = await _driveService.createUnitFolder(unitName);
     final inviteCode = _generateInviteCode();
 
-    // Write unit config to Drive
-    await _driveService.writeJsonFile(folderId, 'unit_config.json', {
+    // Write unit config to Drive (in config subfolder)
+    var configFolderId = await _driveService.findConfigFolder(folderId);
+    configFolderId ??= await _driveService.createSubfolder(folderId, 'config');
+    await _driveService.writeJsonFile(configFolderId, 'unit_config.json', {
       'unitName': unitName,
       'inviteCode': inviteCode,
       'createdAt': DateTime.now().toIso8601String(),
@@ -157,35 +159,52 @@ class SyncService {
   Future<void> _pushAllData() async {
     final folderId = _state.unitFolderId!;
 
-    // Push firefighters
+    // Find or create config folder
+    var configFolderId = await _driveService.findConfigFolder(folderId);
+    configFolderId ??= await _driveService.createSubfolder(folderId, 'config');
+
+    // Push firefighters to config/
     final firefighters = _db.getAllFirefighters();
-    await _driveService.writeJsonFile(folderId, 'firefighters.json', {
+    await _driveService.writeJsonFile(configFolderId, 'firefighters.json', {
       'updatedAt': DateTime.now().toIso8601String(),
       'data': firefighters.map(_firefighterToJson).toList(),
     });
 
-    // Push vehicles
+    // Push vehicles to config/
     final vehicles = _db.getAllVehicles();
-    await _driveService.writeJsonFile(folderId, 'vehicles.json', {
+    await _driveService.writeJsonFile(configFolderId, 'vehicles.json', {
       'updatedAt': DateTime.now().toIso8601String(),
       'data': vehicles.map(_vehicleToJson).toList(),
     });
 
-    // Push threats
+    // Push threat types to config/
     final threats = _db.getAllThreats();
-    await _driveService.writeJsonFile(folderId, 'threats.json', {
+    await _driveService.writeJsonFile(configFolderId, 'threat_types.json', {
       'updatedAt': DateTime.now().toIso8601String(),
       'data': threats.map(_threatToJson).toList(),
     });
 
-    // Push reports
+    // Push unit config to config/
+    final config = _db.getConfig();
+    await _driveService.writeJsonFile(configFolderId, 'unit_config.json', {
+      'unitName': '${config.namePrefix} ${config.locality}'.trim(),
+      'inviteCode': _state.unitInviteCode,
+      'updatedAt': DateTime.now().toIso8601String(),
+      'createdBy': _state.userEmail,
+    });
+
+    // Push reports to reports/{year}/
     final reportsFolderId = await _driveService.findReportsFolder(folderId);
     if (reportsFolderId != null) {
       final reports = _db.getAllReports();
       for (final report in reports) {
+        final yearFolderId = await _driveService.findOrCreateYearFolder(
+          reportsFolderId, report.year,
+        );
+        final fileName = _buildReportFileName(report);
         await _driveService.writeJsonFile(
-          reportsFolderId,
-          '${report.id}.json',
+          yearFolderId,
+          fileName,
           _reportToJson(report),
         );
       }
@@ -197,8 +216,12 @@ class SyncService {
   Future<void> _pullAllData() async {
     final folderId = _state.unitFolderId!;
 
+    // Find config folder (try new structure, fallback to root)
+    final configFolderId = await _driveService.findConfigFolder(folderId);
+    final dataFolderId = configFolderId ?? folderId;
+
     // Pull firefighters
-    final ffData = await _driveService.readJsonFileByName(folderId, 'firefighters.json');
+    final ffData = await _driveService.readJsonFileByName(dataFolderId, 'firefighters.json');
     if (ffData != null && ffData['data'] is List) {
       for (final item in ffData['data'] as List) {
         final ff = _firefighterFromJson(item as Map<String, dynamic>);
@@ -207,7 +230,7 @@ class SyncService {
     }
 
     // Pull vehicles
-    final vData = await _driveService.readJsonFileByName(folderId, 'vehicles.json');
+    final vData = await _driveService.readJsonFileByName(dataFolderId, 'vehicles.json');
     if (vData != null && vData['data'] is List) {
       for (final item in vData['data'] as List) {
         final v = _vehicleFromJson(item as Map<String, dynamic>);
@@ -215,8 +238,9 @@ class SyncService {
       }
     }
 
-    // Pull threats
-    final tData = await _driveService.readJsonFileByName(folderId, 'threats.json');
+    // Pull threat types (new name: threat_types.json, fallback: threats.json)
+    var tData = await _driveService.readJsonFileByName(dataFolderId, 'threat_types.json');
+    tData ??= await _driveService.readJsonFileByName(dataFolderId, 'threats.json');
     if (tData != null && tData['data'] is List) {
       for (final item in tData['data'] as List) {
         final t = _threatFromJson(item as Map<String, dynamic>);
@@ -224,15 +248,30 @@ class SyncService {
       }
     }
 
-    // Pull reports
+    // Pull reports from reports/{year}/ subfolders
     final reportsFolderId = await _driveService.findReportsFolder(folderId);
     if (reportsFolderId != null) {
-      final reportFiles = await _driveService.listJsonFiles(reportsFolderId);
-      for (final file in reportFiles) {
+      // List year subfolders
+      final yearFolders = await _driveService.listSubfolders(reportsFolderId);
+      for (final yearFolder in yearFolders) {
+        final reportFiles = await _driveService.listJsonFiles(yearFolder.id!);
+        for (final file in reportFiles) {
+          final data = await _driveService.readJsonFile(file.id!);
+          if (data != null) {
+            final report = _reportFromJson(data);
+            final local = _db.getReport(report.id);
+            if (local == null || report.updatedAt.isAfter(local.updatedAt)) {
+              await _db.addReport(report);
+            }
+          }
+        }
+      }
+      // Also check for legacy reports directly in reports/ folder
+      final legacyFiles = await _driveService.listJsonFiles(reportsFolderId);
+      for (final file in legacyFiles) {
         final data = await _driveService.readJsonFile(file.id!);
         if (data != null) {
           final report = _reportFromJson(data);
-          // Only overwrite if remote is newer
           final local = _db.getReport(report.id);
           if (local == null || report.updatedAt.isAfter(local.updatedAt)) {
             await _db.addReport(report);
@@ -241,11 +280,10 @@ class SyncService {
       }
     }
 
-    // Pull unit config (name etc.)
-    final configData = await _driveService.readJsonFileByName(folderId, 'unit_config.json');
+    // Pull unit config
+    final configData = await _driveService.readJsonFileByName(dataFolderId, 'unit_config.json');
     if (configData != null && configData['unitName'] != null) {
       final parts = (configData['unitName'] as String).split(' ');
-      // If name has locality (last word), extract it
       if (parts.length > 3) {
         final locality = parts.last;
         final prefix = parts.sublist(0, parts.length - 1).join(' ');
@@ -307,6 +345,15 @@ class SyncService {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no I/O/0/1
     final random = Random.secure();
     return List.generate(6, (_) => chars[random.nextInt(chars.length)]).join();
+  }
+
+  /// Build descriptive report file name: 0001_2026_Pozar.json
+  String _buildReportFileName(Report report) {
+    final number = report.reportNumber.replaceAll('/', '_');
+    final threat = report.threatCategory
+        .replaceAll(' ', '_')
+        .replaceAll(RegExp(r'[^\w_]'), '');
+    return '${number}_$threat.json';
   }
 
   // â”€â”€ JSON serialization â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

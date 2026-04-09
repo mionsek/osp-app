@@ -32,10 +32,23 @@ class GoogleDriveService {
     final created = await _api.files.create(folder);
     final folderId = created.id!;
 
+    // Create config subfolder
+    await _createSubfolder(folderId, 'config');
+
     // Create reports subfolder
     await _createSubfolder(folderId, 'reports');
 
     return folderId;
+  }
+
+  /// Create a subfolder in a parent folder. Returns subfolder ID.
+  Future<String> createSubfolder(String parentId, String name) async {
+    return _createSubfolder(parentId, name);
+  }
+
+  /// List subfolders inside a folder.
+  Future<List<drive.File>> listSubfolders(String parentId) async {
+    return _listSubfolders(parentId);
   }
 
   Future<String> _createSubfolder(String parentId, String name) async {
@@ -48,6 +61,16 @@ class GoogleDriveService {
     return created.id!;
   }
 
+  /// List subfolders inside a folder.
+  Future<List<drive.File>> _listSubfolders(String parentId) async {
+    final result = await _api.files.list(
+      q: "'$parentId' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
+      spaces: 'drive',
+      $fields: 'files(id, name)',
+    );
+    return result.files ?? [];
+  }
+
   /// Find reports subfolder inside unit folder.
   Future<String?> findReportsFolder(String unitFolderId) async {
     final result = await _api.files.list(
@@ -56,6 +79,30 @@ class GoogleDriveService {
       $fields: 'files(id)',
     );
     return result.files?.isNotEmpty == true ? result.files!.first.id : null;
+  }
+
+  /// Find config subfolder inside unit folder.
+  Future<String?> findConfigFolder(String unitFolderId) async {
+    final result = await _api.files.list(
+      q: "'$unitFolderId' in parents and name = 'config' and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
+      spaces: 'drive',
+      $fields: 'files(id)',
+    );
+    return result.files?.isNotEmpty == true ? result.files!.first.id : null;
+  }
+
+  /// Find or create a year subfolder inside reports folder.
+  Future<String> findOrCreateYearFolder(String reportsFolderId, int year) async {
+    final yearStr = year.toString();
+    final result = await _api.files.list(
+      q: "'$reportsFolderId' in parents and name = '$yearStr' and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
+      spaces: 'drive',
+      $fields: 'files(id)',
+    );
+    if (result.files?.isNotEmpty == true) {
+      return result.files!.first.id!;
+    }
+    return _createSubfolder(reportsFolderId, yearStr);
   }
 
   /// Share the unit folder with a user (by email).
@@ -70,7 +117,7 @@ class GoogleDriveService {
   }
 
   /// Find unit folder shared with current user by invite code.
-  /// The invite code is stored in unit_config.json inside the folder.
+  /// The invite code is stored in unit_config.json inside the config subfolder.
   Future<String?> findUnitByInviteCode(String code) async {
     // Search for unit_config.json files accessible to the user
     final result = await _api.files.list(
@@ -85,8 +132,16 @@ class GoogleDriveService {
       try {
         final content = await readJsonFile(file.id!);
         if (content != null && content['inviteCode'] == code) {
-          // Return the parent folder ID
-          return file.parents?.isNotEmpty == true ? file.parents!.first : null;
+          // The file is in /config/ subfolder, we need the grandparent (unit folder)
+          final configFolderId = file.parents?.isNotEmpty == true ? file.parents!.first : null;
+          if (configFolderId == null) continue;
+          // Get the parent of config folder = unit folder
+          final configFolder = await _api.files.get(configFolderId, $fields: 'parents');
+          if (configFolder is drive.File && configFolder.parents?.isNotEmpty == true) {
+            return configFolder.parents!.first;
+          }
+          // Fallback: maybe unit_config.json is in root folder (old structure)
+          return configFolderId;
         }
       } catch (e) {
         debugPrint('Error checking file ${file.id}: $e');
