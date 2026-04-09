@@ -1,10 +1,99 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/models.dart';
+import '../models/sync_state.dart';
 import '../services/database_service.dart';
+import '../services/google_auth_service.dart';
+import '../services/google_drive_service.dart';
+import '../services/sync_service.dart';
 
 final databaseServiceProvider = Provider<DatabaseService>((ref) {
   return DatabaseService();
 });
+
+// --- Google / Sync ---
+
+final googleAuthServiceProvider = Provider<GoogleAuthService>((ref) {
+  return GoogleAuthService();
+});
+
+final googleDriveServiceProvider = Provider<GoogleDriveService>((ref) {
+  return GoogleDriveService(ref.watch(googleAuthServiceProvider));
+});
+
+final syncServiceProvider = Provider<SyncService>((ref) {
+  return SyncService(
+    ref.watch(databaseServiceProvider),
+    ref.watch(googleAuthServiceProvider),
+    ref.watch(googleDriveServiceProvider),
+  );
+});
+
+final syncStateProvider =
+    StateNotifierProvider<SyncStateNotifier, SyncState>((ref) {
+  final syncService = ref.watch(syncServiceProvider);
+  return SyncStateNotifier(syncService);
+});
+
+class SyncStateNotifier extends StateNotifier<SyncState> {
+  final SyncService _syncService;
+
+  SyncStateNotifier(this._syncService) : super(const SyncState()) {
+    _syncService.onStateChanged = (newState) {
+      if (mounted) state = newState;
+    };
+  }
+
+  Future<void> initialize() async {
+    await _syncService.restoreState();
+    state = _syncService.state;
+    if (state.isConnected) {
+      _syncService.startAutoSync();
+    }
+  }
+
+  Future<bool> signIn() async {
+    final success = await _syncService.authService.signIn();
+    if (success) {
+      state = state.copyWith(
+        userEmail: _syncService.authService.userEmail,
+      );
+    }
+    return success;
+  }
+
+  Future<String> createUnit(String unitName) async {
+    final code = await _syncService.createUnit(unitName);
+    state = _syncService.state;
+    _syncService.startAutoSync();
+    return code;
+  }
+
+  Future<bool> joinUnit(String code) async {
+    final success = await _syncService.joinUnit(code);
+    if (success) {
+      state = _syncService.state;
+      _syncService.startAutoSync();
+    }
+    return success;
+  }
+
+  Future<void> syncNow() async {
+    await _syncService.syncAll();
+    state = _syncService.state;
+  }
+
+  Future<void> disconnect() async {
+    await _syncService.disconnectUnit();
+    state = const SyncState();
+  }
+
+  Future<void> signOut() async {
+    _syncService.stopAutoSync();
+    await _syncService.authService.signOut();
+    await _syncService.disconnectUnit();
+    state = const SyncState();
+  }
+}
 
 // --- Config ---
 

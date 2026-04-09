@@ -27,4 +27,18 @@ class UnitConfig extends HiveObject {
     if (locality.isEmpty) return namePrefix;
     return '$namePrefix $locality';
   }
+
+  UnitConfig copyWith({
+    String? namePrefix,
+    String? locality,
+    bool? onboardingCompleted,
+    bool? isAdmin,
+  }) {
+    return UnitConfig(
+      namePrefix: namePrefix ?? this.namePrefix,
+      locality: locality ?? this.locality,
+      onboardingCompleted: onboardingCompleted ?? this.onboardingCompleted,
+      isAdmin: isAdmin ?? this.isAdmin,
+    );
+  }
 }

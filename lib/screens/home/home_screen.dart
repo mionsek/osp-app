@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../models/sync_state.dart';
 import '../../providers/providers.dart';
 
 class HomeScreen extends ConsumerWidget {
@@ -12,12 +13,18 @@ class HomeScreen extends ConsumerWidget {
     final config = ref.watch(unitConfigProvider);
     final vehicles = ref.watch(vehiclesProvider);
     final reports = ref.watch(reportsProvider);
+    final syncState = ref.watch(syncStateProvider);
 
     return Scaffold(
       appBar: AppBar(
         title: Text(config.locality.isNotEmpty
             ? 'OSP ${config.locality}'
             : 'OSP'),
+        actions: [
+          _SyncIndicator(syncState: syncState, onTap: () {
+            ref.read(syncStateProvider.notifier).syncNow();
+          }),
+        ],
       ),
       body: SafeArea(
         child: Padding(
@@ -147,6 +154,60 @@ class _MenuButton extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _SyncIndicator extends StatelessWidget {
+  final SyncState syncState;
+  final VoidCallback onTap;
+
+  const _SyncIndicator({required this.syncState, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    if (!syncState.isConnected) {
+      return const SizedBox.shrink();
+    }
+
+    IconData icon;
+    Color color;
+    String tooltip;
+
+    switch (syncState.status) {
+      case SyncStatus.syncing:
+        icon = Icons.sync;
+        color = Colors.white;
+        tooltip = 'Synchronizacja...';
+      case SyncStatus.idle:
+        icon = Icons.cloud_done;
+        color = Colors.white;
+        tooltip = syncState.lastSyncTime != null
+            ? 'Zsynchronizowano'
+            : 'Połączono';
+      case SyncStatus.error:
+        icon = Icons.cloud_off;
+        color = Colors.orange;
+        tooltip = 'Błąd synchronizacji';
+      case SyncStatus.disconnected:
+        icon = Icons.cloud_off;
+        color = Colors.grey;
+        tooltip = 'Brak połączenia';
+    }
+
+    return IconButton(
+      icon: syncState.isSyncing
+          ? SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: color,
+              ),
+            )
+          : Icon(icon, color: color),
+      tooltip: tooltip,
+      onPressed: syncState.isSyncing ? null : onTap,
     );
   }
 }

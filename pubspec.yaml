@@ -25,6 +25,12 @@ dependencies:
   # Utils
   uuid: ^4.5.1
   intl: ^0.20.2
+  # Google integration
+  google_sign_in: ^6.2.2
+  googleapis: ^13.2.0
+  googleapis_auth: ^1.6.0
+  http: ^1.2.2
+  connectivity_plus: ^6.1.0
 
 dev_dependencies:
   flutter_test:

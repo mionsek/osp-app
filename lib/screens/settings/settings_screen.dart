@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/providers.dart';
 import '../../models/models.dart';
+import '../../models/sync_state.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -165,11 +167,177 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             const SizedBox(height: 8),
             _InfoRow('Wersja aplikacji', '1.0.0'),
             _InfoRow('Rola', config.isAdmin ? 'Administrator' : 'Użytkownik'),
+            const SizedBox(height: 32),
+            const Divider(),
+            const SizedBox(height: 16),
+            _GoogleSyncSection(),
           ],
         ),
         ),
       ),
     );
+  }
+}
+
+class _GoogleSyncSection extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final syncState = ref.watch(syncStateProvider);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('Google Drive Sync',
+            style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 12),
+
+        if (!syncState.isConnected) ...[
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.orange[50],
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.cloud_off, color: Colors.orange),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text('Synchronizacja wyłączona. '
+                      'Zaloguj się, aby współdzielić dane.'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: () async {
+              final success =
+                  await ref.read(syncStateProvider.notifier).signIn();
+              if (success && context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Zalogowano')),
+                );
+              }
+            },
+            icon: const Icon(Icons.login),
+            label: const Text('Zaloguj się kontem Google'),
+          ),
+        ] else ...[
+          _InfoRow('Konto', syncState.userEmail ?? '—'),
+          if (syncState.unitInviteCode != null) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Text('Kod zaproszenia',
+                    style: TextStyle(color: Colors.grey[600])),
+                const Spacer(),
+                Text(
+                  syncState.unitInviteCode!,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    letterSpacing: 2,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(Icons.copy, size: 18),
+                  onPressed: () {
+                    Clipboard.setData(
+                        ClipboardData(text: syncState.unitInviteCode!));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content: Text('Kod skopiowany do schowka')),
+                    );
+                  },
+                  tooltip: 'Kopiuj kod',
+                ),
+              ],
+            ),
+          ],
+          if (syncState.lastSyncTime != null) ...[
+            const SizedBox(height: 4),
+            _InfoRow('Ostatnia synchronizacja',
+                _formatTime(syncState.lastSyncTime!)),
+          ],
+          if (syncState.status == SyncStatus.error &&
+              syncState.errorMessage != null) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.red[50],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                'Błąd: ${syncState.errorMessage}',
+                style: const TextStyle(color: Colors.red, fontSize: 12),
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: syncState.isSyncing
+                      ? null
+                      : () => ref.read(syncStateProvider.notifier).syncNow(),
+                  icon: syncState.isSyncing
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.sync),
+                  label: Text(
+                      syncState.isSyncing ? 'Synchronizacja...' : 'Synchronizuj teraz'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  final confirm = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('Wyloguj'),
+                      content:
+                          const Text('Czy na pewno chcesz się wylogować? '
+                              'Dane lokalne zostaną zachowane.'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: const Text('Anuluj'),
+                        ),
+                        ElevatedButton(
+                          onPressed: () => Navigator.pop(ctx, true),
+                          child: const Text('Wyloguj'),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirm == true) {
+                    await ref.read(syncStateProvider.notifier).signOut();
+                  }
+                },
+                icon: const Icon(Icons.logout, color: Colors.red),
+                label: const Text('Wyloguj'),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  String _formatTime(DateTime time) {
+    final now = DateTime.now();
+    final diff = now.difference(time);
+    if (diff.inMinutes < 1) return 'Przed chwilą';
+    if (diff.inMinutes < 60) return '${diff.inMinutes} min temu';
+    if (diff.inHours < 24) return '${diff.inHours} godz. temu';
+    return '${time.day}.${time.month.toString().padLeft(2, '0')}.${time.year}';
   }
 }
 

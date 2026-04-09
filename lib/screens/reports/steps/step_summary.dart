@@ -157,7 +157,7 @@ class StepSummary extends ConsumerWidget {
               style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           DropdownButtonFormField<String>(
-            value: operationCommanderId,
+            initialValue: operationCommanderId,
             decoration: const InputDecoration(
               prefixIcon: Icon(Icons.military_tech),
               hintText: 'Wybierz KDR',
