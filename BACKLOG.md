@@ -10,15 +10,18 @@
 - [x] Naprawiono: report detail — brak nawigacji do menu głównego
 - [x] Naprawiono: ustawienia — potencjalne zawieszanie się
 
-## Do zrobienia — Kolejne branche
+## Zrobione (feature/003-ux-polish)
+- [x] Liczba ratowników na ekranie głównym: `Ratownicy (n)`
+- [x] Walidacja składu zastępu: ostrzeżenie + pop-up gdy brak kierowcy/dowódcy lub <3 osoby
+- [x] Ikona fałszywego alarmu: `Icons.block` na szarym tle
+- [x] Ikona miejscowego zagrożenia: żółte tło (`#F9A825`)
+- [x] Potwierdzenie zapisu raportu: SnackBar z info o sync
+- [x] Naprawiono: case matching ikon zagrożeń (wielkie/małe litery)
+- [x] Naprawiono: getNextReportNumber — szuka max numeru zamiast count+1
+- [x] Naprawiono: ustawienia — layout crash (RenderFlex overflow)
+- [x] Drive: unit_config.json w config/, threat_types.json zamiast threats.json
 
-### Branch: feature/003-ux-polish
-- [ ] **Liczba ratowników na ekranie głównym**: Dodać `(n)` przy "Ratownicy" tak jak "Wozy bojowe (2)"
-- [ ] **Walidacja składu zastępu**: Ostrzeżenie gdy brak kierowcy lub dowódcy w składzie
-- [ ] **Ikona fałszywego alarmu**: Zmienić `Icons.cancel` → `Icons.warning_amber` z opacity 0.5 (wygaszony znak ostrzegawczy)
-- [ ] **Ustawienia — crash investigation**: Jeśli problem z zawieszaniem nadal występuje po poprawkach, zbadać dokładniej z logami
-- [ ] **Udostępnij/Wyślij vs auto-zapis Drive**: Synchronizacja na Drive działa automatycznie (co 5 min). Dodać widoczny wskaźnik na ekranie raportu, że dane są zapisane na Drive
-- [ ] **Potwierdzenie zapisu na Drive**: Po zapisaniu raportu, wyświetlić info "Raport zapisany lokalnie. Synchronizacja z Google Drive w toku..."
+## Do zrobienia — Kolejne branche
 
 ### Branch: feature/004-multi-account
 - [ ] **Architektura kont**: Naczelnik tworzy jednostkę z konta jednostki (np. ospkielno@gmail.com), ale potem chce logować się prywatnym kontem (np. jan.kowalski@gmail.com). Rozwiązania:
@@ -36,3 +39,10 @@
 
 ### Branch: feature/007-printing
 - [ ] **Bluetooth printing**: Drukowanie na drukarce Bluetooth bez podłączania USB
+
+### Branch: feature/008-info-and-feedback
+- [ ] **Informacje o aplikacji**: Ekran "O aplikacji" — do czego służy, instrukcja użytkowania, wersja, autor
+- [ ] **Kontakt z developerem**: Formularz/przycisk zgłoszenia buga lub propozycji usprawnienia (email lub Google Form)
+
+### Pomysły do rozważenia
+- [ ] **Deduplikacja numerów wyjazdów przy sync**: Automatyczna korekta zdublowanych numerów (np. raz dziennie przy synchronizacji z Google Drive). Obecnie `getNextReportNumber` szuka najwyższego istniejącego numeru, ale przy usunięciu i re-sync mogą powstać duplikaty.

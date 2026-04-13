@@ -118,8 +118,13 @@ class DatabaseService {
     final year = DateTime.now().year;
     final reportsThisYear =
         reportsBox.values.where((r) => r.year == year).toList();
-    final nextNum = reportsThisYear.length + 1;
-    return '${nextNum.toString().padLeft(4, '0')}/$year';
+    int maxNum = 0;
+    for (final r in reportsThisYear) {
+      final parts = r.reportNumber.split('/');
+      final num = int.tryParse(parts.first) ?? 0;
+      if (num > maxNum) maxNum = num;
+    }
+    return '${(maxNum + 1).toString().padLeft(4, '0')}/$year';
   }
 
   // --- Threats ---

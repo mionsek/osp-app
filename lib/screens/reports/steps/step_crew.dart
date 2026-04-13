@@ -162,6 +162,9 @@ class _StepCrewState extends ConsumerState<StepCrew>
             );
           }),
 
+          // Crew validation warnings
+          ..._buildCrewWarnings(crew),
+
           const SizedBox(height: 24),
           Row(
             children: [
@@ -177,14 +180,7 @@ class _StepCrewState extends ConsumerState<StepCrew>
               if (_currentVehicleIndex > 0) const SizedBox(width: 12),
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: () {
-                    if (_currentVehicleIndex <
-                        widget.selectedVehicleIds.length - 1) {
-                      setState(() => _currentVehicleIndex++);
-                    } else {
-                      widget.onNext();
-                    }
-                  },
+                  onPressed: () => _onAdvance(crew),
                   icon: Icon(_currentVehicleIndex <
                           widget.selectedVehicleIds.length - 1
                       ? Icons.arrow_forward
@@ -223,6 +219,97 @@ class _StepCrewState extends ConsumerState<StepCrew>
       }
     }
     return ids;
+  }
+
+  List<String> _getCrewWarnings(CrewAssignment crew) {
+    final warnings = <String>[];
+    final total = crew.allAssignedIds.length;
+    if (crew.driverId == null || crew.driverId!.isEmpty) {
+      warnings.add('Brak kierowcy');
+    }
+    if (crew.commanderId == null || crew.commanderId!.isEmpty) {
+      warnings.add('Brak dowódcy');
+    }
+    if (total < 3) {
+      warnings.add('Minimalna obsada to 3 osoby (jest $total)');
+    }
+    return warnings;
+  }
+
+  Future<void> _onAdvance(CrewAssignment crew) async {
+    final warnings = _getCrewWarnings(crew);
+    if (warnings.isNotEmpty) {
+      final proceed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Uwaga — niepełny skład'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: warnings
+                .map((w) => Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.warning_amber,
+                              color: Colors.orange, size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(child: Text(w)),
+                        ],
+                      ),
+                    ))
+                .toList(),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Popraw'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Kontynuuj mimo to'),
+            ),
+          ],
+        ),
+      );
+      if (proceed != true) return;
+    }
+    if (_currentVehicleIndex < widget.selectedVehicleIds.length - 1) {
+      setState(() => _currentVehicleIndex++);
+    } else {
+      widget.onNext();
+    }
+  }
+
+  List<Widget> _buildCrewWarnings(CrewAssignment crew) {
+    final warnings = _getCrewWarnings(crew);
+
+    if (warnings.isEmpty) return [];
+
+    return [
+      const SizedBox(height: 12),
+      Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.orange[50],
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.orange[200]!),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.warning_amber, color: Colors.orange, size: 20),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                warnings.join(' · '),
+                style: TextStyle(color: Colors.orange[900], fontSize: 13),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ];
   }
 
   String? _autoCreateFirefighterFromText(String text) {

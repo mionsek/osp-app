@@ -12,6 +12,7 @@ class HomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final config = ref.watch(unitConfigProvider);
     final vehicles = ref.watch(vehiclesProvider);
+    final firefighters = ref.watch(firefightersProvider);
     final reports = ref.watch(reportsProvider);
     final syncState = ref.watch(syncStateProvider);
 
@@ -62,7 +63,7 @@ class HomeScreen extends ConsumerWidget {
               const SizedBox(height: 12),
               _MenuButton(
                 icon: Icons.people,
-                label: 'Ratownicy',
+                label: 'Ratownicy (${firefighters.length})',
                 color: const Color(0xFF2E7D32),
                 onTap: () => context.push('/firefighters'),
               ),

@@ -77,27 +77,27 @@ class ReportsListScreen extends ConsumerWidget {
   }
 
   Widget _threatIcon(String category) {
-    switch (category) {
-      case 'Pożar':
-        return const CircleAvatar(
-          backgroundColor: Color(0xFFB71C1C),
-          child: Icon(Icons.local_fire_department, color: Colors.white),
-        );
-      case 'Miejscowe zagrożenie':
-        return const CircleAvatar(
-          backgroundColor: Color(0xFFE65100),
-          child: Icon(Icons.warning, color: Colors.white),
-        );
-      case 'Fałszywy alarm':
-        return const CircleAvatar(
-          backgroundColor: Colors.grey,
-          child: Icon(Icons.cancel, color: Colors.white),
-        );
-      default:
-        return const CircleAvatar(
-          backgroundColor: Color(0xFF1565C0),
-          child: Icon(Icons.help_outline, color: Colors.white),
-        );
+    final lower = category.toLowerCase();
+    if (lower == 'pożar') {
+      return const CircleAvatar(
+        backgroundColor: Color(0xFFB71C1C),
+        child: Icon(Icons.local_fire_department, color: Colors.white),
+      );
+    } else if (lower == 'miejscowe zagrożenie') {
+      return const CircleAvatar(
+        backgroundColor: Color(0xFFF9A825),
+        child: Icon(Icons.warning, color: Colors.white),
+      );
+    } else if (lower == 'fałszywy alarm') {
+      return const CircleAvatar(
+        backgroundColor: Colors.grey,
+        child: Icon(Icons.block, color: Colors.white),
+      );
+    } else {
+      return const CircleAvatar(
+        backgroundColor: Color(0xFF1565C0),
+        child: Icon(Icons.help_outline, color: Colors.white),
+      );
     }
   }
 }

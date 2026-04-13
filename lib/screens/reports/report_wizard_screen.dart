@@ -246,6 +246,16 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
     }
 
     if (mounted) {
+      final syncState = ref.read(syncStateProvider);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(syncState.isConnected
+              ? 'Raport zapisany. Synchronizacja z Google Drive w toku...'
+              : 'Raport zapisany lokalnie.'),
+          backgroundColor: const Color(0xFF2E7D32),
+          duration: const Duration(seconds: 3),
+        ),
+      );
       context.go('/reports/view/${report.id}');
     }
   }
