@@ -48,7 +48,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     try {
       final success = await ref.read(syncStateProvider.notifier).signIn();
       if (success && mounted) {
-        _goToPage(1);
+        _goToPage(2);
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Logowanie nie powiodło się')),
@@ -57,11 +57,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     } finally {
       if (mounted) setState(() => _isSigningIn = false);
     }
-  }
-
-  Future<void> _handleSkipSignIn() async {
-    setState(() => _isCreateMode = true);
-    _goToPage(2);
   }
 
   Future<void> _handleCreateUnit() async {
@@ -221,7 +216,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           physics: const NeverScrollableScrollPhysics(),
           children: [
             _buildWelcomePage(),
-            _buildChoicePage(),
+            _isCreateMode
+                ? _buildAccountChoicePage()
+                : _buildJoinSignInPage(),
             _isCreateMode
                 ? _buildCreatePage(isSignedIn)
                 : _buildJoinPage(),
@@ -260,6 +257,134 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 48),
+          _ChoiceCard(
+            icon: Icons.add_circle_outline,
+            title: 'Utwórz nową jednostkę',
+            subtitle: 'Dla prezesa/naczelnika — skonfiguruj dane jednostki '
+                'i wygeneruj kod zaproszenia.',
+            onTap: () {
+              setState(() => _isCreateMode = true);
+              _goToPage(1);
+            },
+          ),
+          const SizedBox(height: 16),
+          _ChoiceCard(
+            icon: Icons.group_add,
+            title: 'Dołącz do jednostki',
+            subtitle: 'Wpisz kod zaproszenia otrzymany od '
+                'administratora jednostki.',
+            onTap: () {
+              setState(() => _isCreateMode = false);
+              _goToPage(1);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAccountChoicePage() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: 24),
+          Text(
+            'Wybierz konto Google',
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.blue[50],
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Text(
+              'Dane jednostki będą przechowywane na Dysku Google '
+              'wybranego konta. Wszyscy strażacy z jednostki będą '
+              'korzystać z tego samego folderu.',
+              style: TextStyle(fontSize: 13),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          const SizedBox(height: 24),
+          _ChoiceCard(
+            icon: Icons.apartment,
+            title: 'Użyj konta jednostki',
+            subtitle: 'Zalecane — np. ospkielno@gmail.com\n'
+                'Dane będą na wspólnym koncie jednostki.',
+            onTap: _isSigningIn ? () {} : _handleGoogleSignIn,
+            badge: 'zalecane',
+          ),
+          const SizedBox(height: 16),
+          _ChoiceCard(
+            icon: Icons.person,
+            title: 'Użyj prywatnego konta',
+            subtitle: 'np. jan.kowalski@gmail.com\n'
+                'Dane będą na Twoim prywatnym koncie.',
+            onTap: _isSigningIn ? () {} : _handleGoogleSignIn,
+          ),
+          if (_isSigningIn) ...[
+            const SizedBox(height: 24),
+            const Center(child: CircularProgressIndicator()),
+            const SizedBox(height: 8),
+            Text(
+              'Logowanie...',
+              style: TextStyle(color: Colors.grey[600]),
+              textAlign: TextAlign.center,
+            ),
+          ],
+          const SizedBox(height: 24),
+          TextButton(
+            onPressed: () => _goToPage(2),
+            child: const Text('Kontynuuj bez logowania (tryb offline)'),
+          ),
+          const SizedBox(height: 8),
+          TextButton.icon(
+            onPressed: () => _goToPage(0),
+            icon: const Icon(Icons.arrow_back),
+            label: const Text('Wróć'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildJoinSignInPage() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: 48),
+          const Icon(
+            Icons.login,
+            size: 64,
+            color: Color(0xFFB71C1C),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Zaloguj się',
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Zaloguj się kontem Google, aby dołączyć '
+            'do istniejącej jednostki.',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Colors.grey[600],
+                ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 32),
           ElevatedButton.icon(
             onPressed: _isSigningIn ? null : _handleGoogleSignIn,
             icon: _isSigningIn
@@ -274,66 +399,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             style: ElevatedButton.styleFrom(
               minimumSize: const Size(double.infinity, 56),
             ),
-          ),
-          const SizedBox(height: 12),
-          TextButton(
-            onPressed: _handleSkipSignIn,
-            child: const Text('Kontynuuj bez logowania (tryb offline)'),
-          ),
-          const SizedBox(height: 24),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.blue[50],
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Text(
-              'Logowanie kontem Google pozwala synchronizować dane '
-              'między urządzeniami i współdzielić je z innymi strażakami.',
-              style: TextStyle(fontSize: 13),
-              textAlign: TextAlign.center,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildChoicePage() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const SizedBox(height: 48),
-          Text(
-            'Konfiguracja jednostki',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 32),
-          _ChoiceCard(
-            icon: Icons.add_circle_outline,
-            title: 'Utwórz nową jednostkę',
-            subtitle: 'Dla prezesa/naczelnika — skonfiguruj dane jednostki '
-                'i wygeneruj kod zaproszenia.',
-            onTap: () {
-              setState(() => _isCreateMode = true);
-              _goToPage(2);
-            },
-          ),
-          const SizedBox(height: 16),
-          _ChoiceCard(
-            icon: Icons.group_add,
-            title: 'Dołącz do jednostki',
-            subtitle: 'Wpisz kod zaproszenia otrzymany od '
-                'administratora jednostki.',
-            onTap: () {
-              setState(() => _isCreateMode = false);
-              _goToPage(2);
-            },
           ),
           const SizedBox(height: 24),
           TextButton.icon(
@@ -532,12 +597,14 @@ class _ChoiceCard extends StatelessWidget {
   final String title;
   final String subtitle;
   final VoidCallback onTap;
+  final String? badge;
 
   const _ChoiceCard({
     required this.icon,
     required this.title,
     required this.subtitle,
     required this.onTap,
+    this.badge,
   });
 
   @override
@@ -557,12 +624,32 @@ class _ChoiceCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            title,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
+                        if (badge != null)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF2E7D32),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              badge!,
+                              style: const TextStyle(
+                                  color: Colors.white, fontSize: 11),
+                            ),
+                          ),
+                      ],
                     ),
                     const SizedBox(height: 4),
                     Text(
