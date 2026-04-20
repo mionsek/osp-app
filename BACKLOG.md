@@ -21,27 +21,33 @@
 - [x] Naprawiono: ustawienia — layout crash (RenderFlex overflow)
 - [x] Drive: unit_config.json w config/, threat_types.json zamiast threats.json
 
+## Zrobione (feature/004-multi-account)
+- [x] Nowy onboarding: wybór ścieżki (Utwórz/Dołącz) na ekranie powitalnym — bez logowania
+- [x] Wybór konta Google: jednostki [zalecane] / prywatne / tryb offline
+- [x] Ścieżka dołączania: logowanie Google przed kodem zaproszenia
+- [x] Badge "zalecane" na karcie wyboru konta
+
+## Zrobione (feature/005-info-and-feedback)
+- [x] Ekran "O aplikacji" (`/info`): opis, instrukcja użytkowania, wersja (dynamiczna), autor
+- [x] Kontakt: zgłoszenie problemu / propozycja usprawnienia (mailto:)
+- [x] Kafelek "O aplikacji" na ekranie głównym
+- [x] Ustawienia: dynamiczna wersja (package_info_plus) + link "Więcej o aplikacji"
+
 ## Do zrobienia — Kolejne branche
 
-### Branch: feature/004-multi-account
-- [ ] **Architektura kont**: Naczelnik tworzy jednostkę z konta jednostki (np. ospkielno@gmail.com), ale potem chce logować się prywatnym kontem (np. jan.kowalski@gmail.com). Rozwiązania:
-  - Opcja A: Pozwolić na zmianę konta w ustawieniach bez utraty danych (migrate ownership)
-  - Opcja B: Folder na Drive jest dzielony — każdy członek loguje się swoim kontem, host udostępnia folder
-  - Opcja C: Konto jednostki jest tylko do założenia — potem logowanie prywatnym kontem i dołączenie kodem
-  - **Rekomendacja**: Opcja B/C — host tworzy jednostkę (dowolnym kontem), a członkowie dołączają swoimi kontami. Folder Drive jest współdzielony.
+### Branch: feature/006-badania-lekarskie
+- [ ] **Ważność badań lekarskich strażaka**: Opcjonalne pole daty ważności badań lekarskich przy dodawaniu/edycji strażaka (DatePicker, łatwy do ustawienia i aktualizacji przy recertyfikacji)
+- [ ] **Ostrzeżenie przy tworzeniu wyjazdu**: Ikonka ostrzegawcza przy strażaku w składzie zastępu, gdy brak daty badań lub badania wygasły (analogicznie do ostrzeżeń o braku kierowcy/dowódcy)
+- [ ] **Wizualna informacja na liście strażaków**: Wyróżnienie strażaków z przeterminowanymi lub brakującymi badaniami
 
-### Branch: feature/005-info-and-feedback
-- [ ] **Informacje o aplikacji**: Ekran "O aplikacji" — do czego służy, instrukcja użytkowania, wersja, autor
-- [ ] **Kontakt z developerem**: Formularz/przycisk zgłoszenia buga lub propozycji usprawnienia (email lub Google Form)
-
-### Branch: feature/006-monetization
+### Branch: feature/007-monetization
 - [ ] **AdMob reklamy**: Banner na ekranie głównym, interstitial przy generowaniu PDF
 - [ ] **In-app purchases**: Premium (10-20 PLN) — brak reklam, dodatkowe funkcje
 
-### Branch: feature/007-deduplikacja
+### Branch: feature/008-deduplikacja
 - [ ] **Deduplikacja numerów wyjazdów przy sync**: Automatyczna korekta zdublowanych numerów (np. raz dziennie przy synchronizacji z Google Drive). Obecnie `getNextReportNumber` szuka najwyższego istniejącego numeru, ale przy usunięciu i re-sync mogą powstać duplikaty.
 
-### Branch: feature/008-printing
+### Branch: feature/009-printing
 - [ ] **Bluetooth printing**: Drukowanie na drukarce Bluetooth bez podłączania USB
 
 #### Badanie drukarek przenośnych (A5/A4, Bluetooth, do wozu strażackiego)

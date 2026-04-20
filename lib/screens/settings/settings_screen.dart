@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../../providers/providers.dart';
 import '../../models/models.dart';
 import '../../models/sync_state.dart';
@@ -133,9 +135,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 Text('Informacje',
                     style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 8),
-                _InfoRow('Wersja aplikacji', '1.0.0'),
+                FutureBuilder<PackageInfo>(
+                  future: PackageInfo.fromPlatform(),
+                  builder: (context, snapshot) {
+                    final version = snapshot.data?.version ?? '...';
+                    return _InfoRow('Wersja aplikacji', version);
+                  },
+                ),
                 _InfoRow('Rola',
                     config.isAdmin ? 'Administrator' : 'Użytkownik'),
+                const SizedBox(height: 8),
+                TextButton.icon(
+                  onPressed: () => context.push('/info'),
+                  icon: const Icon(Icons.info_outline, size: 18),
+                  label: const Text('Więcej o aplikacji'),
+                ),
                 const SizedBox(height: 32),
                 const Divider(),
                 const SizedBox(height: 16),

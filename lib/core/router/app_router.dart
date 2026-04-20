@@ -12,6 +12,7 @@ import '../../screens/reports/report_wizard_screen.dart';
 import '../../screens/reports/reports_list_screen.dart';
 import '../../screens/reports/report_detail_screen.dart';
 import '../../screens/settings/settings_screen.dart';
+import '../../screens/info/info_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final config = ref.read(unitConfigProvider);
@@ -82,6 +83,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/settings',
         builder: (context, state) => const SettingsScreen(),
+      ),
+      GoRoute(
+        path: '/info',
+        builder: (context, state) => const InfoScreen(),
       ),
     ],
     errorBuilder: (context, state) => Scaffold(

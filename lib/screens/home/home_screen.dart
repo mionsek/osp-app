@@ -74,6 +74,13 @@ class HomeScreen extends ConsumerWidget {
                 color: Colors.grey[700]!,
                 onTap: () => context.push('/settings'),
               ),
+              const SizedBox(height: 12),
+              _MenuButton(
+                icon: Icons.info_outline,
+                label: 'O aplikacji',
+                color: Colors.indigo,
+                onTap: () => context.push('/info'),
+              ),
               const Spacer(),
               OutlinedButton.icon(
                 onPressed: () {
