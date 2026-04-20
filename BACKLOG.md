@@ -30,7 +30,18 @@
   - Opcja C: Konto jednostki jest tylko do założenia — potem logowanie prywatnym kontem i dołączenie kodem
   - **Rekomendacja**: Opcja B/C — host tworzy jednostkę (dowolnym kontem), a członkowie dołączają swoimi kontami. Folder Drive jest współdzielony.
 
-### Branch: feature/005-printing
+### Branch: feature/005-info-and-feedback
+- [ ] **Informacje o aplikacji**: Ekran "O aplikacji" — do czego służy, instrukcja użytkowania, wersja, autor
+- [ ] **Kontakt z developerem**: Formularz/przycisk zgłoszenia buga lub propozycji usprawnienia (email lub Google Form)
+
+### Branch: feature/006-monetization
+- [ ] **AdMob reklamy**: Banner na ekranie głównym, interstitial przy generowaniu PDF
+- [ ] **In-app purchases**: Premium (10-20 PLN) — brak reklam, dodatkowe funkcje
+
+### Branch: feature/007-deduplikacja
+- [ ] **Deduplikacja numerów wyjazdów przy sync**: Automatyczna korekta zdublowanych numerów (np. raz dziennie przy synchronizacji z Google Drive). Obecnie `getNextReportNumber` szuka najwyższego istniejącego numeru, ale przy usunięciu i re-sync mogą powstać duplikaty.
+
+### Branch: feature/008-printing
 - [ ] **Bluetooth printing**: Drukowanie na drukarce Bluetooth bez podłączania USB
 
 #### Badanie drukarek przenośnych (A5/A4, Bluetooth, do wozu strażackiego)
@@ -64,17 +75,6 @@
 **Koszt eksploatacji**: Papier termiczny A4 — ok. 1 zł/arkusz (100 szt. ~100 zł). Brak tuszu = zero kosztów eksploatacyjnych poza papierem.
 
 **Integracja z Flutter**: Pakiet `printing` (już w projekcie) obsługuje drukowanie przez Bluetooth. Wymaga sparowania drukarki z telefonem i wysłania PDF. Phomemo ma własną aplikację, ale drukowanie przez system Android (Bluetooth) powinno działać.
-
-### Branch: feature/006-monetization
-- [ ] **AdMob reklamy**: Banner na ekranie głównym, interstitial przy generowaniu PDF
-- [ ] **In-app purchases**: Premium (10-20 PLN) — brak reklam, dodatkowe funkcje
-
-### Branch: feature/007-deduplikacja
-- [ ] **Deduplikacja numerów wyjazdów przy sync**: Automatyczna korekta zdublowanych numerów (np. raz dziennie przy synchronizacji z Google Drive). Obecnie `getNextReportNumber` szuka najwyższego istniejącego numeru, ale przy usunięciu i re-sync mogą powstać duplikaty.
-
-### Branch: feature/008-info-and-feedback
-- [ ] **Informacje o aplikacji**: Ekran "O aplikacji" — do czego służy, instrukcja użytkowania, wersja, autor
-- [ ] **Kontakt z developerem**: Formularz/przycisk zgłoszenia buga lub propozycji usprawnienia (email lub Google Form)
 
 ### Pomysły do rozważenia
 - [ ] **e-Remiza integration**: Ręczne wpisywanie z przyciskami kopiowania do schowka. Na razie nierealne — do rozważenia w przyszłości.
