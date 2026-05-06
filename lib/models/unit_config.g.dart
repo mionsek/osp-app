@@ -21,13 +21,14 @@ class UnitConfigAdapter extends TypeAdapter<UnitConfig> {
       locality: fields[1] as String,
       onboardingCompleted: fields[2] as bool,
       isAdmin: fields[3] as bool,
+      ownerEmail: fields[4] as String? ?? '',
     );
   }
 
   @override
   void write(BinaryWriter writer, UnitConfig obj) {
     writer
-      ..writeByte(4)
+      ..writeByte(5)
       ..writeByte(0)
       ..write(obj.namePrefix)
       ..writeByte(1)
@@ -35,7 +36,9 @@ class UnitConfigAdapter extends TypeAdapter<UnitConfig> {
       ..writeByte(2)
       ..write(obj.onboardingCompleted)
       ..writeByte(3)
-      ..write(obj.isAdmin);
+      ..write(obj.isAdmin)
+      ..writeByte(4)
+      ..write(obj.ownerEmail);
   }
 
   @override

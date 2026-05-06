@@ -86,6 +86,10 @@ class SyncService {
     // Save Drive folder ID to local config
     await _saveDriveConfig(folderId, inviteCode);
 
+    // Set ownerEmail on local config for the unit creator
+    final config = _db.getConfig();
+    await _db.saveConfig(config.copyWith(ownerEmail: authService.userEmail ?? ''));
+
     // Push all local data to Drive
     await _pushAllData();
 
@@ -121,6 +125,7 @@ class SyncService {
       locality: config.locality,
       onboardingCompleted: config.onboardingCompleted,
       isAdmin: config.isAdmin,
+      ownerEmail: '',
     ));
     _updateState(const SyncState());
   }
@@ -288,11 +293,13 @@ class SyncService {
         final locality = parts.last;
         final prefix = parts.sublist(0, parts.length - 1).join(' ');
         final config = _db.getConfig();
+        final ownerEmail = configData['createdBy'] as String? ?? '';
         await _db.saveConfig(UnitConfig(
           namePrefix: prefix,
           locality: locality,
           onboardingCompleted: config.onboardingCompleted,
           isAdmin: config.isAdmin,
+          ownerEmail: ownerEmail,
         ));
       }
     }

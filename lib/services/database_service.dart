@@ -7,6 +7,7 @@ class DatabaseService {
   static const String _reportsBox = 'reports';
   static const String _configBox = 'config';
   static const String _threatsBox = 'threats';
+  static const String _settingsBox = 'settings';
 
   static Future<void> initialize() async {
     await Hive.initFlutter();
@@ -24,12 +25,16 @@ class DatabaseService {
       Hive.openBox<Report>(_reportsBox),
       Hive.openBox<UnitConfig>(_configBox),
       Hive.openBox<ThreatEntry>(_threatsBox),
+      Hive.openBox<dynamic>(_settingsBox),
     ]);
   }
 
   // --- Config ---
 
   Box<UnitConfig> get configBox => Hive.box<UnitConfig>(_configBox);
+
+  /// General-purpose key-value box for app settings (booleans, strings, etc.).
+  Box<dynamic> get settingsBox => Hive.box<dynamic>(_settingsBox);
 
   UnitConfig getConfig() {
     return configBox.get('main') ?? UnitConfig();

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/providers.dart';
+import '../../widgets/banner_ad_widget.dart';
 
 class VehiclesScreen extends ConsumerWidget {
   const VehiclesScreen({super.key});
@@ -14,6 +15,7 @@ class VehiclesScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Wozy bojowe'),
       ),
+      bottomNavigationBar: const BannerAdWidget(),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => context.push('/vehicles/add'),
         icon: const Icon(Icons.add),

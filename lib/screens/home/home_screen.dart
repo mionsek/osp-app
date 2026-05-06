@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/sync_state.dart';
 import '../../providers/providers.dart';
+import '../../widgets/banner_ad_widget.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -27,6 +28,7 @@ class HomeScreen extends ConsumerWidget {
           }),
         ],
       ),
+      bottomNavigationBar: const BannerAdWidget(),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),

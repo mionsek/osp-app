@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/providers.dart';
+import '../../widgets/banner_ad_widget.dart';
 
 class FirefightersScreen extends ConsumerStatefulWidget {
   const FirefightersScreen({super.key});
@@ -35,6 +36,7 @@ class _FirefightersScreenState extends ConsumerState<FirefightersScreen> {
       appBar: AppBar(
         title: const Text('Ratownicy'),
       ),
+      bottomNavigationBar: const BannerAdWidget(),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => context.push('/firefighters/add'),
         icon: const Icon(Icons.person_add),

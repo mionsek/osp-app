@@ -16,11 +16,15 @@ class UnitConfig extends HiveObject {
   @HiveField(3)
   bool isAdmin;
 
+  @HiveField(4)
+  String ownerEmail;
+
   UnitConfig({
     this.namePrefix = 'Ochotnicza Straż Pożarna',
     this.locality = '',
     this.onboardingCompleted = false,
     this.isAdmin = true,
+    this.ownerEmail = '',
   });
 
   String get fullName {
@@ -33,12 +37,14 @@ class UnitConfig extends HiveObject {
     String? locality,
     bool? onboardingCompleted,
     bool? isAdmin,
+    String? ownerEmail,
   }) {
     return UnitConfig(
       namePrefix: namePrefix ?? this.namePrefix,
       locality: locality ?? this.locality,
       onboardingCompleted: onboardingCompleted ?? this.onboardingCompleted,
       isAdmin: isAdmin ?? this.isAdmin,
+      ownerEmail: ownerEmail ?? this.ownerEmail,
     );
   }
 }
