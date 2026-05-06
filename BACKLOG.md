@@ -51,15 +51,18 @@
 - [ ] **TODO przed publikacją**: zastąpić testowe ID AdMob prawdziwymi w `ad_service.dart` i `AndroidManifest.xml`
 - [ ] **TODO przed publikacją**: zarejestrować produkt `remove_ads` w Google Play Console
 
-### Branch: feature/008-deduplikacja
+### Branch: feature/008-logo
+- [ ] Logo aplikacji — ikony launchera we wszystkich rozdzielczościach Android (mdpi/hdpi/xhdpi/xxhdpi/xxxhdpi) + ikona adaptywna
+
+### Branch: feature/009-deduplikacja
 - [ ] **Deduplikacja numerów wyjazdów przy sync**: Automatyczna korekta zdublowanych numerów (np. raz dziennie przy synchronizacji z Google Drive). Obecnie `getNextReportNumber` szuka najwyższego istniejącego numeru, ale przy usunięciu i re-sync mogą powstać duplikaty.
 
-### Branch: feature/009-printing
+### Branch: feature/010-printing
 - [ ] **Bluetooth printing**: Drukowanie na drukarce Bluetooth bez podłączania USB
   - Użyć pakietu `printing` (już w projekcie) do wysyłania PDF przez Bluetooth
   - Przetestować z Phomemo M832 / M834
 
-### Branch: feature/010-statystyki-wyjazdow
+### Branch: feature/011-statystyki-wyjazdow
 - [ ] **Statystyki udziału strażaków w wyjazdach**: Na podstawie danych z raportów zliczaj, ile razy dany strażak brał udział w akcji
   - Widok: total (wszystkie), filtr po roku, filtr po miesiącu
   - Dane źródłowe: `CrewAssignment` w każdym raporcie (driverId, commanderId, crewMemberIds)

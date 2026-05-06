@@ -49,10 +49,10 @@ dev_dependencies:
 
 flutter_launcher_icons:
   android: true
-  ios: true
+  ios: false
   image_path: "assets/icon/osp_icon.png"
-  adaptive_icon_background: "#B71C1C"
-  adaptive_icon_foreground: "assets/icon/osp_icon_foreground.png"
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/icon/osp_icon.png"
 
 flutter:
   uses-material-design: true
