@@ -24,13 +24,14 @@ class FirefighterAdapter extends TypeAdapter<Firefighter> {
       isDriver: fields[4] == null ? false : fields[4] as bool,
       isCommander: fields[5] == null ? false : fields[5] as bool,
       isKPP: fields[6] == null ? false : fields[6] as bool,
+      medicalExamExpiry: fields[7] as DateTime?,
     );
   }
 
   @override
   void write(BinaryWriter writer, Firefighter obj) {
     writer
-      ..writeByte(7)
+      ..writeByte(8)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -44,7 +45,9 @@ class FirefighterAdapter extends TypeAdapter<Firefighter> {
       ..writeByte(5)
       ..write(obj.isCommander)
       ..writeByte(6)
-      ..write(obj.isKPP);
+      ..write(obj.isKPP)
+      ..writeByte(7)
+      ..write(obj.medicalExamExpiry);
   }
 
   @override

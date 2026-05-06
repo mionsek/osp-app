@@ -596,19 +596,32 @@ class _SeatSelectorState extends State<_SeatSelector> {
     final isCommanderSeat = widget.seatNumber == 2;
 
     if (isDriverSeat && ff.isDriver) {
-      badges.add(_qualificationChip('✓ Kierowca', Colors.green));
+      badges.add(_qualificationChip('✓ Uprawnienia kierowcy', Colors.green));
     } else if (isDriverSeat && !ff.isDriver) {
-      badges.add(_qualificationChip('✗ Brak upr. kierowcy', Colors.orange));
+      badges.add(_qualificationChip('✗ Brak uprawnień kierowcy', Colors.orange));
     }
 
     if (isCommanderSeat && ff.isCommander) {
-      badges.add(_qualificationChip('✓ Dowódca', Colors.green));
+      badges.add(_qualificationChip('✓ Uprawnienia dowódcy', Colors.green));
     } else if (isCommanderSeat && !ff.isCommander) {
-      badges.add(_qualificationChip('✗ Brak upr. dowódcy', Colors.orange));
+      badges.add(_qualificationChip('✗ Brak uprawnień dowódcy', Colors.orange));
     }
 
-    if (ff.isKPP) {
-      badges.add(_qualificationChip('KPP', Colors.blue));
+    if (!isDriverSeat && !isCommanderSeat && ff.isKPP) {
+      badges.add(_qualificationChip('✓ KPP', Colors.blue));
+    }
+
+    if (ff.isMedicalExamExpired) {
+      badges.add(_qualificationChip('[X] Brak ważnych badań lekarskich', const Color(0xFFB71C1C)));
+    } else if (!ff.hasMedicalExam) {
+      badges.add(_qualificationChip('[X] Brak daty badań lekarskich', Colors.grey));
+    } else if (ff.isMedicalExamExpiringSoon) {
+      final daysUntilExpiry = ff.medicalExamExpiry!
+          .difference(DateTime.now())
+          .inDays;
+      badges.add(_qualificationChip('! Badania wygasną w ciągu $daysUntilExpiry dni', Colors.orange));
+    } else {
+      badges.add(_qualificationChip('✓ Ważne badania lekarskie', Colors.green));
     }
 
     return badges;
@@ -630,9 +643,34 @@ class _SeatSelectorState extends State<_SeatSelector> {
 
   String? _buildQualificationText(Firefighter ff) {
     final quals = <String>[];
-    if (ff.isDriver) quals.add('Kierowca');
-    if (ff.isCommander) quals.add('Dowódca');
-    if (ff.isKPP) quals.add('KPP');
+    final isDriverSeat = widget.seatNumber == 1;
+    final isCommanderSeat = widget.seatNumber == 2;
+
+    if (isDriverSeat) {
+      quals.add(ff.isDriver
+          ? '✓ Uprawnienia kierowcy'
+          : '✗ Brak uprawnień kierowcy');
+    } else if (isCommanderSeat) {
+      quals.add(ff.isCommander
+          ? '✓ Uprawnienia dowódcy'
+          : '✗ Brak uprawnień dowódcy');
+    } else if (ff.isKPP) {
+      quals.add('✓ KPP');
+    }
+
+    if (ff.isMedicalExamExpired) {
+      quals.add('[X] Brak ważnych badań lekarskich');
+    } else if (!ff.hasMedicalExam) {
+      quals.add('[X] Brak daty badań lekarskich');
+    } else if (ff.isMedicalExamExpiringSoon) {
+      final daysUntilExpiry = ff.medicalExamExpiry!
+          .difference(DateTime.now())
+          .inDays;
+      quals.add('! Badania wygasną w ciągu $daysUntilExpiry dni');
+    } else {
+      quals.add('✓ Ważne badania lekarskie');
+    }
+
     return quals.isEmpty ? null : quals.join(' · ');
   }
 }

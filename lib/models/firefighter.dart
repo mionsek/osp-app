@@ -25,6 +25,9 @@ class Firefighter extends HiveObject {
   @HiveField(6, defaultValue: false)
   bool isKPP;
 
+  @HiveField(7)
+  DateTime? medicalExamExpiry;
+
   Firefighter({
     required this.id,
     required this.firstName,
@@ -33,10 +36,19 @@ class Firefighter extends HiveObject {
     this.isDriver = false,
     this.isCommander = false,
     this.isKPP = false,
+    this.medicalExamExpiry,
   });
 
   String get fullName => '$firstName $lastName';
   String get fullNameWithRank => '$fullName, $rank';
+
+  bool get hasMedicalExam => medicalExamExpiry != null;
+  bool get isMedicalExamExpired =>
+      medicalExamExpiry != null && medicalExamExpiry!.isBefore(DateTime.now());
+  bool get isMedicalExamExpiringSoon =>
+      medicalExamExpiry != null &&
+      !isMedicalExamExpired &&
+      medicalExamExpiry!.isBefore(DateTime.now().add(const Duration(days: 30)));
 
   @override
   String toString() => fullName;
@@ -49,6 +61,8 @@ class Firefighter extends HiveObject {
     bool? isDriver,
     bool? isCommander,
     bool? isKPP,
+    DateTime? medicalExamExpiry,
+    bool clearMedicalExamExpiry = false,
   }) {
     return Firefighter(
       id: id ?? this.id,
@@ -58,6 +72,9 @@ class Firefighter extends HiveObject {
       isDriver: isDriver ?? this.isDriver,
       isCommander: isCommander ?? this.isCommander,
       isKPP: isKPP ?? this.isKPP,
+      medicalExamExpiry: clearMedicalExamExpiry
+          ? null
+          : (medicalExamExpiry ?? this.medicalExamExpiry),
     );
   }
 }

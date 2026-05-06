@@ -105,7 +105,7 @@ class _FirefightersScreenState extends ConsumerState<FirefightersScreen> {
                             style:
                                 const TextStyle(fontWeight: FontWeight.w600),
                           ),
-                          subtitle: Text(ff.rank),
+                          subtitle: _buildFirefighterSubtitle(context, ff),
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
@@ -131,6 +131,151 @@ class _FirefightersScreenState extends ConsumerState<FirefightersScreen> {
                   ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildFirefighterSubtitle(BuildContext context, dynamic ff) {
+    final subtitleParts = <String>[ff.rank];
+
+    if (ff.isMedicalExamExpired) {
+      subtitleParts.add('Brak ważnych badań lekarskich');
+    } else if (ff.isMedicalExamExpiringSoon) {
+      final daysUntilExpiry = ff.medicalExamExpiry!
+          .difference(DateTime.now())
+          .inDays;
+      subtitleParts.add('Badania lekarskie wygasną w ciągu $daysUntilExpiry dni');
+    } else if (ff.hasMedicalExam) {
+      subtitleParts.add('Ważne badania lekarskie');
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildRoleIcons(context, ff),
+        if (subtitleParts.join(' • ').trim().isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Text(
+              subtitleParts.join(' • '),
+              style: TextStyle(
+                fontSize: 13,
+                color: ff.isMedicalExamExpired || ff.isMedicalExamExpiringSoon
+                    ? Colors.orange[700]
+                    : Theme.of(context).textTheme.bodySmall?.color,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildRoleIcons(BuildContext context, dynamic ff) {
+    final icons = <Widget>[];
+
+    if (ff.isDriver) {
+      icons.add(_roleIcon(
+        context,
+        Icons.drive_eta,
+        'Kierowca',
+        'Kierowca: posiada uprawnienia kierowcy pojazdu pożarniczego.',
+      ));
+    }
+    if (ff.isCommander) {
+      icons.add(_roleIcon(
+        context,
+        Icons.military_tech,
+        'Dowódca',
+        'Dowódca: może pełnić funkcję dowódcy zastępu.',
+      ));
+    }
+    if (ff.isKPP) {
+      icons.add(_roleIcon(
+        context,
+        Icons.medical_services,
+        'Ratownik medyczny',
+        'KPP: posiada kwalifikowaną pierwszą pomoc.',
+      ));
+    }
+
+    if (ff.isMedicalExamExpired) {
+      icons.add(_roleIcon(
+        context,
+        Icons.error_outline,
+        'Badania wygasły',
+        'Badania lekarskie są nieważne.',
+        color: const Color(0xFFB71C1C),
+      ));
+    } else if (ff.isMedicalExamExpiringSoon) {
+      icons.add(_roleIcon(
+        context,
+        Icons.warning_amber,
+        'Badania wkrótce wygasną',
+        'Badania lekarskie wygasną w ciągu 30 dni.',
+        color: Colors.orange,
+      ));
+    } else if (ff.hasMedicalExam) {
+      icons.add(_roleIcon(
+        context,
+        Icons.check_circle,
+        'Ważne badania lekarskie',
+        'Badania lekarskie są ważne.',
+        color: const Color(0xFF2E7D32),
+      ));
+    } else if (!ff.hasMedicalExam) {
+      icons.add(_roleIcon(
+        context,
+        Icons.help_outline,
+        'Brak daty badań',
+        'Nie ustawiono daty ważności badań lekarskich.',
+        color: Colors.grey,
+      ));
+    }
+
+    if (icons.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 2),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 4,
+        children: icons,
+      ),
+    );
+  }
+
+  Widget _roleIcon(
+    BuildContext context,
+    IconData icon,
+    String tooltip,
+    String explanation, {
+    Color? color,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () {
+          ScaffoldMessenger.of(context)
+            ..hideCurrentSnackBar()
+            ..showSnackBar(
+              SnackBar(
+                content: Text(explanation),
+                duration: const Duration(seconds: 2),
+              ),
+            );
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(2),
+          child: Icon(
+            icon,
+            size: 18,
+            color: color,
+          ),
+        ),
       ),
     );
   }

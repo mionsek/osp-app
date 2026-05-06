@@ -33,12 +33,14 @@
 - [x] Kafelek "O aplikacji" na ekranie głównym
 - [x] Ustawienia: dynamiczna wersja (package_info_plus) + link "Więcej o aplikacji"
 
-## Do zrobienia — Kolejne branche
+## Zrobione (feature/006-badania-lekarskie)
+- [x] **Ważność badań lekarskich strażaka**: Opcjonalne pole daty ważności badań lekarskich przy dodawaniu/edycji strażaka (DatePicker, placeholder daty, kolor statusu)
+- [x] **Ostrzeżenie przy tworzeniu wyjazdu**: Status badań lekarskich widoczny dla każdego pola w kroku Zastępy
+- [x] **Wizualna informacja na liście strażaków**: Ikony funkcji (kierowca, dowódca, KPP) + status badań pod nazwiskiem, klikalne z wyjaśnieniem
+- [x] **Doprecyzowanie etykiet uprawnień w zastępach**: `✓`/`✗` tylko dla danej roli pola, `✓ KPP` opcjonalnie, status badań dla każdego
+- [x] **Naprawiono: overflow na ekranie głównym** (RenderFlex — Spacer → SingleChildScrollView)
 
-### Branch: feature/006-badania-lekarskie
-- [ ] **Ważność badań lekarskich strażaka**: Opcjonalne pole daty ważności badań lekarskich przy dodawaniu/edycji strażaka (DatePicker, łatwy do ustawienia i aktualizacji przy recertyfikacji)
-- [ ] **Ostrzeżenie przy tworzeniu wyjazdu**: Ikonka ostrzegawcza przy strażaku w składzie zastępu, gdy brak daty badań lub badania wygasły (analogicznie do ostrzeżeń o braku kierowcy/dowódcy)
-- [ ] **Wizualna informacja na liście strażaków**: Wyróżnienie strażaków z przeterminowanymi lub brakującymi badaniami
+## Do zrobienia — Kolejne branche
 
 ### Branch: feature/007-monetization
 - [ ] **AdMob reklamy**: Banner na ekranie głównym, interstitial przy generowaniu PDF

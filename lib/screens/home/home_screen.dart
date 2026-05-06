@@ -28,7 +28,7 @@ class HomeScreen extends ConsumerWidget {
         ],
       ),
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -81,7 +81,7 @@ class HomeScreen extends ConsumerWidget {
                 color: Colors.indigo,
                 onTap: () => context.push('/info'),
               ),
-              const Spacer(),
+              const SizedBox(height: 24),
               OutlinedButton.icon(
                 onPressed: () {
                   SystemNavigator.pop();
@@ -89,6 +89,7 @@ class HomeScreen extends ConsumerWidget {
                 icon: const Icon(Icons.exit_to_app),
                 label: const Text('Wyjście'),
               ),
+              const SizedBox(height: 8),
             ],
           ),
         ),
