@@ -33,6 +33,9 @@
 - [x] Kafelek "O aplikacji" na ekranie głównym
 - [x] Ustawienia: dynamiczna wersja (package_info_plus) + link "Więcej o aplikacji"
 
+## Zrobione (feature/008-logo)
+- [x] Logo aplikacji — ikony launchera we wszystkich rozdzielczościach Android (mdpi/hdpi/xhdpi/xxhdpi/xxxhdpi) + ikona adaptywna (białe tło, obraz notatnik+płomień)
+
 ## Zrobione (feature/006-badania-lekarskie)
 - [x] **Ważność badań lekarskich strażaka**: Opcjonalne pole daty ważności badań lekarskich przy dodawaniu/edycji strażaka (DatePicker, placeholder daty, kolor statusu)
 - [x] **Ostrzeżenie przy tworzeniu wyjazdu**: Status badań lekarskich widoczny dla każdego pola w kroku Zastępy
@@ -50,9 +53,6 @@
 - [x] In-app purchase „Wyłącz reklamy" (`remove_ads`) — jednorazowy zakup, sekcja Premium w Ustawieniach, możliwość przywrócenia zakupów
 - [ ] **TODO przed publikacją**: zastąpić testowe ID AdMob prawdziwymi w `ad_service.dart` i `AndroidManifest.xml`
 - [ ] **TODO przed publikacją**: zarejestrować produkt `remove_ads` w Google Play Console
-
-### Branch: feature/008-logo
-- [ ] Logo aplikacji — ikony launchera we wszystkich rozdzielczościach Android (mdpi/hdpi/xhdpi/xxhdpi/xxxhdpi) + ikona adaptywna
 
 ### Branch: feature/009-deduplikacja
 - [ ] **Deduplikacja numerów wyjazdów przy sync**: Automatyczna korekta zdublowanych numerów (np. raz dziennie przy synchronizacji z Google Drive). Obecnie `getNextReportNumber` szuka najwyższego istniejącego numeru, ale przy usunięciu i re-sync mogą powstać duplikaty.
