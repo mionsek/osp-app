@@ -52,10 +52,10 @@
 ## Zrobione (feature/008-logo)
 - [x] Logo aplikacji — ikony launchera we wszystkich rozdzielczościach Android (mdpi/hdpi/xhdpi/xxhdpi/xxxhdpi) + ikona adaptywna (białe tło, obraz notatnik+płomień)
 
-## Do zrobienia — Kolejne branche
+## Zrobione (feature/009-app-name)
+- [x] Zmiana nazwy wyświetlanej aplikacji z `osp_app` na **„Wyjazdy OSP"** (`android:label` w AndroidManifest.xml)
 
-### Branch: feature/009-app-name
-- [ ] Zmiana nazwy wyświetlanej aplikacji z `osp_app` na **„Wyjazdy OSP"** (`android:label` w AndroidManifest.xml)
+## Do zrobienia — Kolejne branche
 
 ### Branch: feature/010-deduplikacja
 - [ ] **Deduplikacja numerów wyjazdów przy sync**: Automatyczna korekta zdublowanych numerów (np. raz dziennie przy synchronizacji z Google Drive). Obecnie `getNextReportNumber` szuka najwyższego istniejącego numeru, ale przy usunięciu i re-sync mogą powstać duplikaty.
