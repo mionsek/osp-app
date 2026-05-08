@@ -33,9 +33,6 @@
 - [x] Kafelek "O aplikacji" na ekranie głównym
 - [x] Ustawienia: dynamiczna wersja (package_info_plus) + link "Więcej o aplikacji"
 
-## Zrobione (feature/008-logo)
-- [x] Logo aplikacji — ikony launchera we wszystkich rozdzielczościach Android (mdpi/hdpi/xhdpi/xxhdpi/xxxhdpi) + ikona adaptywna (białe tło, obraz notatnik+płomień)
-
 ## Zrobione (feature/006-badania-lekarskie)
 - [x] **Ważność badań lekarskich strażaka**: Opcjonalne pole daty ważności badań lekarskich przy dodawaniu/edycji strażaka (DatePicker, placeholder daty, kolor statusu)
 - [x] **Ostrzeżenie przy tworzeniu wyjazdu**: Status badań lekarskich widoczny dla każdego pola w kroku Zastępy
@@ -43,9 +40,7 @@
 - [x] **Doprecyzowanie etykiet uprawnień w zastępach**: `✓`/`✗` tylko dla danej roli pola, `✓ KPP` opcjonalnie, status badań dla każdego
 - [x] **Naprawiono: overflow na ekranie głównym** (RenderFlex — Spacer → SingleChildScrollView)
 
-## Do zrobienia — Kolejne branche
-
-### Branch: feature/007-monetization
+## Zrobione (feature/007-monetization)
 - [x] Integracja AdMob (`google_mobile_ads`)
 - [x] Baner reklamowy na ekranie głównym, liście wyjazdów, ratowników i pojazdów
 - [x] **NIE** wyświetlać reklam w: kroku dodawania wyjazdu, ekranie szczegółów raportu
@@ -54,15 +49,23 @@
 - [ ] **TODO przed publikacją**: zastąpić testowe ID AdMob prawdziwymi w `ad_service.dart` i `AndroidManifest.xml`
 - [ ] **TODO przed publikacją**: zarejestrować produkt `remove_ads` w Google Play Console
 
-### Branch: feature/009-deduplikacja
+## Zrobione (feature/008-logo)
+- [x] Logo aplikacji — ikony launchera we wszystkich rozdzielczościach Android (mdpi/hdpi/xhdpi/xxhdpi/xxxhdpi) + ikona adaptywna (białe tło, obraz notatnik+płomień)
+
+## Do zrobienia — Kolejne branche
+
+### Branch: feature/009-app-name
+- [ ] Zmiana nazwy wyświetlanej aplikacji z `osp_app` na **„Wyjazdy OSP"** (`android:label` w AndroidManifest.xml)
+
+### Branch: feature/010-deduplikacja
 - [ ] **Deduplikacja numerów wyjazdów przy sync**: Automatyczna korekta zdublowanych numerów (np. raz dziennie przy synchronizacji z Google Drive). Obecnie `getNextReportNumber` szuka najwyższego istniejącego numeru, ale przy usunięciu i re-sync mogą powstać duplikaty.
 
-### Branch: feature/010-printing
+### Branch: feature/011-printing
 - [ ] **Bluetooth printing**: Drukowanie na drukarce Bluetooth bez podłączania USB
   - Użyć pakietu `printing` (już w projekcie) do wysyłania PDF przez Bluetooth
   - Przetestować z Phomemo M832 / M834
 
-### Branch: feature/011-statystyki-wyjazdow
+### Branch: feature/012-statystyki-wyjazdow
 - [ ] **Statystyki udziału strażaków w wyjazdach**: Na podstawie danych z raportów zliczaj, ile razy dany strażak brał udział w akcji
   - Widok: total (wszystkie), filtr po roku, filtr po miesiącu
   - Dane źródłowe: `CrewAssignment` w każdym raporcie (driverId, commanderId, crewMemberIds)
