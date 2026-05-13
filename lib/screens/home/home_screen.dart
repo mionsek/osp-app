@@ -6,16 +6,44 @@ import '../../models/sync_state.dart';
 import '../../providers/providers.dart';
 import '../../widgets/banner_ad_widget.dart';
 
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  List<String> _lastKnownDuplicates = const [];
+
+  @override
+  Widget build(BuildContext context) {
     final config = ref.watch(unitConfigProvider);
     final vehicles = ref.watch(vehiclesProvider);
     final firefighters = ref.watch(firefightersProvider);
     final reports = ref.watch(reportsProvider);
     final syncState = ref.watch(syncStateProvider);
+
+    // Pokaż SnackBar gdy po sync pojawią się duplikaty
+    final duplicates = syncState.duplicateReportNumbers;
+    if (duplicates.isNotEmpty && duplicates != _lastKnownDuplicates) {
+      _lastKnownDuplicates = duplicates;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.orange[800],
+            duration: const Duration(seconds: 6),
+            content: Text(
+              'Wykryto ${duplicates.length} '
+              '${duplicates.length == 1 ? 'duplikat' : 'duplikaty/duplikatów'} '
+              'numerów wyjazdów: ${duplicates.join(', ')}. '
+              'Sprawdź listę raportów.',
+            ),
+          ),
+        );
+      });
+    }
 
     return Scaffold(
       appBar: AppBar(

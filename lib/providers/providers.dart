@@ -81,9 +81,16 @@ class SyncStateNotifier extends StateNotifier<SyncState> {
     return success;
   }
 
-  Future<void> syncNow() async {
-    await _syncService.syncAll();
+  /// Runs full sync. Returns number of duplicate report numbers detected.
+  Future<int> syncNow() async {
+    final duplicates = await _syncService.syncAll();
     state = _syncService.state;
+    return duplicates;
+  }
+
+  /// Pulls only reports from Drive (lightweight, used before creating a new report).
+  Future<void> pullReportsOnly() async {
+    await _syncService.pullReportsOnly();
   }
 
   Future<void> disconnect() async {

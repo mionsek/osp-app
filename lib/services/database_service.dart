@@ -132,6 +132,22 @@ class DatabaseService {
     return '${(maxNum + 1).toString().padLeft(4, '0')}/$year';
   }
 
+  /// Returns a list of report numbers that appear more than once in the given
+  /// year (or current year if not specified). Used after sync to detect conflicts.
+  List<String> findDuplicateReportNumbers({int? year}) {
+    final y = year ?? DateTime.now().year;
+    final reportsThisYear =
+        reportsBox.values.where((r) => r.year == y).toList();
+    final counts = <String, int>{};
+    for (final r in reportsThisYear) {
+      counts[r.reportNumber] = (counts[r.reportNumber] ?? 0) + 1;
+    }
+    return counts.entries
+        .where((e) => e.value > 1)
+        .map((e) => e.key)
+        .toList();
+  }
+
   // --- Threats ---
 
   Box<ThreatEntry> get threatsBox => Hive.box<ThreatEntry>(_threatsBox);

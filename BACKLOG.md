@@ -55,10 +55,12 @@
 ## Zrobione (feature/009-app-name)
 - [x] Zmiana nazwy wyświetlanej aplikacji z `osp_app` na **„Wyjazdy OSP"** (`android:label` w AndroidManifest.xml)
 
-## Do zrobienia — Kolejne branche
+## Zrobione (feature/010-deduplikacja)
+- [x] Pull raportów z Drive przed otwarciem kreatora nowego wyjazdu — numer `max+1` oparty na aktualnych danych z Drive
+- [x] Wykrywanie duplikatów numerów wyjazdów po każdym sync — pomarańczowy SnackBar z listą kolizji
+- [x] Brak auto-renumeracji — użytkownik decyduje co zrobić z duplikatem
 
-### Branch: feature/010-deduplikacja
-- [ ] **Deduplikacja numerów wyjazdów przy sync**: Automatyczna korekta zdublowanych numerów (np. raz dziennie przy synchronizacji z Google Drive). Obecnie `getNextReportNumber` szuka najwyższego istniejącego numeru, ale przy usunięciu i re-sync mogą powstać duplikaty.
+## Do zrobienia — Kolejne branche
 
 ### Branch: feature/011-printing
 - [ ] **Bluetooth printing**: Drukowanie na drukarce Bluetooth bez podłączania USB

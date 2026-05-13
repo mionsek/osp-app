@@ -133,8 +133,11 @@ class SyncService {
   // â”€â”€ Full sync â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /// Run a full bidirectional sync.
-  Future<void> syncAll() async {
-    if (_isSyncing || !_state.isConnected || _state.unitFolderId == null) return;
+  /// Returns the number of duplicate report numbers detected after pull.
+  Future<int> syncAll() async {
+    if (_isSyncing || !_state.isConnected || _state.unitFolderId == null) {
+      return 0;
+    }
 
     _isSyncing = true;
     _updateState(_state.copyWith(status: SyncStatus.syncing));
@@ -143,19 +146,54 @@ class SyncService {
       await _pushAllData();
       await _pullAllData();
 
+      final duplicates = _db.findDuplicateReportNumbers();
+
       _updateState(_state.copyWith(
         status: SyncStatus.idle,
         lastSyncTime: DateTime.now(),
         errorMessage: null,
+        duplicateReportNumbers: duplicates,
       ));
+      return duplicates.length;
     } catch (e) {
       debugPrint('Sync error: $e');
       _updateState(_state.copyWith(
         status: SyncStatus.error,
         errorMessage: e.toString(),
       ));
+      return 0;
     } finally {
       _isSyncing = false;
+    }
+  }
+
+  /// Pull only reports from Drive (lightweight — used before creating a new report).
+  /// Returns true if pull succeeded.
+  Future<bool> pullReportsOnly() async {
+    if (!_state.isConnected || _state.unitFolderId == null) return false;
+    try {
+      final folderId = _state.unitFolderId!;
+      final reportsFolderId = await _driveService.findReportsFolder(folderId);
+      if (reportsFolderId == null) return true;
+
+      final yearFolders = await _driveService.listSubfolders(reportsFolderId);
+      for (final yearFolder in yearFolders) {
+        final reportFiles = await _driveService.listJsonFiles(yearFolder.id!);
+        for (final file in reportFiles) {
+          final data = await _driveService.readJsonFile(file.id!);
+          if (data != null) {
+            final report = _reportFromJson(data);
+            final local = _db.getReport(report.id);
+            if (local == null || report.updatedAt.isAfter(local.updatedAt)) {
+              await _db.addReport(report);
+            }
+          }
+        }
+      }
+      return true;
+    } catch (e) {
+      debugPrint('pullReportsOnly error: $e');
+      return false;
     }
   }
 

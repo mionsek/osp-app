@@ -13,6 +13,8 @@ class SyncState {
   final String? userEmail;
   final String? unitFolderId;
   final String? unitInviteCode;
+  /// Numery wyjazdów, dla których wykryto duplikaty po ostatnim sync.
+  final List<String> duplicateReportNumbers;
 
   const SyncState({
     this.status = SyncStatus.disconnected,
@@ -21,6 +23,7 @@ class SyncState {
     this.userEmail,
     this.unitFolderId,
     this.unitInviteCode,
+    this.duplicateReportNumbers = const [],
   });
 
   SyncState copyWith({
@@ -30,6 +33,7 @@ class SyncState {
     String? userEmail,
     String? unitFolderId,
     String? unitInviteCode,
+    List<String>? duplicateReportNumbers,
   }) {
     return SyncState(
       status: status ?? this.status,
@@ -38,6 +42,8 @@ class SyncState {
       userEmail: userEmail ?? this.userEmail,
       unitFolderId: unitFolderId ?? this.unitFolderId,
       unitInviteCode: unitInviteCode ?? this.unitInviteCode,
+      duplicateReportNumbers:
+          duplicateReportNumbers ?? this.duplicateReportNumbers,
     );
   }
 

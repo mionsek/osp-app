@@ -55,11 +55,23 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
     if (_isEditing) {
       _loadExistingReport();
     } else {
-      _reportNumber =
-          ref.read(reportsProvider.notifier).getNextNumber();
+      // Ustaw tymczasowy numer lokalny — zostanie nadpisany po pull z Drive
+      _reportNumber = ref.read(reportsProvider.notifier).getNextNumber();
       final config = ref.read(unitConfigProvider);
       _addressLocality = config.locality;
+      // Pull raportów z Drive, żeby numer był oparty na aktualnych danych
+      _pullAndRefreshNumber();
     }
+  }
+
+  /// Pobiera raporty z Drive i aktualizuje numer, jeśli zmienił się max.
+  Future<void> _pullAndRefreshNumber() async {
+    await ref.read(syncStateProvider.notifier).pullReportsOnly();
+    if (!mounted) return;
+    final freshNumber = ref.read(reportsProvider.notifier).getNextNumber();
+    setState(() {
+      _reportNumber = freshNumber;
+    });
   }
 
   void _loadExistingReport() {
