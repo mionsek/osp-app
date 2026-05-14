@@ -13,6 +13,7 @@ import '../../screens/reports/reports_list_screen.dart';
 import '../../screens/reports/report_detail_screen.dart';
 import '../../screens/settings/settings_screen.dart';
 import '../../screens/info/info_screen.dart';
+import '../../screens/statistics/statistics_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final config = ref.read(unitConfigProvider);
@@ -79,6 +80,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           final id = state.pathParameters['id']!;
           return ReportDetailScreen(reportId: id);
         },
+      ),
+      GoRoute(
+        path: '/statistics',
+        builder: (context, state) => const StatisticsScreen(),
       ),
       GoRoute(
         path: '/settings',

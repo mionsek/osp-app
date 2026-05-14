@@ -72,9 +72,20 @@
 - [x] Drukowanie przez Android PrintManager (Mopria/WiFi) + udostępnianie/wysyłanie PDF
 - [x] Zmiana kolejności pól w kreatorze raportu: Zagrożenie → Rodzaj zagrożenia → Opis miejsca zdarzenia
 
+## Zrobione (feature/012-statystyki-wyjazdow)
+- [x] Osobny kafelek „Statystyki" na ekranie głównym (fioletowy, `/statistics`)
+- [x] Filtr roku (domyślnie bieżący rok), dropdown z dostępnymi latami
+- [x] Statystyki strażaków: lista posortowana malejąco wg liczby wyjazdów, strażacy z 0 ukryci, medale dla Top 3
+- [x] Statystyki kategorii zagrożeń: Pożar / Miejscowe zagrożenie / Fałszywy alarm + łącznie
+- [x] Łączny czas działań ratowniczych (suma returnTime − departureTime)
+- [x] Ostrzeżenie o raportach bez uzupełnionego czasu zakończenia (czas = 0, lista numerów)
+- [x] Drukowanie i udostępnianie PDF statystyk A4 — spójne przyciski z ekranem szczegółów raportu
+- [x] Refaktor `PdfService`: wydzielono `_layoutPdf` / `_sharePdf` — zero duplikacji logiki druku
+- [x] 9 nowych testów jednostkowych `computeYearStats` (łącznie 44 testy, wszystkie zielone)
+
 ## Do zrobienia — Kolejne branche
 
-### Branch: feature/012-drukarka-termiczna
+### Branch: feature/013-drukarka-termiczna
 - [ ] **Integracja drukarki termicznej Xprinter XP-P442B** (WiFi, 104 mm, ESC/POS)
   - Nowy layout PDF `receipt 104 mm` z pełną treścią formularza KP PSP (dane w pionowym układzie dostosowanym do szerokości 104 mm)
   - Zastąpienie `Printing.layoutPdf()` komunikacją ESC/POS przez TCP/IP (`esc_pos_utils` + `esc_pos_network_printer`)
@@ -82,13 +93,6 @@
   - Wybór trybu druku w UI: „Drukarka A5" (obecny flow przez Mopria) vs „Drukarka termiczna" (ESC/POS TCP)
   - **Wymaga zakupu drukarki** — Xprinter XP-P442B, 419 zł, dmtrade.pl
   - **Konfiguracja jednorazowa**: hotspot WiFi w telefonie → drukarka zapamiętuje SSID → działa na każdym wyjeździe
-
-### Branch: feature/013-statystyki-wyjazdow
-- [ ] **Statystyki udziału strażaków w wyjazdach**: Na podstawie danych z raportów zliczaj, ile razy dany strażak brał udział w akcji
-  - Widok: total (wszystkie), filtr po roku, filtr po miesiącu
-  - Dane źródłowe: `CrewAssignment` w każdym raporcie (driverId, commanderId, crewMemberIds)
-  - Wyświetlanie: posortowana lista ratowników z liczbą wyjazdów, dostępna z ekranu Ratownicy lub osobny kafelek na ekranie głównym
-  - Implementacja lokalna (bez backendu) — agregacja po raportach zapisanych w Hive
 
 ### Pomysły do rozważenia
 - [ ] **e-Remiza integration**: Ręczne wpisywanie z przyciskami kopiowania do schowka. Na razie nierealne — do rozważenia w przyszłości.

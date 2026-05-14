@@ -99,6 +99,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
               const SizedBox(height: 12),
               _MenuButton(
+                icon: Icons.bar_chart,
+                label: 'Statystyki',
+                color: const Color(0xFF6A1B9A),
+                onTap: () => context.push('/statistics'),
+              ),
+              const SizedBox(height: 12),
+              _MenuButton(
                 icon: Icons.settings,
                 label: 'Ustawienia',
                 color: Colors.grey[700]!,

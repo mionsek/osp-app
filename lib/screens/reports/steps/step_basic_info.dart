@@ -239,20 +239,6 @@ class _StepBasicInfoState extends ConsumerState<StepBasicInfo>
                   widget.onChanged(addressStreet: v.trim()),
             ),
             const SizedBox(height: 12),
-            TextFormField(
-              controller: _descriptionController,
-              decoration: const InputDecoration(
-                labelText: 'Opis miejsca zdarzenia',
-                prefixIcon: Icon(Icons.description),
-                hintText: 'np. za stacją benzynową, przy lesie...',
-              ),
-              maxLength: 300,
-              maxLines: 2,
-              onChanged: (v) =>
-                  widget.onChanged(addressDescription: v.trim()),
-            ),
-            const SizedBox(height: 20),
-
             // Threat category
             Text('Zagrożenie',
                 style: Theme.of(context).textTheme.titleMedium),
@@ -317,6 +303,21 @@ class _StepBasicInfoState extends ConsumerState<StepBasicInfo>
               ),
               const SizedBox(height: 16),
             ],
+
+            // Address description
+            TextFormField(
+              controller: _descriptionController,
+              decoration: const InputDecoration(
+                labelText: 'Opis miejsca zdarzenia',
+                prefixIcon: Icon(Icons.description),
+                hintText: 'np. za stacją benzynową, przy lesie...',
+              ),
+              maxLength: 300,
+              maxLines: 2,
+              onChanged: (v) =>
+                  widget.onChanged(addressDescription: v.trim()),
+            ),
+            const SizedBox(height: 20),
 
             // Vehicles selection
             const SizedBox(height: 8),
