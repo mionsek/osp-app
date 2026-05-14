@@ -50,7 +50,7 @@
 - [ ] **TODO przed publikacją**: zarejestrować produkt `remove_ads` w Google Play Console
 
 ## Zrobione (feature/008-logo)
-- [x] Logo aplikacji — ikony launchera we wszystkich rozdzielczościach Android (mdpi/hdpi/xhdpi/xxhdpi/xxxhdpi) + ikona adaptywna (białe tło, obraz notatnik+płomień)
+- [x] Logo aplikacji — ikony launchera we wszystkich rozdzielczościach Android (mdpi/hdpi/xhdpi/xxhdpi/xI fouatnik+płomień)
 
 ## Zrobione (feature/009-app-name)
 - [x] Zmiana nazwy wyświetlanej aplikacji z `osp_app` na **„Wyjazdy OSP"** (`android:label` w AndroidManifest.xml)
@@ -60,14 +60,30 @@
 - [x] Wykrywanie duplikatów numerów wyjazdów po każdym sync — pomarańczowy SnackBar z listą kolizji
 - [x] Brak auto-renumeracji — użytkownik decyduje co zrobić z duplikatem
 
+## Zrobione (feature/011-printing)
+- [x] Generowanie PDF A5 (148×210 mm) z polskimi znakami (OpenSans via PdfGoogleFonts)
+- [x] Layout zgodny z formularzem KP PSP „Potwierdzenie udziału sił i środków podmiotu ratowniczego w działaniu ratowniczym"
+  - Nagłówek: nazwa jednostki + pole `nr ewidencyjny zdarzenia` w ramce
+  - Wiersz daty z podkreślonymi polami + godziny od/do
+  - Wiersz adresu z pełną podkreśloną linią + zagrożenie/podkategoria
+  - Tabela 5 kolumn: Lp. / Podmiot / Osoby / Czas udziału / Uwagi
+  - Liczba pojazdów i strażaków w ramkach, podpis, przypisy `*` i `**`
+  - Dwa egzemplarze (2 strony A5) w jednym dokumencie
+- [x] Drukowanie przez Android PrintManager (Mopria/WiFi) + udostępnianie/wysyłanie PDF
+- [x] Zmiana kolejności pól w kreatorze raportu: Zagrożenie → Rodzaj zagrożenia → Opis miejsca zdarzenia
+
 ## Do zrobienia — Kolejne branche
 
-### Branch: feature/011-printing
-- [ ] **Bluetooth printing**: Drukowanie na drukarce Bluetooth bez podłączania USB
-  - Użyć pakietu `printing` (już w projekcie) do wysyłania PDF przez Bluetooth
-  - Przetestować z Phomemo M832 / M834
+### Branch: feature/012-drukarka-termiczna
+- [ ] **Integracja drukarki termicznej Xprinter XP-P442B** (WiFi, 104 mm, ESC/POS)
+  - Nowy layout PDF `receipt 104 mm` z pełną treścią formularza KP PSP (dane w pionowym układzie dostosowanym do szerokości 104 mm)
+  - Zastąpienie `Printing.layoutPdf()` komunikacją ESC/POS przez TCP/IP (`esc_pos_utils` + `esc_pos_network_printer`)
+  - Konfiguracja w Ustawieniach: adres IP drukarki (drukarka łączy się do hotspotu z telefonu)
+  - Wybór trybu druku w UI: „Drukarka A5" (obecny flow przez Mopria) vs „Drukarka termiczna" (ESC/POS TCP)
+  - **Wymaga zakupu drukarki** — Xprinter XP-P442B, 419 zł, dmtrade.pl
+  - **Konfiguracja jednorazowa**: hotspot WiFi w telefonie → drukarka zapamiętuje SSID → działa na każdym wyjeździe
 
-### Branch: feature/012-statystyki-wyjazdow
+### Branch: feature/013-statystyki-wyjazdow
 - [ ] **Statystyki udziału strażaków w wyjazdach**: Na podstawie danych z raportów zliczaj, ile razy dany strażak brał udział w akcji
   - Widok: total (wszystkie), filtr po roku, filtr po miesiącu
   - Dane źródłowe: `CrewAssignment` w każdym raporcie (driverId, commanderId, crewMemberIds)
