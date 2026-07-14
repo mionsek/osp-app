@@ -83,16 +83,21 @@
 - [x] Refaktor `PdfService`: wydzielono `_layoutPdf` / `_sharePdf` — zero duplikacji logiki druku
 - [x] 9 nowych testów jednostkowych `computeYearStats` (łącznie 44 testy, wszystkie zielone)
 
+## Zrobione (feature/013-druk-a4-podwojny)
+- [x] **Druk 2× A5 na jednej kartce A4 (poziomo)** — dwa egzemplarze formularza KP PSP obok siebie + przerywana linia cięcia pośrodku; kartkę przecina się po wydruku
+- [x] Refaktor `_buildPdf`: wydzielony `buildCopy()`, jedna strona A4 landscape zamiast dwóch stron A5
+- [x] Usunięto `assets/references/` z pubspec — skan wzoru formularza nie był używany w runtime, niepotrzebnie powiększał APK
+- [x] Usunięto martwy kod: nieużywana funkcja `buildDb` w `test/deduplication_test.dart`
+- **Decyzja sprzętowa**: zamiast drukarki termicznej (Xprinter XP-P442B, ESC/POS) — zwykła drukarka atramentowa z Wi-Fi Direct/Mopria (np. Canon PIXMA TS3550i, ~300 zł). Zero zmian w flow druku (Mopria), zwykły papier, wydruk nie blaknie (dokumentacja archiwalna). Plan integracji ESC/POS porzucony.
+
 ## Do zrobienia — Kolejne branche
 
-### Branch: feature/013-drukarka-termiczna
-- [ ] **Integracja drukarki termicznej Xprinter XP-P442B** (WiFi, 104 mm, ESC/POS)
-  - Nowy layout PDF `receipt 104 mm` z pełną treścią formularza KP PSP (dane w pionowym układzie dostosowanym do szerokości 104 mm)
-  - Zastąpienie `Printing.layoutPdf()` komunikacją ESC/POS przez TCP/IP (`esc_pos_utils` + `esc_pos_network_printer`)
-  - Konfiguracja w Ustawieniach: adres IP drukarki (drukarka łączy się do hotspotu z telefonu)
-  - Wybór trybu druku w UI: „Drukarka A5" (obecny flow przez Mopria) vs „Drukarka termiczna" (ESC/POS TCP)
-  - **Wymaga zakupu drukarki** — Xprinter XP-P442B, 419 zł, dmtrade.pl
-  - **Konfiguracja jednorazowa**: hotspot WiFi w telefonie → drukarka zapamiętuje SSID → działa na każdym wyjeździe
+### Przed publikacją w Play Store
+- [ ] Zastąpić testowe ID AdMob prawdziwymi w `ad_service.dart` i `AndroidManifest.xml` (patrz feature/007)
+- [ ] Zarejestrować produkt `remove_ads` w Google Play Console (patrz feature/007)
+- [ ] Grafiki do sklepu: ikona 512×512, feature graphic 1024×500, min. 2 screenshoty
+- [ ] Podbić wersję w `pubspec.yaml` (obecnie `1.0.0+1`)
+- [ ] (opcjonalnie) Ikona monochromatyczna `<monochrome>` w adaptive icon — motywy Android 13+
 
 ### Pomysły do rozważenia
 - [ ] **e-Remiza integration**: Ręczne wpisywanie z przyciskami kopiowania do schowka. Na razie nierealne — do rozważenia w przyszłości.

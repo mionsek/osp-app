@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:osp_app/models/models.dart';
-import 'package:osp_app/services/database_service.dart';
 
 /// Tworzy minimalny obiekt Report z podanym numerem i rokiem.
 Report _makeReport({
@@ -43,14 +42,6 @@ void main() {
   tearDown(() async {
     await box.deleteFromDisk();
   });
-
-  DatabaseService _buildDb(Box<Report> reportsBox) {
-    // Wstrzykujemy box przez patch — zamiast tego testujemy logikę bezpośrednio
-    // przez wywołanie metod na DatabaseService z otwartym boxem.
-    // Ponieważ DatabaseService korzysta z Hive.box() globalnie, testujemy
-    // logikę findDuplicateReportNumbers() niezależnie.
-    return DatabaseService();
-  }
 
   group('findDuplicateReportNumbers — logika', () {
     test('brak duplikatów zwraca pustą listę', () {
