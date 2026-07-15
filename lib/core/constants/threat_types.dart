@@ -1,4 +1,7 @@
 /// Predefiniowane kategorie zagrożeń i ich podopcje.
+///
+/// Lista kategorii jest zamknięta (nie można dodawać własnych),
+/// a jej kolejność jest istotna — tak ma wyświetlać się w UI.
 class ThreatTypes {
   ThreatTypes._();
 
@@ -6,17 +9,15 @@ class ThreatTypes {
     'Miejscowe Zagrożenie': [
       'Kolizja',
       'Wypadek',
-      'Plama oleju',
-      'Zalanie mieszkania',
+      'Plama ropopochodna',
       'Powalone drzewo',
-      'Uwięzienie zwierzęcia',
+      'Zalana posesja',
     ],
     'Pożar': [
       'Pożar budynku',
-      'Pożar traw',
-      'Pożar lasu',
       'Pożar samochodu',
-      'Pożar śmietnika',
+      'Pożar sadzy w kominie',
+      'Pożar lasu',
     ],
     'Fałszywy Alarm': <String>[],
   };
@@ -25,5 +26,15 @@ class ThreatTypes {
     'Miejscowe Zagrożenie',
     'Pożar',
     'Fałszywy Alarm',
+  ];
+
+  /// Podtypy z wcześniejszych wersji domyślnych list — usuwane przy
+  /// migracji (w odróżnieniu od podtypów dodanych ręcznie przez użytkownika).
+  static const List<String> retiredSubtypes = [
+    'Plama oleju',
+    'Zalanie mieszkania',
+    'Uwięzienie zwierzęcia',
+    'Pożar traw',
+    'Pożar śmietnika',
   ];
 }

@@ -32,8 +32,9 @@ final syncServiceProvider = Provider<SyncService>((ref) {
   );
 });
 
-final syncStateProvider =
-    StateNotifierProvider<SyncStateNotifier, SyncState>((ref) {
+final syncStateProvider = StateNotifierProvider<SyncStateNotifier, SyncState>((
+  ref,
+) {
   final syncService = ref.watch(syncServiceProvider);
   return SyncStateNotifier(syncService);
 });
@@ -58,9 +59,7 @@ class SyncStateNotifier extends StateNotifier<SyncState> {
   Future<bool> signIn() async {
     final success = await _syncService.authService.signIn();
     if (success) {
-      state = state.copyWith(
-        userEmail: _syncService.authService.userEmail,
-      );
+      state = state.copyWith(userEmail: _syncService.authService.userEmail);
     }
     return success;
   }
@@ -110,8 +109,8 @@ class SyncStateNotifier extends StateNotifier<SyncState> {
 
 final unitConfigProvider =
     StateNotifierProvider<UnitConfigNotifier, UnitConfig>((ref) {
-  return UnitConfigNotifier(ref.watch(databaseServiceProvider));
-});
+      return UnitConfigNotifier(ref.watch(databaseServiceProvider));
+    });
 
 class UnitConfigNotifier extends StateNotifier<UnitConfig> {
   final DatabaseService _db;
@@ -135,10 +134,11 @@ class UnitConfigNotifier extends StateNotifier<UnitConfig> {
 
 // --- Vehicles ---
 
-final vehiclesProvider =
-    StateNotifierProvider<VehiclesNotifier, List<Vehicle>>((ref) {
-  return VehiclesNotifier(ref.watch(databaseServiceProvider));
-});
+final vehiclesProvider = StateNotifierProvider<VehiclesNotifier, List<Vehicle>>(
+  (ref) {
+    return VehiclesNotifier(ref.watch(databaseServiceProvider));
+  },
+);
 
 class VehiclesNotifier extends StateNotifier<List<Vehicle>> {
   final DatabaseService _db;
@@ -168,8 +168,8 @@ class VehiclesNotifier extends StateNotifier<List<Vehicle>> {
 
 final firefightersProvider =
     StateNotifierProvider<FirefightersNotifier, List<Firefighter>>((ref) {
-  return FirefightersNotifier(ref.watch(databaseServiceProvider));
-});
+      return FirefightersNotifier(ref.watch(databaseServiceProvider));
+    });
 
 class FirefightersNotifier extends StateNotifier<List<Firefighter>> {
   final DatabaseService _db;
@@ -199,8 +199,9 @@ class FirefightersNotifier extends StateNotifier<List<Firefighter>> {
 
 // --- Reports ---
 
-final reportsProvider =
-    StateNotifierProvider<ReportsNotifier, List<Report>>((ref) {
+final reportsProvider = StateNotifierProvider<ReportsNotifier, List<Report>>((
+  ref,
+) {
   return ReportsNotifier(ref.watch(databaseServiceProvider));
 });
 
@@ -239,16 +240,14 @@ final purchaseServiceProvider = Provider<PurchaseService>((ref) {
 });
 
 /// Whether the user has purchased the Remove Ads IAP.
-final premiumProvider =
-    StateNotifierProvider<PremiumNotifier, bool>((ref) {
+final premiumProvider = StateNotifierProvider<PremiumNotifier, bool>((ref) {
   return PremiumNotifier(ref.watch(purchaseServiceProvider));
 });
 
 class PremiumNotifier extends StateNotifier<bool> {
   final PurchaseService _purchaseService;
 
-  PremiumNotifier(this._purchaseService)
-      : super(_purchaseService.isPremium) {
+  PremiumNotifier(this._purchaseService) : super(_purchaseService.isPremium) {
     // Listen for purchase stream updates
     final controller = _purchaseService.initialize();
     controller.stream.listen(
@@ -286,8 +285,8 @@ final showAdsProvider = Provider<bool>((ref) {
 
 final threatsProvider =
     StateNotifierProvider<ThreatsNotifier, List<ThreatEntry>>((ref) {
-  return ThreatsNotifier(ref.watch(databaseServiceProvider));
-});
+      return ThreatsNotifier(ref.watch(databaseServiceProvider));
+    });
 
 class ThreatsNotifier extends StateNotifier<List<ThreatEntry>> {
   final DatabaseService _db;
@@ -298,14 +297,6 @@ class ThreatsNotifier extends StateNotifier<List<ThreatEntry>> {
     if (existing != null && !existing.subtypes.contains(subtype)) {
       existing.subtypes.add(subtype);
       await _db.addThreat(existing);
-      state = _db.getAllThreats();
-    }
-  }
-
-  Future<void> addCustomCategory(String category) async {
-    if (_db.threatsBox.get(category) == null) {
-      await _db.addThreat(
-          ThreatEntry(category: category, isCustom: true));
       state = _db.getAllThreats();
     }
   }

@@ -44,10 +44,10 @@ class InfoScreen extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               Text(
-                'Aplikacja OSP',
+                'Raporty OSP',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                  fontWeight: FontWeight.bold,
+                ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 4),
@@ -68,10 +68,12 @@ class InfoScreen extends StatelessWidget {
               const SizedBox(height: 16),
 
               // --- Do czego służy ---
-              Text('Do czego służy',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      )),
+              Text(
+                'Do czego służy',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 8),
               const Text(
                 'Aplikacja do tworzenia raportów z wyjazdów ratowniczych '
@@ -85,39 +87,54 @@ class InfoScreen extends StatelessWidget {
               const SizedBox(height: 16),
 
               // --- Jak korzystać ---
-              Text('Jak korzystać',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      )),
+              Text(
+                'Jak korzystać',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 12),
               const _HowToItem(
                 icon: Icons.fire_truck,
                 title: 'Dodaj pojazdy',
-                description: 'Wprowadź wozy bojowe swojej jednostki '
+                description:
+                    'Wprowadź wozy bojowe swojej jednostki '
                     '(numer operacyjny, typ, rejestracja).',
               ),
               const _HowToItem(
                 icon: Icons.people,
                 title: 'Dodaj ratowników',
-                description: 'Wprowadź strażaków z jednostki '
+                description:
+                    'Wprowadź strażaków z jednostki '
                     '(imię, nazwisko, funkcja).',
               ),
               const _HowToItem(
                 icon: Icons.add_circle,
                 title: 'Twórz raporty',
-                description: 'Dodaj wyjazd — wypełnij datę, godziny, adres, '
+                description:
+                    'Dodaj wyjazd — wypełnij datę, godziny, adres, '
                     'rodzaj zagrożenia i skład zastępu.',
               ),
               const _HowToItem(
                 icon: Icons.picture_as_pdf,
                 title: 'Generuj PDF',
-                description: 'Z każdego raportu wygeneruj dokument PDF — '
+                description:
+                    'Z każdego raportu wygeneruj dokument PDF — '
                     'wydrukuj, udostępnij lub zapisz.',
+              ),
+              const _HowToItem(
+                icon: Icons.bar_chart,
+                title: 'Statystyki',
+                description:
+                    'Przeglądaj roczne statystyki wyjazdów — '
+                    'udział strażaków, kategorie zagrożeń i łączny czas '
+                    'działań. Zestawienie wydrukujesz jako PDF.',
               ),
               const _HowToItem(
                 icon: Icons.cloud_sync,
                 title: 'Synchronizacja',
-                description: 'Zaloguj się kontem Google, aby synchronizować '
+                description:
+                    'Zaloguj się kontem Google, aby synchronizować '
                     'dane między urządzeniami przez Google Drive.',
               ),
               const SizedBox(height: 16),
@@ -125,17 +142,19 @@ class InfoScreen extends StatelessWidget {
               const SizedBox(height: 16),
 
               // --- Kontakt ---
-              Text('Kontakt',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      )),
+              Text(
+                'Kontakt',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 12),
               _ContactButton(
                 icon: Icons.bug_report,
                 label: 'Zgłoś problem',
                 subtitle: 'Wyślij email z opisem błędu',
-                onTap: () => _launchEmail(
-                    context, 'OSP App — Zgłoszenie problemu'),
+                onTap: () =>
+                    _launchEmail(context, 'Raporty OSP — Zgłoszenie problemu'),
               ),
               const SizedBox(height: 8),
               _ContactButton(
@@ -143,7 +162,9 @@ class InfoScreen extends StatelessWidget {
                 label: 'Zaproponuj usprawnienie',
                 subtitle: 'Podziel się pomysłem na nową funkcję',
                 onTap: () => _launchEmail(
-                    context, 'OSP App — Propozycja usprawnienia'),
+                  context,
+                  'Raporty OSP — Propozycja usprawnienia',
+                ),
               ),
               const SizedBox(height: 32),
 
@@ -158,8 +179,7 @@ class InfoScreen extends StatelessWidget {
                   children: [
                     Text(
                       'Autor',
-                      style: TextStyle(
-                          color: Colors.grey[600], fontSize: 12),
+                      style: TextStyle(color: Colors.grey[600], fontSize: 12),
                     ),
                     const SizedBox(height: 4),
                     const Text(
@@ -172,10 +192,7 @@ class InfoScreen extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       'github.com/mionsek/osp-app',
-                      style: TextStyle(
-                        color: Colors.grey[600],
-                        fontSize: 13,
-                      ),
+                      style: TextStyle(color: Colors.grey[600], fontSize: 13),
                     ),
                   ],
                 ),
@@ -213,13 +230,18 @@ class _HowToItem extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title,
-                    style: const TextStyle(fontWeight: FontWeight.w600)),
+                Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
                 const SizedBox(height: 2),
                 Text(
                   description,
                   style: TextStyle(
-                      color: Colors.grey[600], fontSize: 13, height: 1.4),
+                    color: Colors.grey[600],
+                    fontSize: 13,
+                    height: 1.4,
+                  ),
                 ),
               ],
             ),
@@ -260,11 +282,14 @@ class _ContactButton extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(label,
-                        style: const TextStyle(fontWeight: FontWeight.w600)),
-                    Text(subtitle,
-                        style: TextStyle(
-                            color: Colors.grey[600], fontSize: 12)),
+                    Text(
+                      label,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    Text(
+                      subtitle,
+                      style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                    ),
                   ],
                 ),
               ),

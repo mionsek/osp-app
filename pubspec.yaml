@@ -1,5 +1,5 @@
 name: osp_app
-description: "Aplikacja OSP — raporty z wyjazdów ratowniczych"
+description: "Raporty OSP — raporty z wyjazdów ratowniczych dla jednostek OSP"
 publish_to: 'none'
 version: 1.0.0+1
 

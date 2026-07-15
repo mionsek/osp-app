@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import '../../../core/constants/threat_types.dart';
 import '../../../providers/providers.dart';
 
 class StepBasicInfo extends ConsumerStatefulWidget {
@@ -28,7 +29,8 @@ class StepBasicInfo extends ConsumerStatefulWidget {
     String? threatSubtype,
     bool clearThreatSubtype,
     List<String>? selectedVehicleIds,
-  }) onChanged;
+  })
+  onChanged;
   final VoidCallback onNext;
 
   const StepBasicInfo({
@@ -65,14 +67,12 @@ class _StepBasicInfoState extends ConsumerState<StepBasicInfo>
   @override
   void initState() {
     super.initState();
-    _reportNumberController =
-        TextEditingController(text: widget.reportNumber);
-    _localityController =
-        TextEditingController(text: widget.addressLocality);
-    _streetController =
-        TextEditingController(text: widget.addressStreet);
-    _descriptionController =
-        TextEditingController(text: widget.addressDescription);
+    _reportNumberController = TextEditingController(text: widget.reportNumber);
+    _localityController = TextEditingController(text: widget.addressLocality);
+    _streetController = TextEditingController(text: widget.addressStreet);
+    _descriptionController = TextEditingController(
+      text: widget.addressDescription,
+    );
   }
 
   @override
@@ -108,13 +108,14 @@ class _StepBasicInfoState extends ConsumerState<StepBasicInfo>
   }
 
   Future<void> _pasteToField(
-      TextEditingController controller, ValueChanged<String> onChanged) async {
+    TextEditingController controller,
+    ValueChanged<String> onChanged,
+  ) async {
     final data = await Clipboard.getData(Clipboard.kTextPlain);
     if (data?.text != null && data!.text!.isNotEmpty) {
       final text = data.text!.trim();
       controller.text = text;
-      controller.selection =
-          TextSelection.collapsed(offset: text.length);
+      controller.selection = TextSelection.collapsed(offset: text.length);
       onChanged(text);
     }
   }
@@ -124,12 +125,13 @@ class _StepBasicInfoState extends ConsumerState<StepBasicInfo>
     super.build(context);
     final vehicles = ref.watch(vehiclesProvider);
     final threats = ref.watch(threatsProvider);
-    final categories = threats.map((t) => t.category).toList();
+    // Stała, zamknięta lista kategorii — kolejność ma znaczenie
+    const categories = ThreatTypes.categories;
     final subtypes = widget.threatCategory.isNotEmpty
         ? threats
-            .where((t) => t.category == widget.threatCategory)
-            .expand((t) => t.subtypes)
-            .toList()
+              .where((t) => t.category == widget.threatCategory)
+              .expand((t) => t.subtypes)
+              .toList()
         : <String>[];
 
     return SingleChildScrollView(
@@ -141,9 +143,9 @@ class _StepBasicInfoState extends ConsumerState<StepBasicInfo>
           children: [
             Text(
               'Krok 1 z 3 — Dane podstawowe',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 20),
 
@@ -155,8 +157,7 @@ class _StepBasicInfoState extends ConsumerState<StepBasicInfo>
                 prefixIcon: Icon(Icons.numbers),
                 hintText: '0001/2026',
               ),
-              onChanged: (v) =>
-                  widget.onChanged(reportNumber: v.trim()),
+              onChanged: (v) => widget.onChanged(reportNumber: v.trim()),
               maxLength: 20,
               validator: (v) {
                 if (v == null || v.trim().isEmpty) {
@@ -209,17 +210,17 @@ class _StepBasicInfoState extends ConsumerState<StepBasicInfo>
                 suffixIcon: IconButton(
                   icon: const Icon(Icons.content_paste),
                   tooltip: 'Wklej z schowka',
-                  onPressed: () => _pasteToField(_localityController, (v) =>
-                      widget.onChanged(addressLocality: v)),
+                  onPressed: () => _pasteToField(
+                    _localityController,
+                    (v) => widget.onChanged(addressLocality: v),
+                  ),
                 ),
               ),
               textCapitalization: TextCapitalization.words,
               maxLength: 50,
-              onChanged: (v) =>
-                  widget.onChanged(addressLocality: v.trim()),
-              validator: (v) => v == null || v.trim().isEmpty
-                  ? 'Podaj miejscowość'
-                  : null,
+              onChanged: (v) => widget.onChanged(addressLocality: v.trim()),
+              validator: (v) =>
+                  v == null || v.trim().isEmpty ? 'Podaj miejscowość' : null,
             ),
             const SizedBox(height: 12),
             TextFormField(
@@ -230,18 +231,18 @@ class _StepBasicInfoState extends ConsumerState<StepBasicInfo>
                 suffixIcon: IconButton(
                   icon: const Icon(Icons.content_paste),
                   tooltip: 'Wklej z schowka',
-                  onPressed: () => _pasteToField(_streetController, (v) =>
-                      widget.onChanged(addressStreet: v)),
+                  onPressed: () => _pasteToField(
+                    _streetController,
+                    (v) => widget.onChanged(addressStreet: v),
+                  ),
                 ),
               ),
               maxLength: 100,
-              onChanged: (v) =>
-                  widget.onChanged(addressStreet: v.trim()),
+              onChanged: (v) => widget.onChanged(addressStreet: v.trim()),
             ),
             const SizedBox(height: 12),
             // Threat category
-            Text('Zagrożenie',
-                style: Theme.of(context).textTheme.titleMedium),
+            Text('Zagrożenie', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
               initialValue: widget.threatCategory.isNotEmpty
@@ -251,20 +252,11 @@ class _StepBasicInfoState extends ConsumerState<StepBasicInfo>
                 prefixIcon: Icon(Icons.warning_amber),
                 hintText: 'Wybierz zagrożenie',
               ),
-              items: [
-                ...categories.map((c) => DropdownMenuItem(
-                      value: c,
-                      child: Text(c),
-                    )),
-                const DropdownMenuItem(
-                  value: '__custom__',
-                  child: Text('Inne — dodaj własne', style: TextStyle(fontStyle: FontStyle.italic)),
-                ),
-              ],
+              items: categories
+                  .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                  .toList(),
               onChanged: (value) {
-                if (value == '__custom__') {
-                  _showAddCustomCategoryDialog();
-                } else if (value != null) {
+                if (value != null) {
                   widget.onChanged(
                     threatCategory: value,
                     clearThreatSubtype: true,
@@ -283,14 +275,15 @@ class _StepBasicInfoState extends ConsumerState<StepBasicInfo>
                   hintText: 'Rodzaj zagrożenia',
                 ),
                 items: [
-                  ...subtypes.map((s) => DropdownMenuItem(
-                        value: s,
-                        child: Text(s),
-                      )),
+                  ...subtypes.map(
+                    (s) => DropdownMenuItem(value: s, child: Text(s)),
+                  ),
                   const DropdownMenuItem(
                     value: '__custom__',
-                    child: Text('Inne — dodaj własne',
-                        style: TextStyle(fontStyle: FontStyle.italic)),
+                    child: Text(
+                      'Inne — dodaj własne',
+                      style: TextStyle(fontStyle: FontStyle.italic),
+                    ),
                   ),
                 ],
                 onChanged: (value) {
@@ -314,36 +307,43 @@ class _StepBasicInfoState extends ConsumerState<StepBasicInfo>
               ),
               maxLength: 300,
               maxLines: 2,
-              onChanged: (v) =>
-                  widget.onChanged(addressDescription: v.trim()),
+              onChanged: (v) => widget.onChanged(addressDescription: v.trim()),
             ),
             const SizedBox(height: 20),
 
             // Vehicles selection
             const SizedBox(height: 8),
-            Text('Pojazdy biorące udział',
-                style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Pojazdy biorące udział',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: 8),
             if (vehicles.isEmpty)
-              const Text('Brak pojazdów — dodaj pojazd w menu głównym',
-                  style: TextStyle(color: Colors.red))
+              const Text(
+                'Brak pojazdów — dodaj pojazd w menu głównym',
+                style: TextStyle(color: Colors.red),
+              )
             else
-              ...vehicles.map((v) => CheckboxListTile(
-                    title: Text(v.name),
-                    subtitle: Text('${v.seats} miejsc'),
-                    value: widget.selectedVehicleIds.contains(v.id),
-                    onChanged: (checked) {
-                      final ids = List<String>.from(widget.selectedVehicleIds);
-                      if (checked == true) {
-                        ids.add(v.id);
-                      } else {
-                        ids.remove(v.id);
-                      }
-                      widget.onChanged(selectedVehicleIds: ids);
-                    },
-                    secondary: const Icon(Icons.fire_truck,
-                        color: Color(0xFFE65100)),
-                  )),
+              ...vehicles.map(
+                (v) => CheckboxListTile(
+                  title: Text(v.name),
+                  subtitle: Text('${v.seats} miejsc'),
+                  value: widget.selectedVehicleIds.contains(v.id),
+                  onChanged: (checked) {
+                    final ids = List<String>.from(widget.selectedVehicleIds);
+                    if (checked == true) {
+                      ids.add(v.id);
+                    } else {
+                      ids.remove(v.id);
+                    }
+                    widget.onChanged(selectedVehicleIds: ids);
+                  },
+                  secondary: const Icon(
+                    Icons.fire_truck,
+                    color: Color(0xFFE65100),
+                  ),
+                ),
+              ),
 
             const SizedBox(height: 24),
             ElevatedButton.icon(
@@ -353,40 +353,6 @@ class _StepBasicInfoState extends ConsumerState<StepBasicInfo>
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  void _showAddCustomCategoryDialog() {
-    final controller = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Nowe zagrożenie'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(hintText: 'Nazwa zagrożenia'),
-          textCapitalization: TextCapitalization.sentences,
-          autofocus: true,
-          maxLength: 100,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Anuluj'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final name = controller.text.trim();
-              if (name.length >= 2) {
-                ref.read(threatsProvider.notifier).addCustomCategory(name);
-                widget.onChanged(threatCategory: name, clearThreatSubtype: true);
-                Navigator.pop(ctx);
-              }
-            },
-            child: const Text('Dodaj'),
-          ),
-        ],
       ),
     );
   }
@@ -468,11 +434,7 @@ class _TimeField extends StatelessWidget {
   final TimeOfDay? value;
   final ValueChanged<TimeOfDay> onChanged;
 
-  const _TimeField({
-    required this.label,
-    this.value,
-    required this.onChanged,
-  });
+  const _TimeField({required this.label, this.value, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
@@ -483,8 +445,9 @@ class _TimeField extends StatelessWidget {
           initialTime: value ?? TimeOfDay.now(),
           builder: (context, child) {
             return MediaQuery(
-              data:
-                  MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
+              data: MediaQuery.of(
+                context,
+              ).copyWith(alwaysUse24HourFormat: true),
               child: child!,
             );
           },
@@ -496,9 +459,11 @@ class _TimeField extends StatelessWidget {
           labelText: label,
           prefixIcon: const Icon(Icons.access_time),
         ),
-        child: Text(value != null
-            ? '${value!.hour.toString().padLeft(2, '0')}:${value!.minute.toString().padLeft(2, '0')}'
-            : '—'),
+        child: Text(
+          value != null
+              ? '${value!.hour.toString().padLeft(2, '0')}:${value!.minute.toString().padLeft(2, '0')}'
+              : '—',
+        ),
       ),
     );
   }

@@ -150,11 +150,18 @@ class PdfService {
       }
     }
 
-    // Local helper — text with underline below
+    // Puste wiersze dopełniające tabelę — jak na papierowym formularzu
+    while (tableRows.length < 10) {
+      tableRows.add(List.filled(5, ''));
+    }
+
+    // Local helper — text over a dotted line (jak wykropkowane pole formularza)
     pw.Widget underlined(String text, {bool bold = false, double size = 8}) {
       return pw.Container(
         decoration: const pw.BoxDecoration(
-          border: pw.Border(bottom: pw.BorderSide(width: 0.5)),
+          border: pw.Border(
+            bottom: pw.BorderSide(width: 0.7, style: pw.BorderStyle.dotted),
+          ),
         ),
         padding: const pw.EdgeInsets.only(bottom: 1),
         child: pw.Text(
@@ -167,6 +174,45 @@ class PdfService {
       );
     }
 
+    // Kratki na pojedyncze znaki numeru ewidencyjnego (jak na formularzu)
+    pw.Widget charBoxes(String text) {
+      return pw.Row(
+        mainAxisSize: pw.MainAxisSize.min,
+        children: [
+          for (final ch in text.split(''))
+            pw.Container(
+              width: 11,
+              height: 14,
+              alignment: pw.Alignment.center,
+              decoration: pw.BoxDecoration(border: pw.Border.all(width: 0.5)),
+              child: pw.Text(
+                ch,
+                style: pw.TextStyle(
+                  fontSize: 8,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+            ),
+        ],
+      );
+    }
+
+    // Numer ewidencyjny "NNNN/RRRR" → kratki, myślnik, kratki
+    final numberParts = report.reportNumber.split('/');
+    final numberBoxes = pw.Row(
+      mainAxisSize: pw.MainAxisSize.min,
+      children: [
+        charBoxes(numberParts.first),
+        if (numberParts.length > 1) ...[
+          pw.Padding(
+            padding: const pw.EdgeInsets.symmetric(horizontal: 2),
+            child: pw.Text('-', style: const pw.TextStyle(fontSize: 8)),
+          ),
+          charBoxes(numberParts.sublist(1).join('/')),
+        ],
+      ],
+    );
+
     // Pojedynczy egzemplarz formularza (zawartość w formacie A5)
     pw.Widget buildCopy() {
       return pw.Padding(
@@ -174,25 +220,17 @@ class PdfService {
         child: pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.stretch,
           children: [
-            // ---- HEADER ----
+            // ---- HEADER (jak na szkicu: kratki numeru u góry po prawej,
+            // nazwa podmiotu nad wykropkowaną linią po lewej) ----
             pw.Row(
-              crossAxisAlignment: pw.CrossAxisAlignment.end,
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                // Left: unit name + (podmiot ksrg)
                 pw.Expanded(
                   child: pw.Column(
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
-                      pw.Container(
-                        decoration: const pw.BoxDecoration(
-                          border: pw.Border(bottom: pw.BorderSide(width: 0.5)),
-                        ),
-                        padding: const pw.EdgeInsets.only(bottom: 2),
-                        child: pw.Text(
-                          config.fullName,
-                          style: const pw.TextStyle(fontSize: 7),
-                        ),
-                      ),
+                      pw.SizedBox(height: 8),
+                      underlined(config.fullName, size: 7),
                       pw.Text(
                         '(podmiot ksrg)',
                         style: pw.TextStyle(
@@ -203,29 +241,14 @@ class PdfService {
                     ],
                   ),
                 ),
-                pw.SizedBox(width: 16),
-                // Right: report number in box + label
+                pw.SizedBox(width: 24),
                 pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.end,
+                  crossAxisAlignment: pw.CrossAxisAlignment.center,
                   children: [
-                    pw.Container(
-                      padding: const pw.EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 3,
-                      ),
-                      decoration: pw.BoxDecoration(
-                        border: pw.Border.all(width: 0.5),
-                      ),
-                      child: pw.Text(
-                        report.reportNumber,
-                        style: pw.TextStyle(
-                          fontSize: 7,
-                          fontWeight: pw.FontWeight.bold,
-                        ),
-                      ),
-                    ),
+                    numberBoxes,
+                    pw.SizedBox(height: 1),
                     pw.Text(
-                      'nr ewidencyjny zdarzenia*',
+                      'nr ewidencyjny zdarzenia *',
                       style: pw.TextStyle(
                         fontSize: 6,
                         fontStyle: pw.FontStyle.italic,
@@ -235,40 +258,35 @@ class PdfService {
                 ),
               ],
             ),
-            pw.SizedBox(height: 10),
+            pw.SizedBox(height: 14),
 
             // ---- TITLE ----
             pw.Center(
               child: pw.Text(
                 'POTWIERDZENIE',
                 style: pw.TextStyle(
-                  fontSize: 13,
+                  fontSize: 12,
                   fontWeight: pw.FontWeight.bold,
                 ),
               ),
             ),
-            pw.SizedBox(height: 4),
-            pw.Center(
-              child: pw.Text(
-                'udziału sił i środków podmiotu ratowniczego'
-                ' w działaniu ratowniczym',
-                style: const pw.TextStyle(fontSize: 8),
-                textAlign: pw.TextAlign.center,
-              ),
-            ),
-            pw.SizedBox(height: 4),
+            pw.SizedBox(height: 10),
 
-            // "w dniu [data] w godzinach** [od – do]"
+            // "udziału w działaniu ratowniczym w dniu... w godzinach**..."
             pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.center,
               children: [
-                pw.Text('w dniu  ', style: const pw.TextStyle(fontSize: 8)),
-                underlined(dateStr, bold: true),
                 pw.Text(
-                  '  w godzinach**  ',
+                  'udziału w działaniu ratowniczym w dniu ',
                   style: const pw.TextStyle(fontSize: 8),
                 ),
-                underlined('$depTime – $retTime', bold: true),
+                underlined(' $dateStr ', bold: true),
+                pw.Text(
+                  ' w godzinach** ',
+                  style: const pw.TextStyle(fontSize: 8),
+                ),
+                pw.Expanded(
+                  child: underlined(' $depTime – $retTime', bold: true),
+                ),
               ],
             ),
             pw.SizedBox(height: 8),
@@ -276,7 +294,12 @@ class PdfService {
             // ---- ADDRESS LINE ----
             pw.Container(
               decoration: const pw.BoxDecoration(
-                border: pw.Border(bottom: pw.BorderSide(width: 0.5)),
+                border: pw.Border(
+                  bottom: pw.BorderSide(
+                    width: 0.7,
+                    style: pw.BorderStyle.dotted,
+                  ),
+                ),
               ),
               padding: const pw.EdgeInsets.only(bottom: 2),
               child: pw.Text(
@@ -303,9 +326,7 @@ class PdfService {
                 fontWeight: pw.FontWeight.bold,
               ),
               cellStyle: const pw.TextStyle(fontSize: 7),
-              headerDecoration: const pw.BoxDecoration(
-                color: PdfColors.grey200,
-              ),
+              headerAlignment: pw.Alignment.center,
               cellHeight: 18,
               cellAlignments: {
                 0: pw.Alignment.center,
@@ -354,7 +375,7 @@ class PdfService {
                     ),
                   ),
                 ),
-                pw.Spacer(),
+                pw.SizedBox(width: 48),
                 pw.Text(
                   'liczba ratowników  ',
                   style: const pw.TextStyle(fontSize: 7),
@@ -385,24 +406,32 @@ class PdfService {
                 crossAxisAlignment: pw.CrossAxisAlignment.center,
                 children: [
                   pw.Container(
-                    width: 160,
+                    width: 190,
                     decoration: const pw.BoxDecoration(
-                      border: pw.Border(top: pw.BorderSide(width: 0.5)),
+                      border: pw.Border(
+                        bottom: pw.BorderSide(
+                          width: 0.7,
+                          style: pw.BorderStyle.dotted,
+                        ),
+                      ),
                     ),
-                    padding: const pw.EdgeInsets.only(top: 2),
+                    padding: const pw.EdgeInsets.only(bottom: 1),
                     child: pw.Text(
                       operationCommander?.fullName ?? '',
                       textAlign: pw.TextAlign.center,
                       style: const pw.TextStyle(fontSize: 7),
                     ),
                   ),
-                  pw.Text(
-                    '(imię, nazwisko i stopień kierującego'
-                    ' działaniem ratowniczym)',
-                    textAlign: pw.TextAlign.center,
-                    style: pw.TextStyle(
-                      fontSize: 6,
-                      fontStyle: pw.FontStyle.italic,
+                  pw.SizedBox(
+                    width: 190,
+                    child: pw.Text(
+                      '(imię, nazwisko i stopień kierującego'
+                      ' działaniem ratowniczym)',
+                      textAlign: pw.TextAlign.center,
+                      style: pw.TextStyle(
+                        fontSize: 6,
+                        fontStyle: pw.FontStyle.italic,
+                      ),
                     ),
                   ),
                 ],
@@ -410,15 +439,38 @@ class PdfService {
             ),
             pw.SizedBox(height: 6),
 
-            // ---- FOOTNOTES ----
-            pw.Text(
-              '* Wpisać numer ewidencyjny zdarzenia z ewidencji zdarzeń.',
-              style: pw.TextStyle(fontSize: 6, fontStyle: pw.FontStyle.italic),
+            // ---- FOOTNOTES (wysunięte gwiazdki jak na formularzu) ----
+            pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.SizedBox(
+                  width: 22,
+                  child: pw.Text('*', style: const pw.TextStyle(fontSize: 6)),
+                ),
+                pw.Expanded(
+                  child: pw.Text(
+                    'wpisać numer ewidencyjny zdarzenia z ewidencji zdarzeń',
+                    style: const pw.TextStyle(fontSize: 6),
+                  ),
+                ),
+              ],
             ),
-            pw.Text(
-              '** Czas interwencji (dla społecznych organizacji ratowniczych'
-              ' można uwzględnić również czas podwyższonej gotowości operacyjnej).',
-              style: pw.TextStyle(fontSize: 6, fontStyle: pw.FontStyle.italic),
+            pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.SizedBox(
+                  width: 22,
+                  child: pw.Text('**', style: const pw.TextStyle(fontSize: 6)),
+                ),
+                pw.Expanded(
+                  child: pw.Text(
+                    'czas interwencji (dla społecznych organizacji'
+                    ' ratowniczych można uwzględnić również czas'
+                    ' podwyższonej gotowości operacyjnej)',
+                    style: const pw.TextStyle(fontSize: 6),
+                  ),
+                ),
+              ],
             ),
           ],
         ),

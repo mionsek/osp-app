@@ -10,6 +10,8 @@ import 'providers/providers.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await DatabaseService.initialize();
+  // Migracja słownika zagrożeń do aktualnych stałych list
+  await DatabaseService().ensureDefaultThreats();
   await MobileAds.instance.initialize();
   runApp(const ProviderScope(child: OspApp()));
 }
@@ -39,7 +41,7 @@ class _OspAppState extends ConsumerState<OspApp> {
     final router = ref.watch(routerProvider);
 
     return MaterialApp.router(
-      title: 'OSP — Raporty',
+      title: 'Raporty OSP',
       theme: OspTheme.lightTheme,
       debugShowCheckedModeBanner: false,
       routerConfig: router,
@@ -48,9 +50,7 @@ class _OspAppState extends ConsumerState<OspApp> {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      supportedLocales: const [
-        Locale('pl'),
-      ],
+      supportedLocales: const [Locale('pl')],
       locale: const Locale('pl'),
     );
   }

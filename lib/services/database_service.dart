@@ -1,4 +1,5 @@
 import 'package:hive_flutter/hive_flutter.dart';
+import '../core/constants/threat_types.dart';
 import '../models/models.dart';
 
 class DatabaseService {
@@ -121,8 +122,9 @@ class DatabaseService {
 
   String getNextReportNumber() {
     final year = DateTime.now().year;
-    final reportsThisYear =
-        reportsBox.values.where((r) => r.year == year).toList();
+    final reportsThisYear = reportsBox.values
+        .where((r) => r.year == year)
+        .toList();
     int maxNum = 0;
     for (final r in reportsThisYear) {
       final parts = r.reportNumber.split('/');
@@ -136,16 +138,14 @@ class DatabaseService {
   /// year (or current year if not specified). Used after sync to detect conflicts.
   List<String> findDuplicateReportNumbers({int? year}) {
     final y = year ?? DateTime.now().year;
-    final reportsThisYear =
-        reportsBox.values.where((r) => r.year == y).toList();
+    final reportsThisYear = reportsBox.values
+        .where((r) => r.year == y)
+        .toList();
     final counts = <String, int>{};
     for (final r in reportsThisYear) {
       counts[r.reportNumber] = (counts[r.reportNumber] ?? 0) + 1;
     }
-    return counts.entries
-        .where((e) => e.value > 1)
-        .map((e) => e.key)
-        .toList();
+    return counts.entries.where((e) => e.value > 1).map((e) => e.key).toList();
   }
 
   // --- Threats ---
@@ -158,37 +158,39 @@ class DatabaseService {
     await threatsBox.put(threat.category, threat);
   }
 
-  Future<void> initializeDefaultThreats() async {
-    // Reseed if old keys exist (lowercase names from previous version)
-    final needsReseed = threatsBox.isEmpty ||
-        threatsBox.containsKey('Pożar') && !threatsBox.containsKey('Miejscowe Zagrożenie') ||
-        threatsBox.containsKey('Miejscowe zagrożenie') ||
-        threatsBox.containsKey('Fałszywy alarm');
-    if (!needsReseed) return;
-    await threatsBox.clear();
-    final defaults = {
-      'Miejscowe Zagrożenie': [
-        'Kolizja',
-        'Wypadek',
-        'Plama oleju',
-        'Zalanie mieszkania',
-        'Powalone drzewo',
-        'Uwięzienie zwierzęcia',
-      ],
-      'Pożar': [
-        'Pożar budynku',
-        'Pożar traw',
-        'Pożar lasu',
-        'Pożar samochodu',
-        'Pożar śmietnika',
-      ],
-      'Fałszywy Alarm': <String>[],
-    };
-    for (final entry in defaults.entries) {
+  Future<void> initializeDefaultThreats() => ensureDefaultThreats();
+
+  /// Uzgadnia słownik zagrożeń ze stałą listą [ThreatTypes.defaults]:
+  /// - trzy stałe kategorie zawsze istnieją, z domyślnymi podtypami
+  ///   w zadanej kolejności,
+  /// - podtypy dodane ręcznie przez użytkownika zostają (na końcu listy),
+  /// - podtypy z wycofanych list domyślnych i kategorie spoza stałej
+  ///   trójki są usuwane.
+  Future<void> ensureDefaultThreats() async {
+    for (final entry in ThreatTypes.defaults.entries) {
+      final existing = threatsBox.get(entry.key);
+      final customSubtypes = existing == null
+          ? const <String>[]
+          : existing.subtypes
+                .where(
+                  (s) =>
+                      !entry.value.contains(s) &&
+                      !ThreatTypes.retiredSubtypes.contains(s),
+                )
+                .toList();
       await threatsBox.put(
         entry.key,
-        ThreatEntry(category: entry.key, subtypes: entry.value),
+        ThreatEntry(
+          category: entry.key,
+          subtypes: [...entry.value, ...customSubtypes],
+        ),
       );
+    }
+    final extraCategories = threatsBox.keys
+        .where((k) => !ThreatTypes.defaults.containsKey(k))
+        .toList();
+    if (extraCategories.isNotEmpty) {
+      await threatsBox.deleteAll(extraCategories);
     }
   }
 }
