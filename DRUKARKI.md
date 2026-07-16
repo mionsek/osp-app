@@ -41,6 +41,12 @@ dokumentów archiwizowanych.
 | Phomemo M08F | ~430–470 zł | arkusze A4 (200 szt./pudełko) lub rolka z uchwytem | [Allegro](https://allegro.pl/produkt/przenosna-drukarka-termiczna-a4-bluetooth-m08f-c3f94e2c-d77f-43ea-848b-44863d45d464) · [GOMEDIA](https://gomedia.net.pl/pl/p/Drukarka-Termiczna-do-Dokumentow-Papier-A4-Phomemo-M08F-Bluetooth-Android/2444868) |
 | AIMO M08F (203 dpi) | ~430 zł | arkusze A4 (100 szt. w zestawie) | [Strefadrukarek](https://strefadrukarek.pl/pl/products/przenosna-drukarka-a4-aimo-m08f-203dpi-do-210mm-pc-mac-smartfon-bt-usb-5411.html) |
 | PeriPage A40 (304 dpi) | ~390–450 zł | arkusze składane A4 (100 szt.) lub rolka | [Ceneo](https://www.ceneo.pl/87317371) · [PeriPage Store](https://www.peripageglobal.com/collections/a4) |
+| NETUM LT-A10 (203 dpi) | ~279 zł | pojedyncze arkusze A4 lub rolka (57–210 mm); w zestawie 25 ark. | [Allegro](https://allegro.pl/oferta/przenosna-termiczna-drukarka-a4-netum-lt-a10-do-dokumentow-zdjec-etykiet-18491947859) · [ERLI](https://erli.pl/produkt/przenosna-termiczna-drukarka-a4-netum-do-dokumentow-zdjec-etykiet-tatuaz,223525837) |
+
+NETUM LT-A10: najtańsza z termicznych (BT + USB-C, bateria 2600 mAh ≈ 90 stron,
+druk przez apkę **ScanPrint** Android/iOS — mniej sprawdzony ekosystem niż
+Phomemo/PeriPage). Cena zbliżona do Canona TS3550i (~267 zł), który do remizy
+pozostaje lepszy (zwykły papier, trwały wydruk, Mopria).
 
 Papier termiczny A4 (cięte kartki):
 [Phomemo 200 szt. — Amazon.pl](https://www.amazon.pl/Phomemo-szybkoschn%C4%85cy-termiczny-przeno%C5%9Bnej-termicznej/dp/B0D6BK35HH) ·
