@@ -16,7 +16,7 @@ class UnitConfig extends HiveObject {
   @HiveField(3)
   bool isAdmin;
 
-  @HiveField(4)
+  @HiveField(4, defaultValue: '')
   String ownerEmail;
 
   UnitConfig({

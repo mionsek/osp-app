@@ -38,6 +38,9 @@ class GoogleDriveService {
     // Create reports subfolder
     await _createSubfolder(folderId, 'reports');
 
+    // Create property handovers subfolder
+    await _createSubfolder(folderId, 'handovers');
+
     return folderId;
   }
 
@@ -75,6 +78,16 @@ class GoogleDriveService {
   Future<String?> findReportsFolder(String unitFolderId) async {
     final result = await _api.files.list(
       q: "'$unitFolderId' in parents and name = 'reports' and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
+      spaces: 'drive',
+      $fields: 'files(id)',
+    );
+    return result.files?.isNotEmpty == true ? result.files!.first.id : null;
+  }
+
+  /// Find property handovers subfolder inside unit folder.
+  Future<String?> findHandoversFolder(String unitFolderId) async {
+    final result = await _api.files.list(
+      q: "'$unitFolderId' in parents and name = 'handovers' and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
       spaces: 'drive',
       $fields: 'files(id)',
     );

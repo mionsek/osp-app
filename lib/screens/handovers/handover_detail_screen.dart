@@ -1,0 +1,222 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
+import '../../models/models.dart';
+import '../../providers/providers.dart';
+import '../../services/pdf_service.dart';
+
+class HandoverDetailScreen extends ConsumerWidget {
+  final String handoverId;
+  const HandoverDetailScreen({super.key, required this.handoverId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final db = ref.watch(databaseServiceProvider);
+    final handover = db.getHandover(handoverId);
+    final firefighters = ref.watch(firefightersProvider);
+    final config = ref.watch(unitConfigProvider);
+
+    if (handover == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Przekazanie mienia')),
+        body: const Center(child: Text('Nie znaleziono przekazania')),
+      );
+    }
+
+    Firefighter? findFF(String? id) {
+      if (id == null || id.isEmpty) return null;
+      return firefighters.where((f) => f.id == id).firstOrNull;
+    }
+
+    final handoverFF = findFF(handover.handoverFirefighterId);
+    String formatTime(DateTime dt) =>
+        '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+
+    return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.home),
+          onPressed: () => context.go('/home'),
+          tooltip: 'Menu główne',
+        ),
+        title: const Text('Przekazanie mienia'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.edit),
+            onPressed: () => context.push('/handovers/edit/${handover.id}'),
+            tooltip: 'Edytuj',
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete),
+            onPressed: () => _confirmDelete(context, ref, handover),
+            tooltip: 'Usuń',
+          ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _Row('Miejsce zdarzenia', handover.eventLocation),
+                    _Row('Data', DateFormat('dd.MM.yyyy').format(handover.eventDate)),
+                    _Row('Godzina', formatTime(handover.eventTime)),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Przejmujący',
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleMedium
+                            ?.copyWith(fontWeight: FontWeight.bold)),
+                    const Divider(),
+                    _Row('Rodzaj', handover.recipientTypeLabel),
+                    _Row('Imię i nazwisko', handover.recipientName),
+                    if (handover.recipientAddress.isNotEmpty)
+                      _Row('Adres', handover.recipientAddress),
+                    if (handover.recipientPhone.isNotEmpty)
+                      _Row('Telefon', handover.recipientPhone),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Przekazywane mienie',
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleMedium
+                            ?.copyWith(fontWeight: FontWeight.bold)),
+                    const Divider(),
+                    Text(handover.propertyDescription),
+                    if (handover.notes != null && handover.notes!.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      _Row('Uwagi', handover.notes!),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _Row('Przekazujący', handoverFF?.fullNameWithRank ?? '—'),
+                    _Row('Miejscowość, dnia',
+                        '${handover.signLocality}, ${DateFormat('dd.MM.yyyy').format(handover.signDate)}'),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: () => PdfService.generateAndPrintHandover(
+                  handover, config, handoverFF),
+              icon: const Icon(Icons.print),
+              label: const Text('Drukuj'),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: () => PdfService.generateAndShareHandover(
+                  handover, config, handoverFF),
+              icon: const Icon(Icons.share),
+              label: const Text('Udostępnij / Wyślij'),
+            ),
+            const SizedBox(height: 16),
+            const Divider(),
+            const SizedBox(height: 8),
+            TextButton.icon(
+              onPressed: () => context.go('/handovers'),
+              icon: const Icon(Icons.list),
+              label: const Text('Lista przekazań mienia'),
+            ),
+            TextButton.icon(
+              onPressed: () => context.go('/home'),
+              icon: const Icon(Icons.home),
+              label: const Text('Wróć do menu głównego'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _confirmDelete(
+      BuildContext context, WidgetRef ref, PropertyHandover handover) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Usuń przekazanie mienia'),
+        content: const Text('Czy na pewno chcesz usunąć to przekazanie mienia?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Anuluj'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFB71C1C)),
+            onPressed: () {
+              ref.read(handoversProvider.notifier).delete(handover.id);
+              Navigator.pop(ctx);
+              context.go('/handovers');
+            },
+            child: const Text('Usuń'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Row extends StatelessWidget {
+  final String label;
+  final String value;
+  const _Row(this.label, this.value);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 130,
+            child: Text(label,
+                style: TextStyle(
+                    color: Colors.grey[600], fontWeight: FontWeight.w500)),
+          ),
+          Expanded(
+            child: Text(value,
+                style: const TextStyle(fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+  }
+}

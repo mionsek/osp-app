@@ -9,6 +9,7 @@ class DatabaseService {
   static const String _configBox = 'config';
   static const String _threatsBox = 'threats';
   static const String _settingsBox = 'settings';
+  static const String _handoversBox = 'property_handovers';
 
   static Future<void> initialize() async {
     await Hive.initFlutter();
@@ -19,6 +20,7 @@ class DatabaseService {
     Hive.registerAdapter(ThreatEntryAdapter());
     Hive.registerAdapter(ReportAdapter());
     Hive.registerAdapter(UnitConfigAdapter());
+    Hive.registerAdapter(PropertyHandoverAdapter());
 
     await Future.wait([
       Hive.openBox<Vehicle>(_vehiclesBox),
@@ -27,6 +29,7 @@ class DatabaseService {
       Hive.openBox<UnitConfig>(_configBox),
       Hive.openBox<ThreatEntry>(_threatsBox),
       Hive.openBox<dynamic>(_settingsBox),
+      Hive.openBox<PropertyHandover>(_handoversBox),
     ]);
   }
 
@@ -147,6 +150,31 @@ class DatabaseService {
     }
     return counts.entries.where((e) => e.value > 1).map((e) => e.key).toList();
   }
+
+  // --- Property handovers (przekazanie mienia) ---
+
+  Box<PropertyHandover> get handoversBox =>
+      Hive.box<PropertyHandover>(_handoversBox);
+
+  List<PropertyHandover> getAllHandovers() {
+    final handovers = handoversBox.values.toList();
+    handovers.sort((a, b) => b.eventDate.compareTo(a.eventDate));
+    return handovers;
+  }
+
+  Future<void> addHandover(PropertyHandover handover) async {
+    await handoversBox.put(handover.id, handover);
+  }
+
+  Future<void> updateHandover(PropertyHandover handover) async {
+    await handoversBox.put(handover.id, handover);
+  }
+
+  Future<void> deleteHandover(String id) async {
+    await handoversBox.delete(id);
+  }
+
+  PropertyHandover? getHandover(String id) => handoversBox.get(id);
 
   // --- Threats ---
 

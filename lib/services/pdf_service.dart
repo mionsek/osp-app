@@ -2,6 +2,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:intl/intl.dart';
+import '../core/constants/handover_recipient_types.dart';
 import '../models/models.dart';
 import '../providers/statistics_provider.dart';
 
@@ -60,6 +61,28 @@ class PdfService {
   ) async {
     final pdf = await _buildStatsPdf(stats, config);
     await _sharePdf(pdf, _statsFileName(stats));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Przekazanie mienia — drukuj / udostępnij
+  // ---------------------------------------------------------------------------
+
+  static Future<void> generateAndPrintHandover(
+    PropertyHandover handover,
+    UnitConfig config,
+    Firefighter? handoverFirefighter,
+  ) async {
+    final pdf = await _buildHandoverPdf(handover, config, handoverFirefighter);
+    await _layoutPdf(pdf, _handoverFileName(handover));
+  }
+
+  static Future<void> generateAndShareHandover(
+    PropertyHandover handover,
+    UnitConfig config,
+    Firefighter? handoverFirefighter,
+  ) async {
+    final pdf = await _buildHandoverPdf(handover, config, handoverFirefighter);
+    await _sharePdf(pdf, _handoverFileName(handover));
   }
 
   static String _sanitizeFilename(String s) =>
@@ -653,6 +676,362 @@ class PdfService {
         ],
       ),
     );
+
+    return pdf;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Nazwa pliku przekazania mienia
+  // ---------------------------------------------------------------------------
+
+  static String _handoverFileName(PropertyHandover handover) {
+    final dateStr = DateFormat('yyyy-MM-dd').format(handover.eventDate);
+    final locality = _sanitizeFilename(
+      handover.eventLocation.isNotEmpty ? handover.eventLocation : 'mienie',
+    );
+    return 'przekazanie_mienia_${dateStr}_$locality.pdf';
+  }
+
+  // ---------------------------------------------------------------------------
+  // Budowanie PDF przekazania mienia (A4) — wzorowane na formularzu
+  // „Potwierdzenie przekazania terenu, obiektu lub mienia objętego
+  // działaniem ratowniczym" (§ 21 ust. 2 pkt 2 rozp. MSWiA z 17.09.2021 r.)
+  // ---------------------------------------------------------------------------
+
+  /// Klauzule podmiotu przejmującego w formie z formularza (celownik) wraz
+  /// z zestawem wartości [PropertyHandover.recipientType], które je wybierają.
+  /// Dwie ostatnie opcje z listy zamkniętej dzielą jedną klauzulę na
+  /// formularzu ("przedstawicielowi ... lub samorządu terytorialnego").
+  static final List<(String, Set<String>)> _recipientClauses = [
+    ('właścicielowi', {HandoverRecipientTypes.owner}),
+    ('zarządcy', {HandoverRecipientTypes.manager}),
+    ('użytkownikowi', {HandoverRecipientTypes.user}),
+    (
+      'przedstawicielowi organu administracji rządowej lub samorządu terytorialnego',
+      {
+        HandoverRecipientTypes.governmentAdminRep,
+        HandoverRecipientTypes.localGovRep,
+      },
+    ),
+    ('Policji', {HandoverRecipientTypes.police}),
+    ('straży gminnej/miejskiej', {HandoverRecipientTypes.municipalGuard}),
+  ];
+
+  /// Buduje rozpiskę „(właścicielowi, zarządcy, ...)" z klauzulą wybraną
+  /// pogrubioną i podkreśloną, a pozostałymi przekreślonymi — tak jak
+  /// ręczne „niepotrzebne skreślić" na papierowym formularzu.
+  static List<pw.InlineSpan> _recipientClauseSpans(PropertyHandover handover) {
+    final spans = <pw.InlineSpan>[];
+    final isOther = handover.recipientType == HandoverRecipientTypes.other;
+    for (var i = 0; i < _recipientClauses.length; i++) {
+      final (label, matches) = _recipientClauses[i];
+      final selected = !isOther && matches.contains(handover.recipientType);
+      spans.add(
+        pw.TextSpan(
+          text: label,
+          style: pw.TextStyle(
+            fontSize: 8,
+            fontWeight: selected ? pw.FontWeight.bold : pw.FontWeight.normal,
+            decoration:
+                selected ? pw.TextDecoration.underline : pw.TextDecoration.lineThrough,
+          ),
+        ),
+      );
+      if (i < _recipientClauses.length - 1) {
+        spans.add(const pw.TextSpan(text: ', ', style: pw.TextStyle(fontSize: 8)));
+      }
+    }
+    if (isOther) {
+      spans.add(pw.TextSpan(
+        text: ' (${handover.recipientTypeOther ?? handover.recipientType})',
+        style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
+      ));
+    }
+    return spans;
+  }
+
+  /// Prosty zawijacz tekstu na potrzeby wykropkowanych linii formularza —
+  /// dzieli po słowach, a nadmiar (ponad [maxLines]) dokłada do ostatniej
+  /// linii zamiast go obcinać.
+  static List<String> _wrapText(
+    String text,
+    int maxLines, {
+    int charsPerLine = 100,
+  }) {
+    if (text.isEmpty) return List.filled(maxLines, '');
+    final words = text.split(RegExp(r'\s+'));
+    final lines = <String>[];
+    var current = '';
+    for (final word in words) {
+      final candidate = current.isEmpty ? word : '$current $word';
+      if (candidate.length > charsPerLine && current.isNotEmpty) {
+        lines.add(current);
+        current = word;
+      } else {
+        current = candidate;
+      }
+    }
+    if (current.isNotEmpty) lines.add(current);
+
+    if (lines.length > maxLines) {
+      final overflow = lines.sublist(maxLines - 1).join(' ');
+      final trimmed = lines.sublist(0, maxLines - 1)..add(overflow);
+      return trimmed;
+    }
+    while (lines.length < maxLines) {
+      lines.add('');
+    }
+    return lines;
+  }
+
+  static Future<pw.Document> _buildHandoverPdf(
+    PropertyHandover handover,
+    UnitConfig config,
+    Firefighter? handoverFirefighter,
+  ) async {
+    final baseFont = await PdfGoogleFonts.openSansRegular();
+    final boldFont = await PdfGoogleFonts.openSansBold();
+    final italicFont = await PdfGoogleFonts.openSansItalic();
+    final pageTheme = pw.ThemeData.withFont(
+      base: baseFont,
+      bold: boldFont,
+      italic: italicFont,
+    );
+
+    final pdf = pw.Document(
+      title: 'Potwierdzenie przekazania mienia',
+      author: config.fullName,
+    );
+
+    final eventDateStr = DateFormat('dd.MM.yyyy').format(handover.eventDate);
+    final eventTimeStr =
+        '${handover.eventTime.hour.toString().padLeft(2, '0')}:${handover.eventTime.minute.toString().padLeft(2, '0')}';
+    final signDateStr = DateFormat('dd.MM.yyyy').format(handover.signDate);
+
+    pw.Widget dottedLine(String text, {double size = 8, bool bold = false}) {
+      return pw.Container(
+        decoration: const pw.BoxDecoration(
+          border: pw.Border(
+            bottom: pw.BorderSide(width: 0.7, style: pw.BorderStyle.dotted),
+          ),
+        ),
+        padding: const pw.EdgeInsets.only(bottom: 1),
+        child: pw.Text(
+          text,
+          style: pw.TextStyle(
+            fontSize: size,
+            fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
+          ),
+        ),
+      );
+    }
+
+    pw.Widget caption(String text) => pw.Text(
+          text,
+          textAlign: pw.TextAlign.center,
+          style: pw.TextStyle(fontSize: 6, fontStyle: pw.FontStyle.italic),
+        );
+
+    final propertyLines = _wrapText(handover.propertyDescription, 3);
+    final notesLines = _wrapText(handover.notes ?? '', 4);
+
+    // Formularz drukowany w 2 egzemplarzach (dla przekazującego i dla
+    // przejmującego) — każdy egzemplarz to osobna, pełna strona A4.
+    pw.Widget buildCopy() => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+          children: [
+            // ---- HEADER: podmiot ksrg ----
+            dottedLine(config.fullName, size: 8),
+            caption('(podmiot ksrg)'),
+            pw.SizedBox(height: 18),
+
+            // ---- TITLE ----
+            pw.Center(
+              child: pw.Text(
+                'POTWIERDZENIE',
+                style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold),
+              ),
+            ),
+            pw.SizedBox(height: 4),
+            pw.Center(
+              child: pw.Text(
+                'PRZEKAZANIA TERENU, OBIEKTU LUB MIENIA*',
+                textAlign: pw.TextAlign.center,
+                style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
+              ),
+            ),
+            pw.Center(
+              child: pw.Text(
+                'OBJĘTEGO DZIAŁANIEM RATOWNICZYM',
+                style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
+              ),
+            ),
+            pw.SizedBox(height: 16),
+
+            // ---- Dotyczy zdarzenia w... ----
+            pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.end,
+              children: [
+                pw.Text('Dotyczy zdarzenia w ',
+                    style: const pw.TextStyle(fontSize: 9)),
+                pw.Expanded(child: dottedLine(handover.eventLocation, size: 9)),
+              ],
+            ),
+            caption('(miejscowość, adres)'),
+            pw.SizedBox(height: 12),
+
+            // ---- W dniu... o godzinie... ----
+            pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.end,
+              children: [
+                pw.Text('W dniu ', style: const pw.TextStyle(fontSize: 9)),
+                pw.SizedBox(
+                    width: 90, child: dottedLine(eventDateStr, size: 9, bold: true)),
+                pw.Text('  o godzinie ', style: const pw.TextStyle(fontSize: 9)),
+                pw.SizedBox(
+                    width: 60, child: dottedLine(eventTimeStr, size: 9, bold: true)),
+                pw.Expanded(child: dottedLine('', size: 9)),
+              ],
+            ),
+            pw.SizedBox(height: 10),
+
+            // ---- Podstawa prawna + rodzaj przejmującego (niepotrzebne skreślić) ----
+            pw.RichText(
+              text: pw.TextSpan(
+                style: const pw.TextStyle(fontSize: 8),
+                children: [
+                  const pw.TextSpan(
+                    text: 'zgodnie z § 21 ust. 2 pkt 2 rozporządzenia Ministra '
+                        'Spraw Wewnętrznych i Administracji z dnia 17 września '
+                        '2021 r. w sprawie szczegółowej organizacji krajowego '
+                        'systemu ratowniczo-gaśniczego przekazuję ',
+                  ),
+                  const pw.TextSpan(text: '('),
+                  ..._recipientClauseSpans(handover),
+                  const pw.TextSpan(text: ')*'),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 10),
+
+            // ---- imię i nazwisko przejmującego ----
+            dottedLine(handover.recipientName, size: 9),
+            caption('(imię i nazwisko)'),
+            pw.SizedBox(height: 8),
+
+            pw.Text(
+              'do nadzorowania i zabezpieczenia następujący/ce teren, obiekt '
+              'lub mienie*:',
+              style: const pw.TextStyle(fontSize: 9),
+            ),
+            pw.SizedBox(height: 6),
+            for (final line in propertyLines) ...[
+              dottedLine(line, size: 9),
+              pw.SizedBox(height: 3),
+            ],
+            pw.Text(
+              'które objęte były działaniami ratowniczymi.',
+              style: const pw.TextStyle(fontSize: 9),
+            ),
+            pw.SizedBox(height: 8),
+            pw.Text('Uwagi szczegółowe:', style: const pw.TextStyle(fontSize: 9)),
+            pw.SizedBox(height: 6),
+            for (final line in notesLines) ...[
+              dottedLine(line, size: 9),
+              pw.SizedBox(height: 3),
+            ],
+            pw.SizedBox(height: 14),
+
+            // ---- Przekazujący / Przejmujący ----
+            pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Expanded(
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+                    children: [
+                      pw.Center(
+                        child: pw.Text('Przekazujący',
+                            style: pw.TextStyle(
+                                fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                      ),
+                      caption('(stopień służbowy, imię i nazwisko)'),
+                      pw.SizedBox(height: 6),
+                      dottedLine(handoverFirefighter?.fullNameWithRank ?? '',
+                          size: 9),
+                      pw.SizedBox(height: 8),
+                      dottedLine('', size: 9),
+                      pw.SizedBox(height: 4),
+                      caption('(podpis)'),
+                    ],
+                  ),
+                ),
+                pw.SizedBox(width: 16),
+                pw.Expanded(
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+                    children: [
+                      pw.Center(
+                        child: pw.Text('Przejmujący',
+                            style: pw.TextStyle(
+                                fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                      ),
+                      caption(
+                          '(imię i nazwisko, adres służbowy lub zamieszkania '
+                          'oraz numer telefonu)'),
+                      pw.SizedBox(height: 6),
+                      dottedLine(handover.recipientName, size: 9),
+                      pw.SizedBox(height: 3),
+                      dottedLine(
+                        [handover.recipientAddress, handover.recipientPhone]
+                            .where((s) => s.isNotEmpty)
+                            .join(', tel. '),
+                        size: 9,
+                      ),
+                      pw.SizedBox(height: 4),
+                      caption('(podpis)'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+
+            pw.Spacer(),
+
+            // ---- Miejscowość... dnia... ----
+            pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.end,
+              children: [
+                pw.Text('Miejscowość ', style: const pw.TextStyle(fontSize: 9)),
+                pw.SizedBox(
+                  width: 160,
+                  child: dottedLine(handover.signLocality, size: 9, bold: true),
+                ),
+                pw.Text(' dnia ', style: const pw.TextStyle(fontSize: 9)),
+                pw.Expanded(child: dottedLine(signDateStr, size: 9, bold: true)),
+              ],
+            ),
+            pw.SizedBox(height: 10),
+
+            pw.Text(
+              '* Niepotrzebne skreślić',
+              style: pw.TextStyle(fontSize: 7, fontStyle: pw.FontStyle.italic),
+            ),
+          ],
+        );
+
+    // Dwa egzemplarze — po jednym dla przekazującego i przejmującego —
+    // każdy jako osobna, pełna strona A4.
+    for (var i = 0; i < 2; i++) {
+      pdf.addPage(
+        pw.Page(
+          pageFormat: PdfPageFormat.a4,
+          theme: pageTheme,
+          margin: const pw.EdgeInsets.fromLTRB(36, 28, 36, 28),
+          build: (context) => buildCopy(),
+        ),
+      );
+    }
 
     return pdf;
   }

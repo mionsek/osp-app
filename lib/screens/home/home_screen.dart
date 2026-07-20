@@ -22,6 +22,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final vehicles = ref.watch(vehiclesProvider);
     final firefighters = ref.watch(firefightersProvider);
     final reports = ref.watch(reportsProvider);
+    final handovers = ref.watch(handoversProvider);
     final syncState = ref.watch(syncStateProvider);
 
     // Pokaż SnackBar gdy po sync pojawią się duplikaty
@@ -82,6 +83,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 label: 'Lista wyjazdów (${reports.length})',
                 color: const Color(0xFF1565C0),
                 onTap: () => context.push('/reports'),
+              ),
+              const SizedBox(height: 12),
+              _MenuButton(
+                icon: Icons.inventory_2,
+                label: 'Przekazania mienia (${handovers.length})',
+                color: const Color(0xFF6D4C41),
+                onTap: () => context.push('/handovers'),
               ),
               const SizedBox(height: 12),
               _MenuButton(

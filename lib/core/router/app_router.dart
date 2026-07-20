@@ -11,6 +11,9 @@ import '../../screens/firefighters/firefighter_form_screen.dart';
 import '../../screens/reports/report_wizard_screen.dart';
 import '../../screens/reports/reports_list_screen.dart';
 import '../../screens/reports/report_detail_screen.dart';
+import '../../screens/handovers/handovers_list_screen.dart';
+import '../../screens/handovers/handover_form_screen.dart';
+import '../../screens/handovers/handover_detail_screen.dart';
 import '../../screens/settings/settings_screen.dart';
 import '../../screens/info/info_screen.dart';
 import '../../screens/statistics/statistics_screen.dart';
@@ -79,6 +82,28 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final id = state.pathParameters['id']!;
           return ReportDetailScreen(reportId: id);
+        },
+      ),
+      GoRoute(
+        path: '/handovers',
+        builder: (context, state) => const HandoversListScreen(),
+      ),
+      GoRoute(
+        path: '/handovers/new',
+        builder: (context, state) => const HandoverFormScreen(),
+      ),
+      GoRoute(
+        path: '/handovers/edit/:id',
+        builder: (context, state) {
+          final id = state.pathParameters['id']!;
+          return HandoverFormScreen(handoverId: id);
+        },
+      ),
+      GoRoute(
+        path: '/handovers/view/:id',
+        builder: (context, state) {
+          final id = state.pathParameters['id']!;
+          return HandoverDetailScreen(handoverId: id);
         },
       ),
       GoRoute(

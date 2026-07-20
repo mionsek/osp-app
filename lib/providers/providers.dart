@@ -231,6 +231,37 @@ class ReportsNotifier extends StateNotifier<List<Report>> {
   }
 }
 
+// --- Property handovers (przekazanie mienia) ---
+
+final handoversProvider =
+    StateNotifierProvider<HandoversNotifier, List<PropertyHandover>>((ref) {
+      return HandoversNotifier(ref.watch(databaseServiceProvider));
+    });
+
+class HandoversNotifier extends StateNotifier<List<PropertyHandover>> {
+  final DatabaseService _db;
+  HandoversNotifier(this._db) : super(_db.getAllHandovers());
+
+  Future<void> add(PropertyHandover handover) async {
+    await _db.addHandover(handover);
+    state = _db.getAllHandovers();
+  }
+
+  Future<void> update(PropertyHandover handover) async {
+    await _db.updateHandover(handover);
+    state = _db.getAllHandovers();
+  }
+
+  Future<void> delete(String id) async {
+    await _db.deleteHandover(id);
+    state = _db.getAllHandovers();
+  }
+
+  void refresh() {
+    state = _db.getAllHandovers();
+  }
+}
+
 // --- Ads & Premium ---
 
 final purchaseServiceProvider = Provider<PurchaseService>((ref) {

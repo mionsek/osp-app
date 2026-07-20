@@ -264,6 +264,21 @@ class SyncService {
         );
       }
     }
+
+    // Push property handovers to handovers/
+    var handoversFolderId = await _driveService.findHandoversFolder(folderId);
+    handoversFolderId ??= await _driveService.createSubfolder(
+      folderId,
+      'handovers',
+    );
+    final handovers = _db.getAllHandovers();
+    for (final handover in handovers) {
+      await _driveService.writeJsonFile(
+        handoversFolderId,
+        _buildHandoverFileName(handover),
+        _handoverToJson(handover),
+      );
+    }
   }
 
   // â”€â”€ Pull Drive â†’ local â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -345,6 +360,26 @@ class SyncService {
           final local = _db.getReport(report.id);
           if (local == null || report.updatedAt.isAfter(local.updatedAt)) {
             await _db.addReport(report);
+          }
+        }
+      }
+    }
+
+    // Pull property handovers from handovers/
+    final handoversFolderId = await _driveService.findHandoversFolder(
+      folderId,
+    );
+    if (handoversFolderId != null) {
+      final handoverFiles = await _driveService.listJsonFiles(
+        handoversFolderId,
+      );
+      for (final file in handoverFiles) {
+        final data = await _driveService.readJsonFile(file.id!);
+        if (data != null) {
+          final handover = _handoverFromJson(data);
+          final local = _db.getHandover(handover.id);
+          if (local == null || handover.updatedAt.isAfter(local.updatedAt)) {
+            await _db.addHandover(handover);
           }
         }
       }
@@ -440,6 +475,21 @@ class SyncService {
     return '${number}_$threat.json';
   }
 
+  /// Build descriptive handover file name: 2026-07-20_Kielno_`id-prefix`.json
+  String _buildHandoverFileName(PropertyHandover handover) {
+    final dateStr =
+        '${handover.eventDate.year.toString().padLeft(4, '0')}-'
+        '${handover.eventDate.month.toString().padLeft(2, '0')}-'
+        '${handover.eventDate.day.toString().padLeft(2, '0')}';
+    final locality = handover.eventLocation
+        .replaceAll(' ', '_')
+        .replaceAll(RegExp(r'[^\w_]'), '');
+    final idPrefix = handover.id.length >= 8
+        ? handover.id.substring(0, 8)
+        : handover.id;
+    return '${dateStr}_${locality}_$idPrefix.json';
+  }
+
   // â”€â”€ JSON serialization â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Map<String, dynamic> _firefighterToJson(Firefighter ff) => {
@@ -533,6 +583,51 @@ class SyncService {
     createdBy: j['createdBy'] as String? ?? '',
     syncStatus: 'synced',
   );
+
+  Map<String, dynamic> _handoverToJson(PropertyHandover h) => {
+    'id': h.id,
+    'reportId': h.reportId,
+    'eventLocation': h.eventLocation,
+    'eventDate': h.eventDate.toIso8601String(),
+    'eventTime': h.eventTime.toIso8601String(),
+    'recipientType': h.recipientType,
+    'recipientTypeOther': h.recipientTypeOther,
+    'recipientName': h.recipientName,
+    'recipientAddress': h.recipientAddress,
+    'recipientPhone': h.recipientPhone,
+    'propertyDescription': h.propertyDescription,
+    'notes': h.notes,
+    'handoverFirefighterId': h.handoverFirefighterId,
+    'signLocality': h.signLocality,
+    'signDate': h.signDate.toIso8601String(),
+    'createdAt': h.createdAt.toIso8601String(),
+    'updatedAt': h.updatedAt.toIso8601String(),
+    'createdBy': h.createdBy,
+    'syncStatus': 'synced',
+  };
+
+  PropertyHandover _handoverFromJson(Map<String, dynamic> j) =>
+      PropertyHandover(
+        id: j['id'] as String,
+        reportId: j['reportId'] as String?,
+        eventLocation: j['eventLocation'] as String? ?? '',
+        eventDate: DateTime.parse(j['eventDate'] as String),
+        eventTime: DateTime.parse(j['eventTime'] as String),
+        recipientType: j['recipientType'] as String,
+        recipientTypeOther: j['recipientTypeOther'] as String?,
+        recipientName: j['recipientName'] as String? ?? '',
+        recipientAddress: j['recipientAddress'] as String? ?? '',
+        recipientPhone: j['recipientPhone'] as String? ?? '',
+        propertyDescription: j['propertyDescription'] as String? ?? '',
+        notes: j['notes'] as String?,
+        handoverFirefighterId: j['handoverFirefighterId'] as String?,
+        signLocality: j['signLocality'] as String? ?? '',
+        signDate: DateTime.parse(j['signDate'] as String),
+        createdAt: DateTime.parse(j['createdAt'] as String),
+        updatedAt: DateTime.parse(j['updatedAt'] as String),
+        createdBy: j['createdBy'] as String? ?? '',
+        syncStatus: 'synced',
+      );
 
   Map<String, dynamic> _crewToJson(CrewAssignment c) => {
     'vehicleId': c.vehicleId,

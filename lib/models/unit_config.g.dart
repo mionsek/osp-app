@@ -21,7 +21,7 @@ class UnitConfigAdapter extends TypeAdapter<UnitConfig> {
       locality: fields[1] as String,
       onboardingCompleted: fields[2] as bool,
       isAdmin: fields[3] as bool,
-      ownerEmail: fields[4] as String? ?? '',
+      ownerEmail: fields[4] == null ? '' : fields[4] as String,
     );
   }
 
