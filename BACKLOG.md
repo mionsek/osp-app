@@ -98,6 +98,31 @@
 - [x] **Zmiana nazwy aplikacji na „Raporty OSP"** (AndroidManifest, MaterialApp, ekran „O aplikacji", pubspec, web)
 - [x] Ekran „O aplikacji": dodano sekcję „Statystyki" w instrukcji, tematy maili kontaktowych zmienione na „Raporty OSP — …"
 
+## Zrobione (feature/016-poprawki-przekazania-mienia)
+
+### Druk na przenośnej drukarce termicznej Bluetooth (NETUM XL-P801)
+- [x] **Druk bezpośrednio z aplikacji na drukarkę Bluetooth** — z pominięciem systemowego okna druku Androida, którego takie drukarki nie obsługują (brak usługi druku)
+- [x] **Protokół drukarki odtworzony metodą inżynierii wstecznej** — mimo deklaracji sprzedawcy drukarka NIE obsługuje ESC/POS (0 komend ESC/POS w przechwyconej transmisji z aplikacji producenta). Log HCI Bluetooth → parser strumienia RFCOMM → analiza. Format: 26-bajtowy nagłówek (bajt 19 = bajtów/wiersz, bajty 20–21 = liczba wierszy BE, bajty 24–25 = długość bloku), dalej bitmapa 1-bit spakowana **raw deflate**, na końcu `ESC J 100` + `10 FF FE 45`. Potwierdzenie: 208 × 2354 = 489 632 B = dokładny rozmiar rozpakowanej bitmapy
+- [x] Wybór i zapamiętanie sparowanej drukarki w Ustawieniach (`UnitConfig.btPrinterMac/btPrinterName`) — wybiera się raz
+- [x] Wydruk testowy (ramka + ukośne pasy) do weryfikacji szerokości i geometrii
+- [x] Przycisk „Drukuj na <drukarce>" na ekranie szczegółów przekazania mienia
+- [x] Jakość druku: renderowanie w 2× rozdzielczości + uśrednianie do punktów drukarki, próg przesunięty w stronę czerni (176) — cienkie kreski i drobny tekst nie zanikają
+- [x] Naprawiono (obejścia błędów pakietu `print_bluetooth_thermal`): brak żądania uprawnienia BLUETOOTH_CONNECT na Androidzie 12+ → wywołania wisiały w nieskończoność; `outputStream == null` zamiast `=` → ponowne łączenie zawsze zwracało false; `writeBytes` wymaga `List<int>`, nie `Uint8List`
+
+### Poprawki zgłoszone po testach
+- [x] **Nazwa jednostki jako jedno pole** — `UnitConfig.unitFullName`, np. „Ochotnicza Straż Pożarna w Kielnie" zamiast gramatycznie błędnej sklejki „... Kielno" (polskiej odmiany miejscowości nie da się sensownie zautomatyzować). Miejscowość została osobno — do stopki „Miejscowość ... dnia ...". Stare konfiguracje działają dalej (fallback na prefiks + miejscowość)
+- [x] **Adres z GPS** (`LocationService`) — przycisk podpowiadający miejscowość i ulicę w kreatorze wyjazdu i w formularzu przekazania; pola pozostają w pełni edytowalne, czytelne komunikaty przy braku zasięgu/zgody/GPS
+- [x] **Przyciski chowające się za systemowym paskiem nawigacji** — dolny odstęp `MediaQuery.viewPaddingOf(context).bottom` na wszystkich przewijanych ekranach (m.in. „Wróć do menu głównego" było całkowicie niedostępne)
+- [x] Stopka „Aplikację stworzył Dawid Mionskowski" na ekranie głównym
+- [x] Przekazujący strażak — opcja „Nie wybrano" z ostrzeżeniem (osobny komunikat, gdy nie ma jeszcze żadnych ratowników) zamiast twardej blokady zapisu
+- [x] Formularz przekazania: A4 poziomo z 2 egzemplarzami A5 obok siebie (zamiast 2 osobnych stron A4), stopka bezpośrednio pod podpisami
+- [x] Naprawiono: `Firefighter.fullNameWithRank` dawał „Jan Kowalski," gdy stopień był pusty
+- [x] Naprawiono: zapis Ustawień tworzył nową konfigurację od zera, kasując konto właściciela i zapamiętaną drukarkę
+
+### Do rozważenia w kolejnym branchu
+- Podgląd wydruku przed wysłaniem na drukarkę Bluetooth (obecnie druk startuje od razu)
+- Powiększyć drobny tekst podstawy prawnej („zgodnie z § 21 ust. 2 pkt 2...") — przy 6 pkt i 203 DPI jest na granicy czytelności
+
 ## Zrobione (feature/015-przekazanie-mienia)
 - [x] **Nowa funkcja „Przekazanie mienia"**: osobny dokument od wyjazdu — „Potwierdzenie przekazania terenu, obiektu lub mienia objętego działaniem ratowniczym" (§ 21 ust. 2 pkt 2 rozp. MSWiA z 17.09.2021 r.)
 - [x] Model `PropertyHandover` (Hive) + box `property_handovers`, CRUD w `DatabaseService`, provider `handoversProvider`

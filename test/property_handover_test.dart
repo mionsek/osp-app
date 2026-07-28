@@ -1,11 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:osp_app/core/constants/handover_property_kinds.dart';
 import 'package:osp_app/core/constants/handover_recipient_types.dart';
 import 'package:osp_app/models/models.dart';
 
 void main() {
   group('PropertyHandover', () {
     PropertyHandover build({
-      String recipientType = HandoverRecipientTypes.owner,
+      String? recipientType = HandoverRecipientTypes.owner,
       String? recipientTypeOther,
     }) {
       final now = DateTime(2026, 7, 20, 12, 0);
@@ -43,6 +44,16 @@ void main() {
       );
       expect(h.recipientTypeLabel, HandoverRecipientTypes.owner);
     });
+
+    test('recipientTypeLabel is empty when nothing was chosen yet', () {
+      final h = build(recipientType: null);
+      expect(h.recipientTypeLabel, isEmpty);
+    });
+
+    test('propertyKind defaults to null (nothing chosen yet)', () {
+      final h = build();
+      expect(h.propertyKind, isNull);
+    });
   });
 
   group('HandoverRecipientTypes', () {
@@ -51,6 +62,17 @@ void main() {
       expect(HandoverRecipientTypes.all.length, 8);
       expect(HandoverRecipientTypes.all.toSet().length, 8,
           reason: 'no duplicate entries');
+    });
+  });
+
+  group('HandoverPropertyKinds', () {
+    test('closed list has teren/obiekt/mienie, no duplicates', () {
+      expect(HandoverPropertyKinds.all, [
+        HandoverPropertyKinds.teren,
+        HandoverPropertyKinds.obiekt,
+        HandoverPropertyKinds.mienie,
+      ]);
+      expect(HandoverPropertyKinds.all.toSet().length, 3);
     });
   });
 }

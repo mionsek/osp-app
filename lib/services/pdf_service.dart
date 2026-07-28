@@ -1,7 +1,10 @@
+import 'dart:typed_data';
+
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:intl/intl.dart';
+import '../core/constants/handover_property_kinds.dart';
 import '../core/constants/handover_recipient_types.dart';
 import '../models/models.dart';
 import '../providers/statistics_provider.dart';
@@ -83,6 +86,18 @@ class PdfService {
   ) async {
     final pdf = await _buildHandoverPdf(handover, config, handoverFirefighter);
     await _sharePdf(pdf, _handoverFileName(handover));
+  }
+
+  /// Surowe bajty PDF przekazania mienia — potrzebne przy druku przez
+  /// Bluetooth, gdzie stronę renderujemy do bitmapy zamiast oddawać ją
+  /// systemowemu oknu drukowania.
+  static Future<Uint8List> handoverPdfBytes(
+    PropertyHandover handover,
+    UnitConfig config,
+    Firefighter? handoverFirefighter,
+  ) async {
+    final pdf = await _buildHandoverPdf(handover, config, handoverFirefighter);
+    return Uint8List.fromList(await pdf.save());
   }
 
   static String _sanitizeFilename(String s) =>
@@ -719,33 +734,86 @@ class PdfService {
 
   /// Buduje rozpiskę „(właścicielowi, zarządcy, ...)" z klauzulą wybraną
   /// pogrubioną i podkreśloną, a pozostałymi przekreślonymi — tak jak
-  /// ręczne „niepotrzebne skreślić" na papierowym formularzu.
+  /// ręczne „niepotrzebne skreślić" na papierowym formularzu. Gdy nic nie
+  /// wybrano ([PropertyHandover.recipientType] == null), żadna pozycja nie
+  /// jest przekreślona — formularz zostaje jak pusty oryginał, do ręcznego
+  /// skreślenia długopisem.
   static List<pw.InlineSpan> _recipientClauseSpans(PropertyHandover handover) {
     final spans = <pw.InlineSpan>[];
+    final hasSelection = handover.recipientType != null;
     final isOther = handover.recipientType == HandoverRecipientTypes.other;
     for (var i = 0; i < _recipientClauses.length; i++) {
       final (label, matches) = _recipientClauses[i];
-      final selected = !isOther && matches.contains(handover.recipientType);
+      final selected =
+          hasSelection && !isOther && matches.contains(handover.recipientType);
       spans.add(
         pw.TextSpan(
           text: label,
           style: pw.TextStyle(
-            fontSize: 8,
+            fontSize: 6,
             fontWeight: selected ? pw.FontWeight.bold : pw.FontWeight.normal,
-            decoration:
-                selected ? pw.TextDecoration.underline : pw.TextDecoration.lineThrough,
+            decoration: selected
+                ? pw.TextDecoration.underline
+                : (hasSelection ? pw.TextDecoration.lineThrough : null),
           ),
         ),
       );
       if (i < _recipientClauses.length - 1) {
-        spans.add(const pw.TextSpan(text: ', ', style: pw.TextStyle(fontSize: 8)));
+        spans.add(const pw.TextSpan(text: ', ', style: pw.TextStyle(fontSize: 6)));
       }
     }
     if (isOther) {
       spans.add(pw.TextSpan(
         text: ' (${handover.recipientTypeOther ?? handover.recipientType})',
-        style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
+        style: pw.TextStyle(fontSize: 6, fontWeight: pw.FontWeight.bold),
       ));
+    }
+    return spans;
+  }
+
+  /// Rodzaje przekazywanego przedmiotu w dwóch formach gramatycznych: tytuł
+  /// (dopełniacz, wielkie litery — "TERENU") i treść zdania (mianownik —
+  /// "teren"). Ta sama logika skreślania co [_recipientClauseSpans].
+  static const List<(String key, String titleLabel, String bodyLabel)>
+      _propertyKindClauses = [
+    (HandoverPropertyKinds.teren, 'TERENU', 'teren'),
+    (HandoverPropertyKinds.obiekt, 'OBIEKTU', 'obiekt'),
+    (HandoverPropertyKinds.mienie, 'MIENIA', 'mienie'),
+  ];
+
+  static List<pw.InlineSpan> _propertyKindSpans(
+    String? selectedKind, {
+    required bool title,
+  }) {
+    final spans = <pw.InlineSpan>[];
+    final fontSize = title ? 9.0 : 7.0;
+    final baseWeight = title ? pw.FontWeight.bold : pw.FontWeight.normal;
+    for (var i = 0; i < _propertyKindClauses.length; i++) {
+      final (key, titleLabel, bodyLabel) = _propertyKindClauses[i];
+      final selected = selectedKind == key;
+      spans.add(
+        pw.TextSpan(
+          text: title ? titleLabel : bodyLabel,
+          style: pw.TextStyle(
+            fontSize: fontSize,
+            fontWeight: selected ? pw.FontWeight.bold : baseWeight,
+            decoration: selected
+                ? pw.TextDecoration.underline
+                : (selectedKind != null ? pw.TextDecoration.lineThrough : null),
+          ),
+        ),
+      );
+      if (i == _propertyKindClauses.length - 2) {
+        spans.add(pw.TextSpan(
+          text: title ? ' LUB ' : ' lub ',
+          style: pw.TextStyle(fontSize: fontSize, fontWeight: baseWeight),
+        ));
+      } else if (i < _propertyKindClauses.length - 2) {
+        spans.add(pw.TextSpan(
+          text: ', ',
+          style: pw.TextStyle(fontSize: fontSize, fontWeight: baseWeight),
+        ));
+      }
     }
     return spans;
   }
@@ -808,7 +876,7 @@ class PdfService {
         '${handover.eventTime.hour.toString().padLeft(2, '0')}:${handover.eventTime.minute.toString().padLeft(2, '0')}';
     final signDateStr = DateFormat('dd.MM.yyyy').format(handover.signDate);
 
-    pw.Widget dottedLine(String text, {double size = 8, bool bold = false}) {
+    pw.Widget dottedLine(String text, {double size = 6, bool bold = false}) {
       return pw.Container(
         decoration: const pw.BoxDecoration(
           border: pw.Border(
@@ -829,76 +897,91 @@ class PdfService {
     pw.Widget caption(String text) => pw.Text(
           text,
           textAlign: pw.TextAlign.center,
-          style: pw.TextStyle(fontSize: 6, fontStyle: pw.FontStyle.italic),
+          style: pw.TextStyle(fontSize: 5, fontStyle: pw.FontStyle.italic),
         );
 
-    final propertyLines = _wrapText(handover.propertyDescription, 3);
-    final notesLines = _wrapText(handover.notes ?? '', 4);
+    final propertyLines = _wrapText(handover.propertyDescription, 3, charsPerLine: 70);
+    // Puste uwagi -> jedna pusta linia kropek do ręcznego wypełnienia,
+    // zamiast kilku gęsto upakowanych pustych linii.
+    final notesLines = (handover.notes == null || handover.notes!.trim().isEmpty)
+        ? ['']
+        : _wrapText(handover.notes!, 4, charsPerLine: 70);
 
-    // Formularz drukowany w 2 egzemplarzach (dla przekazującego i dla
-    // przejmującego) — każdy egzemplarz to osobna, pełna strona A4.
+    // Pojedynczy egzemplarz formularza w formacie A5 — drukowany 2 razy
+    // obok siebie na poziomej kartce A4 (jeden dla przekazującego, drugi
+    // zostaje u przejmującego), tak samo jak potwierdzenie udziału w
+    // działaniu ratowniczym.
     pw.Widget buildCopy() => pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.stretch,
           children: [
             // ---- HEADER: podmiot ksrg ----
-            dottedLine(config.fullName, size: 8),
+            dottedLine(config.fullName, size: 6),
             caption('(podmiot ksrg)'),
-            pw.SizedBox(height: 18),
+            pw.SizedBox(height: 12),
 
             // ---- TITLE ----
             pw.Center(
               child: pw.Text(
                 'POTWIERDZENIE',
-                style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold),
+                style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
               ),
             ),
-            pw.SizedBox(height: 4),
-            pw.Center(
-              child: pw.Text(
-                'PRZEKAZANIA TERENU, OBIEKTU LUB MIENIA*',
-                textAlign: pw.TextAlign.center,
-                style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
+            pw.SizedBox(height: 3),
+            pw.RichText(
+              textAlign: pw.TextAlign.center,
+              text: pw.TextSpan(
+                children: [
+                  pw.TextSpan(
+                    text: 'PRZEKAZANIA ',
+                    style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
+                  ),
+                  ..._propertyKindSpans(handover.propertyKind, title: true),
+                  pw.TextSpan(
+                    text: '*',
+                    style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
+                  ),
+                ],
               ),
             ),
             pw.Center(
               child: pw.Text(
                 'OBJĘTEGO DZIAŁANIEM RATOWNICZYM',
-                style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
+                style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
               ),
             ),
-            pw.SizedBox(height: 16),
+            pw.SizedBox(height: 11),
 
             // ---- Dotyczy zdarzenia w... ----
             pw.Row(
               crossAxisAlignment: pw.CrossAxisAlignment.end,
               children: [
                 pw.Text('Dotyczy zdarzenia w ',
-                    style: const pw.TextStyle(fontSize: 9)),
-                pw.Expanded(child: dottedLine(handover.eventLocation, size: 9)),
+                    style: const pw.TextStyle(fontSize: 7)),
+                pw.Expanded(child: dottedLine(handover.eventLocation, size: 7)),
               ],
             ),
             caption('(miejscowość, adres)'),
-            pw.SizedBox(height: 12),
+            pw.SizedBox(height: 8),
 
             // ---- W dniu... o godzinie... ----
             pw.Row(
               crossAxisAlignment: pw.CrossAxisAlignment.end,
               children: [
-                pw.Text('W dniu ', style: const pw.TextStyle(fontSize: 9)),
+                pw.Text('W dniu ', style: const pw.TextStyle(fontSize: 7)),
                 pw.SizedBox(
-                    width: 90, child: dottedLine(eventDateStr, size: 9, bold: true)),
-                pw.Text('  o godzinie ', style: const pw.TextStyle(fontSize: 9)),
+                    width: 65, child: dottedLine(eventDateStr, size: 7, bold: true)),
+                pw.Text('  o godzinie ', style: const pw.TextStyle(fontSize: 7)),
                 pw.SizedBox(
-                    width: 60, child: dottedLine(eventTimeStr, size: 9, bold: true)),
-                pw.Expanded(child: dottedLine('', size: 9)),
+                    width: 42, child: dottedLine(eventTimeStr, size: 7, bold: true)),
+                pw.Expanded(child: dottedLine('', size: 7)),
               ],
             ),
-            pw.SizedBox(height: 10),
+            pw.SizedBox(height: 7),
 
             // ---- Podstawa prawna + rodzaj przejmującego (niepotrzebne skreślić) ----
             pw.RichText(
               text: pw.TextSpan(
-                style: const pw.TextStyle(fontSize: 8),
+                style: const pw.TextStyle(fontSize: 6),
                 children: [
                   const pw.TextSpan(
                     text: 'zgodnie z § 21 ust. 2 pkt 2 rozporządzenia Ministra '
@@ -912,35 +995,41 @@ class PdfService {
                 ],
               ),
             ),
-            pw.SizedBox(height: 10),
+            pw.SizedBox(height: 7),
 
             // ---- imię i nazwisko przejmującego ----
-            dottedLine(handover.recipientName, size: 9),
+            dottedLine(handover.recipientName, size: 7),
             caption('(imię i nazwisko)'),
-            pw.SizedBox(height: 8),
-
-            pw.Text(
-              'do nadzorowania i zabezpieczenia następujący/ce teren, obiekt '
-              'lub mienie*:',
-              style: const pw.TextStyle(fontSize: 9),
-            ),
             pw.SizedBox(height: 6),
+
+            pw.RichText(
+              text: pw.TextSpan(
+                style: const pw.TextStyle(fontSize: 7),
+                children: [
+                  const pw.TextSpan(
+                      text: 'do nadzorowania i zabezpieczenia następujący/ce '),
+                  ..._propertyKindSpans(handover.propertyKind, title: false),
+                  const pw.TextSpan(text: '*:'),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 4),
             for (final line in propertyLines) ...[
-              dottedLine(line, size: 9),
-              pw.SizedBox(height: 3),
+              dottedLine(line, size: 7),
+              pw.SizedBox(height: 5),
             ],
             pw.Text(
               'które objęte były działaniami ratowniczymi.',
-              style: const pw.TextStyle(fontSize: 9),
+              style: const pw.TextStyle(fontSize: 7),
             ),
-            pw.SizedBox(height: 8),
-            pw.Text('Uwagi szczegółowe:', style: const pw.TextStyle(fontSize: 9)),
             pw.SizedBox(height: 6),
+            pw.Text('Uwagi szczegółowe:', style: const pw.TextStyle(fontSize: 7)),
+            pw.SizedBox(height: 4),
             for (final line in notesLines) ...[
-              dottedLine(line, size: 9),
-              pw.SizedBox(height: 3),
+              dottedLine(line, size: 7),
+              pw.SizedBox(height: 5),
             ],
-            pw.SizedBox(height: 14),
+            pw.SizedBox(height: 10),
 
             // ---- Przekazujący / Przejmujący ----
             pw.Row(
@@ -953,20 +1042,22 @@ class PdfService {
                       pw.Center(
                         child: pw.Text('Przekazujący',
                             style: pw.TextStyle(
-                                fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                                fontSize: 7, fontWeight: pw.FontWeight.bold)),
                       ),
                       caption('(stopień służbowy, imię i nazwisko)'),
                       pw.SizedBox(height: 6),
                       dottedLine(handoverFirefighter?.fullNameWithRank ?? '',
-                          size: 9),
+                          size: 7),
                       pw.SizedBox(height: 8),
-                      dottedLine('', size: 9),
-                      pw.SizedBox(height: 4),
+                      dottedLine('', size: 7),
+                      pw.SizedBox(height: 8),
+                      dottedLine('', size: 7),
+                      pw.SizedBox(height: 3),
                       caption('(podpis)'),
                     ],
                   ),
                 ),
-                pw.SizedBox(width: 16),
+                pw.SizedBox(width: 10),
                 pw.Expanded(
                   child: pw.Column(
                     crossAxisAlignment: pw.CrossAxisAlignment.stretch,
@@ -974,21 +1065,23 @@ class PdfService {
                       pw.Center(
                         child: pw.Text('Przejmujący',
                             style: pw.TextStyle(
-                                fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                                fontSize: 7, fontWeight: pw.FontWeight.bold)),
                       ),
                       caption(
                           '(imię i nazwisko, adres służbowy lub zamieszkania '
                           'oraz numer telefonu)'),
                       pw.SizedBox(height: 6),
-                      dottedLine(handover.recipientName, size: 9),
-                      pw.SizedBox(height: 3),
+                      dottedLine(handover.recipientName, size: 7),
+                      pw.SizedBox(height: 8),
                       dottedLine(
                         [handover.recipientAddress, handover.recipientPhone]
                             .where((s) => s.isNotEmpty)
                             .join(', tel. '),
-                        size: 9,
+                        size: 7,
                       ),
-                      pw.SizedBox(height: 4),
+                      pw.SizedBox(height: 8),
+                      dottedLine('', size: 7),
+                      pw.SizedBox(height: 3),
                       caption('(podpis)'),
                     ],
                   ),
@@ -996,42 +1089,66 @@ class PdfService {
               ],
             ),
 
-            pw.Spacer(),
+            pw.SizedBox(height: 20),
 
             // ---- Miejscowość... dnia... ----
             pw.Row(
               crossAxisAlignment: pw.CrossAxisAlignment.end,
               children: [
-                pw.Text('Miejscowość ', style: const pw.TextStyle(fontSize: 9)),
+                pw.Text('Miejscowość ', style: const pw.TextStyle(fontSize: 7)),
                 pw.SizedBox(
-                  width: 160,
-                  child: dottedLine(handover.signLocality, size: 9, bold: true),
+                  width: 110,
+                  child: dottedLine(handover.signLocality, size: 7, bold: true),
                 ),
-                pw.Text(' dnia ', style: const pw.TextStyle(fontSize: 9)),
-                pw.Expanded(child: dottedLine(signDateStr, size: 9, bold: true)),
+                pw.Text(' dnia ', style: const pw.TextStyle(fontSize: 7)),
+                pw.Expanded(child: dottedLine(signDateStr, size: 7, bold: true)),
               ],
             ),
-            pw.SizedBox(height: 10),
+            pw.SizedBox(height: 7),
 
             pw.Text(
               '* Niepotrzebne skreślić',
-              style: pw.TextStyle(fontSize: 7, fontStyle: pw.FontStyle.italic),
+              style: pw.TextStyle(fontSize: 5, fontStyle: pw.FontStyle.italic),
             ),
           ],
         );
 
-    // Dwa egzemplarze — po jednym dla przekazującego i przejmującego —
-    // każdy jako osobna, pełna strona A4.
-    for (var i = 0; i < 2; i++) {
-      pdf.addPage(
-        pw.Page(
-          pageFormat: PdfPageFormat.a4,
-          theme: pageTheme,
-          margin: const pw.EdgeInsets.fromLTRB(36, 28, 36, 28),
-          build: (context) => buildCopy(),
+    // Dwa egzemplarze obok siebie na A4 poziomo (format A5 każdy) — jeden
+    // zostaje u przekazującego, drugi u przejmującego — rozcinane wzdłuż
+    // przerywanej linii pośrodku kartki, tak jak potwierdzenie udziału w
+    // działaniu ratowniczym.
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4.landscape,
+        theme: pageTheme,
+        margin: pw.EdgeInsets.zero,
+        build: (context) => pw.Row(
+          crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+          children: [
+            pw.Expanded(
+              child: pw.Padding(
+                padding: const pw.EdgeInsets.fromLTRB(18, 14, 18, 14),
+                child: buildCopy(),
+              ),
+            ),
+            pw.Container(
+              width: 0,
+              decoration: const pw.BoxDecoration(
+                border: pw.Border(
+                  left: pw.BorderSide(width: 0.5, style: pw.BorderStyle.dashed),
+                ),
+              ),
+            ),
+            pw.Expanded(
+              child: pw.Padding(
+                padding: const pw.EdgeInsets.fromLTRB(18, 14, 18, 14),
+                child: buildCopy(),
+              ),
+            ),
+          ],
         ),
-      );
-    }
+      ),
+    );
 
     return pdf;
   }

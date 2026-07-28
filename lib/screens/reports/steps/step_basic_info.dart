@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/threat_types.dart';
 import '../../../providers/providers.dart';
+import '../../../services/location_service.dart';
 
 class StepBasicInfo extends ConsumerStatefulWidget {
   final String reportNumber;
@@ -82,6 +83,48 @@ class _StepBasicInfoState extends ConsumerState<StepBasicInfo>
     _streetController.dispose();
     _descriptionController.dispose();
     super.dispose();
+  }
+
+  bool _locating = false;
+
+  /// Podpowiada adres zdarzenia z GPS. To tylko wstępne wypełnienie —
+  /// oba pola zostają edytowalne, bo GPS bywa niedokładny, a bez internetu
+  /// adresu w ogóle nie da się ustalić.
+  Future<void> _fillAddressFromGps() async {
+    setState(() => _locating = true);
+    try {
+      final address = await LocationService.currentAddress();
+      if (!mounted) return;
+      if (address.isEmpty) {
+        _showSnack('Nie udało się ustalić adresu — wpisz go ręcznie.');
+        return;
+      }
+      setState(() {
+        if (address.locality.isNotEmpty) {
+          _localityController.text = address.locality;
+          widget.onChanged(addressLocality: address.locality);
+        }
+        if (address.street.isNotEmpty) {
+          _streetController.text = address.street;
+          widget.onChanged(addressStreet: address.street);
+        }
+      });
+      _showSnack('Wstawiono adres z GPS — sprawdź i popraw w razie potrzeby.',
+          ok: true);
+    } on LocationFailure catch (e) {
+      if (mounted) _showSnack(e.message);
+    } catch (e) {
+      if (mounted) _showSnack('Błąd lokalizacji: $e');
+    } finally {
+      if (mounted) setState(() => _locating = false);
+    }
+  }
+
+  void _showSnack(String text, {bool ok = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(text),
+      backgroundColor: ok ? const Color(0xFF2E7D32) : Colors.orange[800],
+    ));
   }
 
   void _validate() {
@@ -202,6 +245,18 @@ class _StepBasicInfoState extends ConsumerState<StepBasicInfo>
             const SizedBox(height: 16),
 
             // Address
+            OutlinedButton.icon(
+              onPressed: _locating ? null : _fillAddressFromGps,
+              icon: _locating
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.my_location),
+              label: const Text('Wstaw adres z GPS'),
+            ),
+            const SizedBox(height: 12),
             TextFormField(
               controller: _localityController,
               decoration: InputDecoration(

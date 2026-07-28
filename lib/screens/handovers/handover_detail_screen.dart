@@ -4,11 +4,59 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../models/models.dart';
 import '../../providers/providers.dart';
+import '../../services/bluetooth_print_service.dart';
 import '../../services/pdf_service.dart';
 
 class HandoverDetailScreen extends ConsumerWidget {
   final String handoverId;
   const HandoverDetailScreen({super.key, required this.handoverId});
+
+  /// Druk na sparowanej drukarce termicznej Bluetooth — z pominięciem
+  /// systemowego okna drukowania, którego takie drukarki nie obsługują.
+  Future<void> _printViaBluetooth(
+    BuildContext context,
+    WidgetRef ref,
+    PropertyHandover handover,
+    UnitConfig config,
+    Firefighter? handoverFF,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    void show(String text, {bool ok = false}) {
+      messenger.showSnackBar(SnackBar(
+        content: Text(text),
+        backgroundColor: ok ? const Color(0xFF2E7D32) : Colors.red,
+      ));
+    }
+
+    final mac = config.btPrinterMac;
+    if (mac == null || mac.isEmpty) {
+      show('Najpierw wybierz drukarkę w Ustawieniach.');
+      return;
+    }
+    try {
+      if (!await BluetoothPrintService.ensurePermission()) {
+        show('Brak zgody na dostęp do Bluetooth.');
+        return;
+      }
+      if (!await BluetoothPrintService.connectIfNeeded(mac)) {
+        show('Nie udało się połączyć z drukarką.');
+        return;
+      }
+      messenger.showSnackBar(const SnackBar(
+        content: Text('Wysyłanie do drukarki...'),
+        duration: Duration(seconds: 2),
+      ));
+      final bytes =
+          await PdfService.handoverPdfBytes(handover, config, handoverFF);
+      final ok = await BluetoothPrintService.printPdf(bytes);
+      show(
+        ok ? 'Wysłano do drukarki.' : 'Drukarka odrzuciła zadanie.',
+        ok: ok,
+      );
+    } catch (e) {
+      show('Błąd druku: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -55,7 +103,7 @@ class HandoverDetailScreen extends ConsumerWidget {
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.viewPaddingOf(context).bottom),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -85,7 +133,12 @@ class HandoverDetailScreen extends ConsumerWidget {
                             .titleMedium
                             ?.copyWith(fontWeight: FontWeight.bold)),
                     const Divider(),
-                    _Row('Rodzaj', handover.recipientTypeLabel),
+                    _Row(
+                      'Rodzaj',
+                      handover.recipientTypeLabel.isEmpty
+                          ? 'Nie wybrano'
+                          : handover.recipientTypeLabel,
+                    ),
                     _Row('Imię i nazwisko', handover.recipientName),
                     if (handover.recipientAddress.isNotEmpty)
                       _Row('Adres', handover.recipientAddress),
@@ -108,6 +161,8 @@ class HandoverDetailScreen extends ConsumerWidget {
                             .titleMedium
                             ?.copyWith(fontWeight: FontWeight.bold)),
                     const Divider(),
+                    _Row('Kategoria', handover.propertyKind ?? 'Nie wybrano'),
+                    const SizedBox(height: 8),
                     Text(handover.propertyDescription),
                     if (handover.notes != null && handover.notes!.isNotEmpty) ...[
                       const SizedBox(height: 8),
@@ -139,6 +194,17 @@ class HandoverDetailScreen extends ConsumerWidget {
               icon: const Icon(Icons.print),
               label: const Text('Drukuj'),
             ),
+            if (config.btPrinterMac != null &&
+                config.btPrinterMac!.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: () => _printViaBluetooth(
+                    context, ref, handover, config, handoverFF),
+                icon: const Icon(Icons.bluetooth),
+                label: Text(
+                    'Drukuj na ${config.btPrinterName ?? "drukarce Bluetooth"}'),
+              ),
+            ],
             const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: () => PdfService.generateAndShareHandover(

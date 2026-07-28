@@ -1,5 +1,17 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Eksperymentalne drukowanie po Bluetooth do drukarek termicznych
+         bez usługi druku Androida (np. NETUM). Łączymy się tylko z już
+         sparowanym urządzeniem — nie potrzebujemy lokalizacji. -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation"/>
+    <!-- Podpowiadanie adresu zdarzenia z GPS. Używane tylko na żądanie
+         (przycisk w formularzu), nigdy w tle. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <application
         android:label="Raporty OSP"
         android:name="${applicationName}"

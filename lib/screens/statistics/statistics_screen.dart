@@ -21,7 +21,7 @@ class StatisticsScreen extends ConsumerWidget {
       ),
       bottomNavigationBar: const BannerAdWidget(),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.viewPaddingOf(context).bottom),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [

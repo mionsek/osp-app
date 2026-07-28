@@ -40,7 +40,8 @@ class Firefighter extends HiveObject {
   });
 
   String get fullName => '$firstName $lastName';
-  String get fullNameWithRank => '$fullName, $rank';
+  String get fullNameWithRank =>
+      rank.trim().isEmpty ? fullName : '$fullName, $rank';
 
   bool get hasMedicalExam => medicalExamExpiry != null;
   bool get isMedicalExamExpired =>

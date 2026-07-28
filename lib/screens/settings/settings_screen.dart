@@ -4,10 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import '../../providers/providers.dart';
-import '../../models/models.dart';
 import '../../models/sync_state.dart';
 import '../../services/ad_service.dart';
+import '../../services/bluetooth_print_service.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -17,7 +18,7 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  late TextEditingController _prefixController;
+  late TextEditingController _fullNameController;
   late TextEditingController _localityController;
   final _formKey = GlobalKey<FormState>();
 
@@ -26,18 +27,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     super.initState();
     try {
       final config = ref.read(unitConfigProvider);
-      _prefixController = TextEditingController(text: config.namePrefix);
+      // Dla starych konfiguracji `fullName` zwróci sklejony prefiks
+      // z miejscowością — użytkownik może to od razu poprawić na
+      // poprawną gramatycznie formę („... w Kielnie").
+      _fullNameController = TextEditingController(text: config.fullName);
       _localityController = TextEditingController(text: config.locality);
     } catch (e) {
       debugPrint('Settings initState error: $e');
-      _prefixController = TextEditingController(text: 'Ochotnicza Straż Pożarna');
+      _fullNameController =
+          TextEditingController(text: 'Ochotnicza Straż Pożarna');
       _localityController = TextEditingController();
     }
   }
 
   @override
   void dispose() {
-    _prefixController.dispose();
+    _fullNameController.dispose();
     _localityController.dispose();
     super.dispose();
   }
@@ -45,11 +50,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     final currentConfig = ref.read(unitConfigProvider);
-    final newConfig = UnitConfig(
-      namePrefix: _prefixController.text.trim(),
+    // copyWith, a nie nowy obiekt — inaczej gubimy ustawienia, których ten
+    // ekran nie edytuje (konto właściciela, zapamiętana drukarka).
+    final newConfig = currentConfig.copyWith(
+      unitFullName: _fullNameController.text.trim(),
       locality: _localityController.text.trim(),
       onboardingCompleted: true,
-      isAdmin: currentConfig.isAdmin,
     );
     await ref.read(unitConfigProvider.notifier).save(newConfig);
     if (mounted) {
@@ -87,12 +93,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 8),
                 TextFormField(
-                  controller: _prefixController,
+                  controller: _fullNameController,
                   decoration: const InputDecoration(
-                    labelText: 'Prefiks nazwy',
-                    hintText: 'Ochotnicza Straż Pożarna',
+                    labelText: 'Pełna nazwa jednostki',
+                    hintText: 'np. Ochotnicza Straż Pożarna w Kielnie',
+                    helperText: 'Tak, jak ma się pojawić na wydrukach',
                   ),
-                  maxLength: 100,
+                  maxLength: 120,
                   validator: (v) => v == null || v.trim().isEmpty
                       ? 'Podaj nazwę jednostki'
                       : null,
@@ -104,6 +111,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   decoration: const InputDecoration(
                     labelText: 'Miejscowość',
                     hintText: 'np. Kielno',
+                    helperText: 'Do stopki „Miejscowość ... dnia ..."',
                   ),
                   textCapitalization: TextCapitalization.words,
                   maxLength: 50,
@@ -111,19 +119,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ? 'Podaj miejscowość'
                       : null,
                   onChanged: (_) => setState(() {}),
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    'Pełna nazwa: ${_prefixController.text.trim()} ${_localityController.text.trim()}'
-                        .trim(),
-                    style: const TextStyle(fontWeight: FontWeight.w500),
-                  ),
                 ),
                 const SizedBox(height: 24),
                 ElevatedButton.icon(
@@ -160,6 +155,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 const Divider(),
                 const SizedBox(height: 16),
                 _GoogleSyncSection(),
+                const SizedBox(height: 32),
+                const Divider(),
+                const SizedBox(height: 16),
+                _BluetoothPrinterSection(),
               ],
             ),
           ),
@@ -331,6 +330,219 @@ class _GoogleSyncSection extends ConsumerWidget {
     if (diff.inMinutes < 60) return '${diff.inMinutes} min temu';
     if (diff.inHours < 24) return '${diff.inHours} godz. temu';
     return '${time.day}.${time.month.toString().padLeft(2, '0')}.${time.year}';
+  }
+}
+
+class _BluetoothPrinterSection extends ConsumerStatefulWidget {
+  @override
+  ConsumerState<_BluetoothPrinterSection> createState() =>
+      _BluetoothPrinterSectionState();
+}
+
+class _BluetoothPrinterSectionState
+    extends ConsumerState<_BluetoothPrinterSection> {
+  bool _loading = false;
+  bool _testing = false;
+  String? _errorMessage;
+
+  Future<void> _pickPrinter() async {
+    setState(() {
+      _loading = true;
+      _errorMessage = null;
+    });
+    try {
+      final permitted = await BluetoothPrintService.ensurePermission();
+      if (!permitted) {
+        if (mounted) {
+          setState(() => _errorMessage =
+              'Brak zgody na dostęp do Bluetooth. Zezwól aplikacji na '
+              'urządzenia w pobliżu w ustawieniach telefonu (Aplikacje → '
+              'OSP → Uprawnienia) i spróbuj ponownie.');
+        }
+        return;
+      }
+      final enabled = await BluetoothPrintService.isBluetoothEnabled();
+      if (!enabled) {
+        if (mounted) {
+          setState(() => _errorMessage = 'Włącz Bluetooth w telefonie i spróbuj ponownie.');
+        }
+        return;
+      }
+      final paired = await BluetoothPrintService.pairedPrinters();
+      if (!mounted) return;
+      if (paired.isEmpty) {
+        setState(() => _errorMessage =
+            'Brak sparowanych urządzeń Bluetooth. Sparuj drukarkę w '
+            'ustawieniach Bluetooth telefonu, a potem wróć tutaj.');
+        return;
+      }
+      final selected = await showModalBottomSheet<BluetoothInfo>(
+        context: context,
+        builder: (ctx) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text('Wybierz sparowane urządzenie',
+                    style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+              for (final info in paired)
+                ListTile(
+                  leading: const Icon(Icons.print),
+                  title: Text(info.name),
+                  subtitle: Text(info.macAdress),
+                  onTap: () => Navigator.pop(ctx, info),
+                ),
+            ],
+          ),
+        ),
+      );
+      if (selected == null || !mounted) return;
+
+      final config = ref.read(unitConfigProvider);
+      await ref.read(unitConfigProvider.notifier).save(config.copyWith(
+            btPrinterMac: selected.macAdress,
+            btPrinterName: selected.name,
+          ));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Wybrano drukarkę: ${selected.name}')),
+        );
+      }
+    } catch (e) {
+      if (mounted) setState(() => _errorMessage = 'Błąd: $e');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _forget() async {
+    final config = ref.read(unitConfigProvider);
+    await ref.read(unitConfigProvider.notifier).save(
+        config.copyWith(btPrinterMac: '', btPrinterName: ''));
+  }
+
+  Future<void> _testPrint() async {
+    final config = ref.read(unitConfigProvider);
+    final mac = config.btPrinterMac;
+    if (mac == null || mac.isEmpty) return;
+    setState(() {
+      _testing = true;
+      _errorMessage = null;
+    });
+    try {
+      final permitted = await BluetoothPrintService.ensurePermission();
+      if (!permitted) {
+        if (mounted) {
+          setState(() => _errorMessage =
+              'Brak zgody na dostęp do Bluetooth. Zezwól aplikacji na '
+              'urządzenia w pobliżu w ustawieniach telefonu i spróbuj '
+              'ponownie.');
+        }
+        return;
+      }
+      final connected = await BluetoothPrintService.connectIfNeeded(mac);
+      if (!connected) {
+        if (mounted) {
+          setState(() => _errorMessage =
+              'Nie udało się połączyć z drukarką. Upewnij się, że jest '
+              'włączona i w zasięgu.');
+        }
+        return;
+      }
+      final ok = await BluetoothPrintService.printTestPage(config.fullName);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(ok
+                ? 'Wysłano wydruk testowy — sprawdź drukarkę.'
+                : 'Drukarka odrzuciła wydruk testowy.'),
+            backgroundColor: ok ? const Color(0xFF2E7D32) : Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) setState(() => _errorMessage = 'Błąd: $e');
+    } finally {
+      if (mounted) setState(() => _testing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final config = ref.watch(unitConfigProvider);
+    final hasPrinter =
+        config.btPrinterMac != null && config.btPrinterMac!.isNotEmpty;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Text('Drukarka Bluetooth',
+                style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.orange[100],
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: const Text('eksperymentalne',
+                  style: TextStyle(fontSize: 10, color: Colors.brown)),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Dla drukarek termicznych (np. NETUM), których Android nie widzi '
+          'jako zwykłej drukarki. Wymaga wcześniejszego sparowania '
+          'urządzenia w ustawieniach Bluetooth telefonu.',
+          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+        ),
+        const SizedBox(height: 12),
+        if (hasPrinter) ...[
+          _InfoRow('Wybrana drukarka', config.btPrinterName ?? '—'),
+          const SizedBox(height: 8),
+        ],
+        if (_errorMessage != null) ...[
+          Text(_errorMessage!,
+              style: const TextStyle(color: Colors.red, fontSize: 12)),
+          const SizedBox(height: 8),
+        ],
+        OutlinedButton.icon(
+          onPressed: _loading ? null : _pickPrinter,
+          icon: _loading
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2))
+              : const Icon(Icons.bluetooth_searching),
+          label: Text(hasPrinter ? 'Zmień drukarkę' : 'Wybierz drukarkę'),
+        ),
+        if (hasPrinter) ...[
+          const SizedBox(height: 8),
+          ElevatedButton.icon(
+            onPressed: _testing ? null : _testPrint,
+            icon: _testing
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.print),
+            label: const Text('Testuj wydruk'),
+          ),
+          const SizedBox(height: 8),
+          TextButton.icon(
+            onPressed: _forget,
+            icon: const Icon(Icons.close, size: 18, color: Colors.red),
+            label: const Text('Zapomnij drukarkę',
+                style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ],
+    );
   }
 }
 

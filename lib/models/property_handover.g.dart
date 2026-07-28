@@ -22,12 +22,13 @@ class PropertyHandoverAdapter extends TypeAdapter<PropertyHandover> {
       eventLocation: fields[2] as String,
       eventDate: fields[3] as DateTime,
       eventTime: fields[4] as DateTime,
-      recipientType: fields[5] as String,
+      recipientType: fields[5] as String?,
       recipientTypeOther: fields[6] as String?,
       recipientName: fields[7] as String,
       recipientAddress: fields[8] as String,
       recipientPhone: fields[9] as String,
       propertyDescription: fields[10] as String,
+      propertyKind: fields[19] as String?,
       notes: fields[11] as String?,
       handoverFirefighterId: fields[12] as String?,
       signLocality: fields[13] as String,
@@ -42,7 +43,7 @@ class PropertyHandoverAdapter extends TypeAdapter<PropertyHandover> {
   @override
   void write(BinaryWriter writer, PropertyHandover obj) {
     writer
-      ..writeByte(19)
+      ..writeByte(20)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -80,7 +81,9 @@ class PropertyHandoverAdapter extends TypeAdapter<PropertyHandover> {
       ..writeByte(17)
       ..write(obj.createdBy)
       ..writeByte(18)
-      ..write(obj.syncStatus);
+      ..write(obj.syncStatus)
+      ..writeByte(19)
+      ..write(obj.propertyKind);
   }
 
   @override

@@ -79,6 +79,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
               const SizedBox(height: 12),
               _MenuButton(
+                icon: Icons.add_box,
+                label: 'Dodaj przekazanie mienia',
+                color: const Color(0xFF6D4C41),
+                onTap: () => context.push('/handovers/new'),
+              ),
+              const SizedBox(height: 16),
+              const Divider(),
+              const SizedBox(height: 16),
+              _MenuButton(
                 icon: Icons.list_alt,
                 label: 'Lista wyjazdów (${reports.length})',
                 color: const Color(0xFF1565C0),
@@ -134,7 +143,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 icon: const Icon(Icons.exit_to_app),
                 label: const Text('Wyjście'),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 20),
+              Text(
+                'Aplikację stworzył Dawid Mionskowski',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              ),
+              // Zapas na systemowy pasek nawigacji — bez tego ostatnie
+              // elementy listy chowają się za przyciskami telefonu.
+              SizedBox(height: 12 + MediaQuery.viewPaddingOf(context).bottom),
             ],
           ),
         ),

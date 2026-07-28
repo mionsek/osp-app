@@ -30,9 +30,10 @@ class PropertyHandover extends HiveObject {
   @HiveField(4)
   DateTime eventTime;
 
-  /// Rodzaj podmiotu przejmującego — jedna z [HandoverRecipientTypes.all].
+  /// Rodzaj podmiotu przejmującego — jedna z [HandoverRecipientTypes.all],
+  /// albo `null` gdy jeszcze nie wybrano (do ręcznego skreślenia na wydruku).
   @HiveField(5)
-  String recipientType;
+  String? recipientType;
 
   /// Opis własny, gdy [recipientType] == HandoverRecipientTypes.other.
   @HiveField(6)
@@ -83,18 +84,24 @@ class PropertyHandover extends HiveObject {
   @HiveField(18)
   String syncStatus;
 
+  /// Rodzaj przekazywanego przedmiotu — jedna z [HandoverPropertyKinds.all],
+  /// albo `null` gdy jeszcze nie wybrano (do ręcznego skreślenia na wydruku).
+  @HiveField(19)
+  String? propertyKind;
+
   PropertyHandover({
     required this.id,
     this.reportId,
     this.eventLocation = '',
     required this.eventDate,
     required this.eventTime,
-    required this.recipientType,
+    this.recipientType,
     this.recipientTypeOther,
     this.recipientName = '',
     this.recipientAddress = '',
     this.recipientPhone = '',
     this.propertyDescription = '',
+    this.propertyKind,
     this.notes,
     this.handoverFirefighterId,
     this.signLocality = '',
@@ -105,9 +112,10 @@ class PropertyHandover extends HiveObject {
     this.syncStatus = 'local',
   });
 
-  /// Etykieta rodzaju przejmującego do wyświetlenia/druku.
+  /// Etykieta rodzaju przejmującego do wyświetlenia/druku — pusty string,
+  /// gdy jeszcze nie wybrano.
   String get recipientTypeLabel =>
       recipientTypeOther != null && recipientTypeOther!.trim().isNotEmpty
           ? recipientTypeOther!.trim()
-          : recipientType;
+          : (recipientType ?? '');
 }

@@ -52,7 +52,7 @@ class ReportsListScreen extends ConsumerWidget {
               ),
             )
           : ListView.builder(
-              padding: const EdgeInsets.only(top: 8, bottom: 80),
+              padding: EdgeInsets.only(top: 8, bottom: 80 + MediaQuery.viewPaddingOf(context).bottom),
               itemCount: reports.length,
               itemBuilder: (context, index) {
                 final report = reports[index];

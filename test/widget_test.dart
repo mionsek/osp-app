@@ -20,6 +20,16 @@ void main() {
       expect(f.fullName, 'Dawid Kowalski');
       expect(f.fullNameWithRank, 'Dawid Kowalski, Strażak');
     });
+
+    test('fullNameWithRank omits the comma when rank is empty', () {
+      final f = Firefighter(
+        id: '1',
+        firstName: 'Jan',
+        lastName: 'Kowalski',
+        rank: '',
+      );
+      expect(f.fullNameWithRank, 'Jan Kowalski');
+    });
   });
 
   group('CrewAssignment', () {
@@ -51,6 +61,24 @@ void main() {
         locality: 'Kielno',
       );
       expect(config.fullName, 'Ochotnicza Straż Pożarna Kielno');
+    });
+
+    test('fullName uses the manually entered unit name when set', () {
+      final c = UnitConfig(
+        namePrefix: 'Ochotnicza Straż Pożarna',
+        locality: 'Kielno',
+        unitFullName: 'Ochotnicza Straż Pożarna w Kielnie',
+      );
+      expect(c.fullName, 'Ochotnicza Straż Pożarna w Kielnie');
+    });
+
+    test('fullName falls back to prefix + locality for old configs', () {
+      final c = UnitConfig(
+        namePrefix: 'Ochotnicza Straż Pożarna',
+        locality: 'Kielno',
+        unitFullName: '   ',
+      );
+      expect(c.fullName, 'Ochotnicza Straż Pożarna Kielno');
     });
 
     test('fullName without locality', () {

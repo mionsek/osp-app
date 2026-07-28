@@ -3,9 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
+import '../../core/constants/handover_property_kinds.dart';
 import '../../core/constants/handover_recipient_types.dart';
 import '../../models/models.dart';
 import '../../providers/providers.dart';
+import '../../services/location_service.dart';
 
 /// Formularz „Potwierdzenie przekazania terenu, obiektu lub mienia".
 /// Jeden ekran (nie kreator) — pola są prostsze niż w wyjeździe.
@@ -33,11 +35,49 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
   late DateTime _eventDate;
   late TimeOfDay _eventTime;
   late DateTime _signDate;
-  String _recipientType = HandoverRecipientTypes.owner;
+  String? _recipientType;
+  String? _propertyKind;
   String? _handoverFirefighterId;
   String? _linkedReportId;
+  bool _locating = false;
 
   bool get _isEditing => widget.handoverId != null;
+
+  /// Podpowiada miejsce zdarzenia na podstawie GPS. Wynik wpisujemy do
+  /// zwykłego pola tekstowego — użytkownik może go dowolnie poprawić, bo
+  /// GPS potrafi się mylić, a bez internetu adresu w ogóle nie ustalimy.
+  Future<void> _fillAddressFromGps() async {
+    setState(() => _locating = true);
+    try {
+      final address = await LocationService.currentAddress();
+      if (!mounted) return;
+      if (address.isEmpty) {
+        _showSnack('Nie udało się ustalić adresu — wpisz go ręcznie.');
+        return;
+      }
+      setState(() {
+        _eventLocationController.text = address.oneLine;
+        if (address.locality.isNotEmpty) {
+          _signLocalityController.text = address.locality;
+        }
+      });
+      _showSnack('Wstawiono adres z GPS — sprawdź i popraw w razie potrzeby.',
+          ok: true);
+    } on LocationFailure catch (e) {
+      if (mounted) _showSnack(e.message);
+    } catch (e) {
+      if (mounted) _showSnack('Błąd lokalizacji: $e');
+    } finally {
+      if (mounted) setState(() => _locating = false);
+    }
+  }
+
+  void _showSnack(String text, {bool ok = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(text),
+      backgroundColor: ok ? const Color(0xFF2E7D32) : Colors.orange[800],
+    ));
+  }
 
   @override
   void initState() {
@@ -64,6 +104,7 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
         _recipientAddressController.text = h.recipientAddress;
         _recipientPhoneController.text = h.recipientPhone;
         _propertyDescriptionController.text = h.propertyDescription;
+        _propertyKind = h.propertyKind;
         _notesController.text = h.notes ?? '';
         _handoverFirefighterId = h.handoverFirefighterId;
         _signLocalityController.text = h.signLocality;
@@ -102,6 +143,20 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
   Future<void> _onSave() async {
     if (!_formKey.currentState!.validate()) return;
 
+    final missing = <String>[
+      if (_recipientNameController.text.trim().isEmpty)
+        'imię i nazwisko przejmującego',
+      if (_recipientPhoneController.text.trim().isEmpty)
+        'numer telefonu przejmującego',
+      if (_recipientType == null) 'rodzaj podmiotu przejmującego',
+      if (_propertyKind == null) 'rodzaj przekazywanego (teren/obiekt/mienie)',
+      if (_handoverFirefighterId == null) 'przekazujący strażak',
+    ];
+    if (missing.isNotEmpty) {
+      final proceed = await _confirmIncomplete(missing);
+      if (proceed != true) return;
+    }
+
     final now = DateTime.now();
     final eventDateTime = DateTime(
       _eventDate.year,
@@ -129,6 +184,7 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
           ..recipientAddress = _recipientAddressController.text.trim()
           ..recipientPhone = _recipientPhoneController.text.trim()
           ..propertyDescription = _propertyDescriptionController.text.trim()
+          ..propertyKind = _propertyKind
           ..notes = _notesController.text.trim().isEmpty
               ? null
               : _notesController.text.trim()
@@ -137,7 +193,7 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
           ..signDate = _signDate
           ..updatedAt = now;
         await ref.read(handoversProvider.notifier).update(h);
-        if (mounted) context.pop();
+        if (mounted) _afterSave(h.id);
       }
       return;
     }
@@ -156,6 +212,7 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
       recipientAddress: _recipientAddressController.text.trim(),
       recipientPhone: _recipientPhoneController.text.trim(),
       propertyDescription: _propertyDescriptionController.text.trim(),
+      propertyKind: _propertyKind,
       notes: _notesController.text.trim().isEmpty
           ? null
           : _notesController.text.trim(),
@@ -167,7 +224,48 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
       createdBy: syncState.userEmail ?? '',
     );
     await ref.read(handoversProvider.notifier).add(handover);
-    if (mounted) context.pop();
+    if (mounted) _afterSave(handover.id);
+  }
+
+  /// Po zapisie — tak jak przy dodawaniu wyjazdu — przechodzimy od razu do
+  /// ekranu szczegółów, skąd można wydrukować lub wysłać potwierdzenie.
+  void _afterSave(String handoverId) {
+    final syncState = ref.read(syncStateProvider);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(syncState.isConnected
+            ? 'Przekazanie mienia zapisane. Synchronizacja z Google Drive '
+                'w toku...'
+            : 'Przekazanie mienia zapisane lokalnie.'),
+        backgroundColor: const Color(0xFF2E7D32),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+    context.go('/handovers/view/$handoverId');
+  }
+
+  Future<bool?> _confirmIncomplete(List<String> missing) {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Niepełne dane'),
+        content: Text(
+          'Nie uzupełniono: ${missing.join(', ')}.\n\n'
+          'Możesz zapisać mimo to i uzupełnić brakujące pola ręcznie na '
+          'wydruku, albo wrócić i je wypełnić.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Wróć do formularza'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Zapisz mimo to'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -182,7 +280,7 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
         ),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+        padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + MediaQuery.viewPaddingOf(context).bottom),
         child: Form(
           key: _formKey,
           child: Column(
@@ -240,10 +338,21 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
               const SizedBox(height: 12),
               TextFormField(
                 controller: _eventLocationController,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Miejsce zdarzenia',
                   hintText: 'Miejscowość, adres',
-                  prefixIcon: Icon(Icons.place),
+                  prefixIcon: const Icon(Icons.place),
+                  suffixIcon: IconButton(
+                    icon: _locating
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.my_location),
+                    tooltip: 'Wstaw adres z GPS',
+                    onPressed: _locating ? null : _fillAddressFromGps,
+                  ),
                 ),
                 maxLength: 150,
                 validator: (v) => (v == null || v.trim().isEmpty)
@@ -284,6 +393,7 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
                 initialValue: _recipientType,
                 decoration: const InputDecoration(
                   labelText: 'Rodzaj podmiotu przejmującego',
+                  hintText: 'Nie wybrano',
                   prefixIcon: Icon(Icons.badge),
                 ),
                 isExpanded: true,
@@ -293,10 +403,16 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
                           child: Text(t, overflow: TextOverflow.ellipsis),
                         ))
                     .toList(),
-                onChanged: (v) {
-                  if (v != null) setState(() => _recipientType = v);
-                },
+                onChanged: (v) => setState(() => _recipientType = v),
               ),
+              if (_recipientType == null) ...[
+                const SizedBox(height: 8),
+                const _WarningBanner(
+                  text: 'Nie wybrano rodzaju podmiotu przejmującego — na '
+                      'wydruku ta pozycja zostanie pusta, do ręcznego '
+                      'skreślenia długopisem.',
+                ),
+              ],
               if (_recipientType == HandoverRecipientTypes.other) ...[
                 const SizedBox(height: 12),
                 TextFormField(
@@ -320,8 +436,6 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
                 ),
                 textCapitalization: TextCapitalization.words,
                 maxLength: 100,
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Podaj imię i nazwisko' : null,
               ),
               const SizedBox(height: 12),
               TextFormField(
@@ -352,10 +466,32 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
                     ?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                initialValue: _propertyKind,
+                decoration: const InputDecoration(
+                  labelText: 'Rodzaj przekazywanego',
+                  hintText: 'Nie wybrano',
+                  prefixIcon: Icon(Icons.category),
+                ),
+                isExpanded: true,
+                items: HandoverPropertyKinds.all
+                    .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+                    .toList(),
+                onChanged: (v) => setState(() => _propertyKind = v),
+              ),
+              if (_propertyKind == null) ...[
+                const SizedBox(height: 8),
+                const _WarningBanner(
+                  text: 'Nie wybrano rodzaju (teren / obiekt / mienie) — na '
+                      'wydruku żadna pozycja nie zostanie skreślona, do '
+                      'ręcznego uzupełnienia długopisem.',
+                ),
+              ],
+              const SizedBox(height: 12),
               TextFormField(
                 controller: _propertyDescriptionController,
                 decoration: const InputDecoration(
-                  labelText: 'Teren, obiekt lub mienie',
+                  labelText: 'Opis przekazywanego',
                   hintText: 'Co dokładnie jest przekazywane do nadzoru...',
                   prefixIcon: Icon(Icons.inventory_2),
                   alignLabelWithHint: true,
@@ -392,20 +528,33 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
                 decoration: const InputDecoration(
                   labelText: 'Przekazujący (stopień, imię i nazwisko)',
                   prefixIcon: Icon(Icons.military_tech),
-                  hintText: 'Wybierz strażaka',
+                  hintText: 'Nie wybrano',
                 ),
                 isExpanded: true,
-                items: firefighters
-                    .map((f) => DropdownMenuItem(
-                          value: f.id,
-                          child: Text(f.fullNameWithRank,
-                              overflow: TextOverflow.ellipsis),
-                        ))
-                    .toList(),
+                items: [
+                  const DropdownMenuItem<String>(
+                    value: null,
+                    child: Text('Nie wybrano'),
+                  ),
+                  ...firefighters.map((f) => DropdownMenuItem(
+                        value: f.id,
+                        child: Text(f.fullNameWithRank,
+                            overflow: TextOverflow.ellipsis),
+                      )),
+                ],
                 onChanged: (id) => setState(() => _handoverFirefighterId = id),
-                validator: (v) =>
-                    v == null ? 'Wybierz przekazującego strażaka' : null,
               ),
+              if (_handoverFirefighterId == null) ...[
+                const SizedBox(height: 8),
+                _WarningBanner(
+                  text: firefighters.isEmpty
+                      ? 'Nie masz jeszcze dodanych ratowników — pole '
+                          '„Przekazujący" na wydruku zostanie puste, do '
+                          'uzupełnienia długopisem.'
+                      : 'Nie wybrano przekazującego — pole na wydruku '
+                          'zostanie puste, do uzupełnienia długopisem.',
+                ),
+              ],
               const SizedBox(height: 12),
               Row(
                 children: [
@@ -449,6 +598,36 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _WarningBanner extends StatelessWidget {
+  final String text;
+  const _WarningBanner({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.orange[50],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.orange[300]!),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.warning_amber_rounded, color: Colors.orange[800], size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(fontSize: 12, color: Colors.orange[900]),
+            ),
+          ),
+        ],
       ),
     );
   }

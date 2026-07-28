@@ -22,13 +22,16 @@ class UnitConfigAdapter extends TypeAdapter<UnitConfig> {
       onboardingCompleted: fields[2] as bool,
       isAdmin: fields[3] as bool,
       ownerEmail: fields[4] == null ? '' : fields[4] as String,
+      btPrinterMac: fields[5] as String?,
+      btPrinterName: fields[6] as String?,
+      unitFullName: fields[7] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, UnitConfig obj) {
     writer
-      ..writeByte(5)
+      ..writeByte(8)
       ..writeByte(0)
       ..write(obj.namePrefix)
       ..writeByte(1)
@@ -38,7 +41,13 @@ class UnitConfigAdapter extends TypeAdapter<UnitConfig> {
       ..writeByte(3)
       ..write(obj.isAdmin)
       ..writeByte(4)
-      ..write(obj.ownerEmail);
+      ..write(obj.ownerEmail)
+      ..writeByte(5)
+      ..write(obj.btPrinterMac)
+      ..writeByte(6)
+      ..write(obj.btPrinterName)
+      ..writeByte(7)
+      ..write(obj.unitFullName);
   }
 
   @override

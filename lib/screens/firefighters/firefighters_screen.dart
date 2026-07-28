@@ -85,7 +85,7 @@ class _FirefightersScreenState extends ConsumerState<FirefightersScreen> {
                     ),
                   )
                 : ListView.builder(
-                    padding: const EdgeInsets.only(bottom: 80),
+                    padding: EdgeInsets.only(bottom: 80 + MediaQuery.viewPaddingOf(context).bottom),
                     itemCount: filtered.length,
                     itemBuilder: (context, index) {
                       final ff = filtered[index];

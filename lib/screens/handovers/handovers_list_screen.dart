@@ -48,7 +48,7 @@ class HandoversListScreen extends ConsumerWidget {
               ),
             )
           : ListView.builder(
-              padding: const EdgeInsets.only(top: 8, bottom: 80),
+              padding: EdgeInsets.only(top: 8, bottom: 80 + MediaQuery.viewPaddingOf(context).bottom),
               itemCount: handovers.length,
               itemBuilder: (context, index) {
                 final h = handovers[index];
@@ -66,8 +66,8 @@ class HandoversListScreen extends ConsumerWidget {
                     ),
                     subtitle: Text(
                       '${DateFormat('dd.MM.yyyy').format(h.eventDate)} • '
-                      'Przejmujący: ${h.recipientName.isNotEmpty ? h.recipientName : "—"} '
-                      '(${h.recipientTypeLabel})',
+                      'Przejmujący: ${h.recipientName.isNotEmpty ? h.recipientName : "—"}'
+                      '${h.recipientTypeLabel.isNotEmpty ? " (${h.recipientTypeLabel})" : ""}',
                     ),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () => context.push('/handovers/view/${h.id}'),

@@ -163,7 +163,7 @@ class _FirefighterFormScreenState extends ConsumerState<FirefighterFormScreen> {
         title: Text(_isEditing ? 'Edytuj ratownika' : 'Nowy ratownik'),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + MediaQuery.viewPaddingOf(context).bottom),
         child: Form(
           key: _formKey,
           child: Column(

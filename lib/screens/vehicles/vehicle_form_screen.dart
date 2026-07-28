@@ -70,7 +70,7 @@ class _VehicleFormScreenState extends ConsumerState<VehicleFormScreen> {
         title: Text(_isEditing ? 'Edytuj pojazd' : 'Nowy pojazd'),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + MediaQuery.viewPaddingOf(context).bottom),
         child: Form(
           key: _formKey,
           child: Column(
