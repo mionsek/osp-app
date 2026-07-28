@@ -43,3 +43,21 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Sekrety — NIGDY nie commitować (repozytorium jest publiczne).
+#
+# Klucz podpisu aplikacji jest najważniejszy: kto go ma, może podpisać
+# dowolny plik APK tak, jakby pochodził od nas, i podstawić go jako
+# aktualizację. Klucza nie da się też unieważnić — utrata oznacza
+# konieczność publikacji aplikacji od nowa, bez zachowania instalacji.
+*.jks
+*.keystore
+/android/key.properties
+
+# Konfiguracja Firebase/Google — identyfikatory projektu i klienta.
+**/google-services.json
+**/GoogleService-Info.plist
+
+# Pliki ze zmiennymi środowiskowymi
+.env
+.env.*
