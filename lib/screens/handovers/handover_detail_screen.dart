@@ -6,6 +6,7 @@ import '../../models/models.dart';
 import '../../providers/providers.dart';
 import '../../services/bluetooth_print_service.dart';
 import '../../services/pdf_service.dart';
+import '../../widgets/bluetooth_printer_picker.dart';
 
 class HandoverDetailScreen extends ConsumerWidget {
   final String handoverId;
@@ -28,10 +29,18 @@ class HandoverDetailScreen extends ConsumerWidget {
       ));
     }
 
-    final mac = config.btPrinterMac;
+    var mac = config.btPrinterMac;
+    // Gdy drukarka nie jest jeszcze wybrana, pozwalamy wybrać ją od razu
+    // tutaj — bez odsyłania użytkownika do Ustawień.
     if (mac == null || mac.isEmpty) {
-      show('Najpierw wybierz drukarkę w Ustawieniach.');
-      return;
+      final result = await pickBluetoothPrinter(context, ref);
+      if (result.errorMessage != null) {
+        show(result.errorMessage!);
+        return;
+      }
+      if (!result.selected) return; // użytkownik zrezygnował
+      mac = ref.read(unitConfigProvider).btPrinterMac;
+      if (mac == null || mac.isEmpty) return;
     }
     try {
       if (!await BluetoothPrintService.ensurePermission()) {
@@ -194,17 +203,22 @@ class HandoverDetailScreen extends ConsumerWidget {
               icon: const Icon(Icons.print),
               label: const Text('Drukuj'),
             ),
-            if (config.btPrinterMac != null &&
-                config.btPrinterMac!.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              OutlinedButton.icon(
+            const SizedBox(height: 8),
+            // Przycisk jest widoczny również wtedy, gdy drukarka nie jest
+            // jeszcze wybrana — wybór odbywa się wtedy od razu tutaj,
+            // zamiast odsyłać użytkownika do Ustawień.
+            Builder(builder: (context) {
+              final hasPrinter = config.btPrinterMac != null &&
+                  config.btPrinterMac!.isNotEmpty;
+              return OutlinedButton.icon(
                 onPressed: () => _printViaBluetooth(
                     context, ref, handover, config, handoverFF),
                 icon: const Icon(Icons.bluetooth),
-                label: Text(
-                    'Drukuj na ${config.btPrinterName ?? "drukarce Bluetooth"}'),
-              ),
-            ],
+                label: Text(hasPrinter
+                    ? 'Drukuj na ${config.btPrinterName ?? "drukarce Bluetooth"}'
+                    : 'Drukuj na drukarce Bluetooth...'),
+              );
+            }),
             const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: () => PdfService.generateAndShareHandover(

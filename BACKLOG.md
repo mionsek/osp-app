@@ -98,6 +98,13 @@
 - [x] **Zmiana nazwy aplikacji na „Raporty OSP"** (AndroidManifest, MaterialApp, ekran „O aplikacji", pubspec, web)
 - [x] Ekran „O aplikacji": dodano sekcję „Statystyki" w instrukcji, tematy maili kontaktowych zmienione na „Raporty OSP — …"
 
+## Zrobione (feature/017-druk-bt-ux)
+- [x] **Drobny druk podstawy prawnej powiększony** z 6 do 7 pkt (`_handoverLegalFontSize`) — tyle, co reszta treści formularza; przy 203 DPI drukarki termicznej 6 pkt było na granicy czytelności
+- [x] **Wybór drukarki Bluetooth wprost z ekranu drukowania** — przycisk „Drukuj na drukarce Bluetooth..." jest widoczny zawsze; gdy drukarka nie jest jeszcze wybrana, kliknięcie od razu otwiera listę sparowanych urządzeń, bez odsyłania do Ustawień
+- [x] Wspólny `pickBluetoothPrinter()` (`lib/widgets/bluetooth_printer_picker.dart`) — jedno źródło logiki dla Ustawień i obu ekranów druku
+- [x] **Druk przez Bluetooth również dla raportu wyjazdu** (wcześniej tylko przekazanie mienia) — ten sam format A4 poziomo z 2 egzemplarzami A5, więc bez zmian w protokole
+- [x] **Ostrzeżenie o zgodności drukarek** w „O aplikacji" — druk BT przetestowany wyłącznie z NETUM XL-P801, inne modele najpewniej nie zadziałają (protokół odtworzony wstecznie dla jednego modelu); zaznaczono, że zwykły „Drukuj" i „Udostępnij" działają zawsze
+
 ## Zrobione (feature/016-poprawki-przekazania-mienia)
 
 ### Druk na przenośnej drukarce termicznej Bluetooth (NETUM XL-P801)

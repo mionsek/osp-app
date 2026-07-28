@@ -88,6 +88,17 @@ class PdfService {
     await _sharePdf(pdf, _handoverFileName(handover));
   }
 
+  /// Surowe bajty PDF potwierdzenia udziału w działaniu ratowniczym —
+  /// jak [handoverPdfBytes], na potrzeby druku przez Bluetooth.
+  static Future<Uint8List> reportPdfBytes(
+    Report report,
+    UnitConfig config,
+    List<Firefighter> allFirefighters,
+  ) async {
+    final pdf = await _buildPdf(report, config, allFirefighters);
+    return Uint8List.fromList(await pdf.save());
+  }
+
   /// Surowe bajty PDF przekazania mienia — potrzebne przy druku przez
   /// Bluetooth, gdzie stronę renderujemy do bitmapy zamiast oddawać ją
   /// systemowemu oknu drukowania.
@@ -713,6 +724,11 @@ class PdfService {
   // działaniem ratowniczym" (§ 21 ust. 2 pkt 2 rozp. MSWiA z 17.09.2021 r.)
   // ---------------------------------------------------------------------------
 
+  /// Wielkość drobnego druku podstawy prawnej wraz z rozpiską podmiotów.
+  /// Podniesiona z 6 do 7 pkt (tyle, co reszta treści formularza), bo przy
+  /// 203 DPI drukarki termicznej 6 pkt było na granicy czytelności.
+  static const double _handoverLegalFontSize = 7;
+
   /// Klauzule podmiotu przejmującego w formie z formularza (celownik) wraz
   /// z zestawem wartości [PropertyHandover.recipientType], które je wybierają.
   /// Dwie ostatnie opcje z listy zamkniętej dzielą jedną klauzulę na
@@ -750,7 +766,7 @@ class PdfService {
         pw.TextSpan(
           text: label,
           style: pw.TextStyle(
-            fontSize: 6,
+            fontSize: _handoverLegalFontSize,
             fontWeight: selected ? pw.FontWeight.bold : pw.FontWeight.normal,
             decoration: selected
                 ? pw.TextDecoration.underline
@@ -759,13 +775,19 @@ class PdfService {
         ),
       );
       if (i < _recipientClauses.length - 1) {
-        spans.add(const pw.TextSpan(text: ', ', style: pw.TextStyle(fontSize: 6)));
+        spans.add(const pw.TextSpan(
+          text: ', ',
+          style: pw.TextStyle(fontSize: _handoverLegalFontSize),
+        ));
       }
     }
     if (isOther) {
       spans.add(pw.TextSpan(
         text: ' (${handover.recipientTypeOther ?? handover.recipientType})',
-        style: pw.TextStyle(fontSize: 6, fontWeight: pw.FontWeight.bold),
+        style: pw.TextStyle(
+          fontSize: _handoverLegalFontSize,
+          fontWeight: pw.FontWeight.bold,
+        ),
       ));
     }
     return spans;
@@ -981,7 +1003,7 @@ class PdfService {
             // ---- Podstawa prawna + rodzaj przejmującego (niepotrzebne skreślić) ----
             pw.RichText(
               text: pw.TextSpan(
-                style: const pw.TextStyle(fontSize: 6),
+                style: const pw.TextStyle(fontSize: _handoverLegalFontSize),
                 children: [
                   const pw.TextSpan(
                     text: 'zgodnie z § 21 ust. 2 pkt 2 rozporządzenia Ministra '

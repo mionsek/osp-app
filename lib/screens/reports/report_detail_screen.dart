@@ -5,11 +5,63 @@ import 'package:intl/intl.dart';
 import '../../models/models.dart';
 import '../../models/sync_state.dart';
 import '../../providers/providers.dart';
+import '../../services/bluetooth_print_service.dart';
 import '../../services/pdf_service.dart';
+import '../../widgets/bluetooth_printer_picker.dart';
 
 class ReportDetailScreen extends ConsumerWidget {
   final String reportId;
   const ReportDetailScreen({super.key, required this.reportId});
+
+  /// Druk na sparowanej drukarce termicznej Bluetooth. Gdy drukarka nie
+  /// jest jeszcze wybrana, pozwalamy wybrać ją od razu tutaj.
+  Future<void> _printViaBluetooth(
+    BuildContext context,
+    WidgetRef ref,
+    Report report,
+    UnitConfig config,
+    List<Firefighter> firefighters,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    void show(String text, {bool ok = false}) {
+      messenger.showSnackBar(SnackBar(
+        content: Text(text),
+        backgroundColor: ok ? const Color(0xFF2E7D32) : Colors.red,
+      ));
+    }
+
+    var mac = config.btPrinterMac;
+    if (mac == null || mac.isEmpty) {
+      final result = await pickBluetoothPrinter(context, ref);
+      if (result.errorMessage != null) {
+        show(result.errorMessage!);
+        return;
+      }
+      if (!result.selected) return;
+      mac = ref.read(unitConfigProvider).btPrinterMac;
+      if (mac == null || mac.isEmpty) return;
+    }
+    try {
+      if (!await BluetoothPrintService.ensurePermission()) {
+        show('Brak zgody na dostęp do Bluetooth.');
+        return;
+      }
+      if (!await BluetoothPrintService.connectIfNeeded(mac)) {
+        show('Nie udało się połączyć z drukarką.');
+        return;
+      }
+      messenger.showSnackBar(const SnackBar(
+        content: Text('Wysyłanie do drukarki...'),
+        duration: Duration(seconds: 2),
+      ));
+      final bytes =
+          await PdfService.reportPdfBytes(report, config, firefighters);
+      final ok = await BluetoothPrintService.printPdf(bytes);
+      show(ok ? 'Wysłano do drukarki.' : 'Drukarka odrzuciła zadanie.', ok: ok);
+    } catch (e) {
+      show('Błąd druku: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -188,6 +240,19 @@ class ReportDetailScreen extends ConsumerWidget {
               icon: const Icon(Icons.print),
               label: const Text('Drukuj (2 egzemplarze)'),
             ),
+            const SizedBox(height: 8),
+            Builder(builder: (context) {
+              final hasPrinter = config.btPrinterMac != null &&
+                  config.btPrinterMac!.isNotEmpty;
+              return OutlinedButton.icon(
+                onPressed: () => _printViaBluetooth(
+                    context, ref, report, config, firefighters),
+                icon: const Icon(Icons.bluetooth),
+                label: Text(hasPrinter
+                    ? 'Drukuj na ${config.btPrinterName ?? "drukarce Bluetooth"}'
+                    : 'Drukuj na drukarce Bluetooth...'),
+              );
+            }),
             const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: () =>

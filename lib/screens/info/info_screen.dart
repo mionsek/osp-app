@@ -137,6 +137,49 @@ class InfoScreen extends StatelessWidget {
                     'Zaloguj się kontem Google, aby synchronizować '
                     'dane między urządzeniami przez Google Drive.',
               ),
+              const _HowToItem(
+                icon: Icons.bluetooth,
+                title: 'Druk na drukarce Bluetooth',
+                description:
+                    'Dokument możesz wysłać wprost na przenośną drukarkę '
+                    'termiczną — przycisk znajdziesz przy każdym raporcie '
+                    'i przekazaniu mienia. Drukarkę wybiera się raz.',
+              ),
+              const SizedBox(height: 16),
+
+              // Uczciwe ostrzeżenie: obsługa druku Bluetooth powstała przez
+              // odtworzenie zamkniętego protokołu jednego modelu drukarki,
+              // więc nie ma podstaw zakładać, że zadziała z innymi.
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange[50],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.orange[200]!),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.warning_amber_rounded,
+                        color: Colors.orange[800], size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Druk przez Bluetooth przetestowano wyłącznie '
+                        'z drukarką NETUM XL-P801. Inne modele najpewniej '
+                        'nie zadziałają — każdy producent stosuje własny '
+                        'sposób komunikacji. Przed zakupem innej drukarki '
+                        'najlepiej dopytaj autora aplikacji.\n\n'
+                        'Niezależnie od tego zawsze działa zwykły przycisk '
+                        '„Drukuj" (drukarki widoczne w systemie Android) '
+                        'oraz „Udostępnij / Wyślij".',
+                        style: TextStyle(
+                            fontSize: 12, color: Colors.orange[900]),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               const SizedBox(height: 16),
               const Divider(),
               const SizedBox(height: 16),

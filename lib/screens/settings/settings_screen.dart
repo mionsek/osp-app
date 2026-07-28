@@ -4,11 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import '../../providers/providers.dart';
 import '../../models/sync_state.dart';
 import '../../services/ad_service.dart';
 import '../../services/bluetooth_print_service.dart';
+import '../../widgets/bluetooth_printer_picker.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -351,63 +351,16 @@ class _BluetoothPrinterSectionState
       _errorMessage = null;
     });
     try {
-      final permitted = await BluetoothPrintService.ensurePermission();
-      if (!permitted) {
-        if (mounted) {
-          setState(() => _errorMessage =
-              'Brak zgody na dostęp do Bluetooth. Zezwól aplikacji na '
-              'urządzenia w pobliżu w ustawieniach telefonu (Aplikacje → '
-              'OSP → Uprawnienia) i spróbuj ponownie.');
-        }
-        return;
-      }
-      final enabled = await BluetoothPrintService.isBluetoothEnabled();
-      if (!enabled) {
-        if (mounted) {
-          setState(() => _errorMessage = 'Włącz Bluetooth w telefonie i spróbuj ponownie.');
-        }
-        return;
-      }
-      final paired = await BluetoothPrintService.pairedPrinters();
+      final result = await pickBluetoothPrinter(context, ref);
       if (!mounted) return;
-      if (paired.isEmpty) {
-        setState(() => _errorMessage =
-            'Brak sparowanych urządzeń Bluetooth. Sparuj drukarkę w '
-            'ustawieniach Bluetooth telefonu, a potem wróć tutaj.');
+      if (result.errorMessage != null) {
+        setState(() => _errorMessage = result.errorMessage);
         return;
       }
-      final selected = await showModalBottomSheet<BluetoothInfo>(
-        context: context,
-        builder: (ctx) => SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Padding(
-                padding: EdgeInsets.all(16),
-                child: Text('Wybierz sparowane urządzenie',
-                    style: TextStyle(fontWeight: FontWeight.bold)),
-              ),
-              for (final info in paired)
-                ListTile(
-                  leading: const Icon(Icons.print),
-                  title: Text(info.name),
-                  subtitle: Text(info.macAdress),
-                  onTap: () => Navigator.pop(ctx, info),
-                ),
-            ],
-          ),
-        ),
-      );
-      if (selected == null || !mounted) return;
-
-      final config = ref.read(unitConfigProvider);
-      await ref.read(unitConfigProvider.notifier).save(config.copyWith(
-            btPrinterMac: selected.macAdress,
-            btPrinterName: selected.name,
-          ));
-      if (mounted) {
+      if (result.selected) {
+        final name = ref.read(unitConfigProvider).btPrinterName ?? '';
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Wybrano drukarkę: ${selected.name}')),
+          SnackBar(content: Text('Wybrano drukarkę: $name')),
         );
       }
     } catch (e) {
