@@ -15,6 +15,19 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   List<String> _lastKnownDuplicates = const [];
+  bool _gettingStartedDismissed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _gettingStartedDismissed =
+        ref.read(databaseServiceProvider).isGettingStartedDismissed;
+  }
+
+  Future<void> _dismissGettingStarted() async {
+    await ref.read(databaseServiceProvider).dismissGettingStarted();
+    if (mounted) setState(() => _gettingStartedDismissed = true);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -48,9 +61,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(config.locality.isNotEmpty
-            ? 'OSP ${config.locality}'
-            : 'OSP'),
+        // Nazwa jednostki bywa długa („Ochotnicza Straż Pożarna
+        // w Kielnie"), więc na pasku skracamy ją do samej końcówki —
+        // pełna wersja i tak jest w Ustawieniach oraz na wydrukach.
+        title: Text(
+          _shortUnitLabel(config.fullName),
+          overflow: TextOverflow.ellipsis,
+        ),
         actions: [
           _SyncIndicator(syncState: syncState, onTap: () {
             ref.read(syncStateProvider.notifier).syncNow();
@@ -65,6 +82,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: 16),
+              // Podpowiedź pierwszych kroków — znika sama, gdy jednostka ma
+              // już wprowadzone pojazdy i ratowników, więc nie wymaga
+              // zapamiętywania „zamknięcia" ani nie zawadza na stałe.
+              if (!_gettingStartedDismissed &&
+                  (vehicles.isEmpty || firefighters.isEmpty)) ...[
+                _GettingStartedCard(
+                  hasVehicles: vehicles.isNotEmpty,
+                  hasFirefighters: firefighters.isNotEmpty,
+                  onDismiss: _dismissGettingStarted,
+                ),
+                const SizedBox(height: 16),
+              ],
               _MenuButton(
                 icon: Icons.add_circle,
                 label: 'Dodaj wyjazd',
@@ -159,6 +188,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
+  /// Skraca pełną nazwę jednostki do etykiety na pasku tytułu:
+  /// „Ochotnicza Straż Pożarna w Kielnie" → „OSP w Kielnie".
+  /// Nazwy, których nie rozpoznajemy, zostawiamy bez zmian.
+  static String _shortUnitLabel(String fullName) {
+    final name = fullName.trim();
+    if (name.isEmpty) return 'OSP';
+    final match = RegExp(
+      r'^Ochotnicza\s+Stra[żz]\s+Po[żz]arna\s*',
+      caseSensitive: false,
+    ).firstMatch(name);
+    if (match == null) return name;
+    final rest = name.substring(match.end).trim();
+    return rest.isEmpty ? 'OSP' : 'OSP $rest';
+  }
+
   void _showNoVehiclesDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -181,6 +225,129 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             child: const Text('Dodaj pojazd'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Krótka podpowiedź dla nowej jednostki: co trzeba uzupełnić, zanim da
+/// się dodać pierwszy wyjazd. Znika automatycznie, gdy komplet jest już
+/// wprowadzony.
+class _GettingStartedCard extends StatelessWidget {
+  final bool hasVehicles;
+  final bool hasFirefighters;
+  final VoidCallback onDismiss;
+
+  const _GettingStartedCard({
+    required this.hasVehicles,
+    required this.hasFirefighters,
+    required this.onDismiss,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: EdgeInsets.zero,
+      color: Colors.blue[50],
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.flag, color: Colors.blue[700]),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Pierwsze kroki',
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, size: 20),
+                  tooltip: 'Nie pokazuj ponownie',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: onDismiss,
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Zanim dodasz pierwszy wyjazd, uzupełnij dane jednostki:',
+              style: TextStyle(color: Colors.grey[800]),
+            ),
+            const SizedBox(height: 8),
+            _Step(
+              done: hasVehicles,
+              label: 'Dodaj wozy bojowe',
+              onTap: () => context.push('/vehicles'),
+            ),
+            _Step(
+              done: hasFirefighters,
+              label: 'Dodaj ratowników',
+              onTap: () => context.push('/firefighters'),
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Expanded(
+                  child: TextButton.icon(
+                    onPressed: () => context.push('/info'),
+                    icon: const Icon(Icons.info_outline, size: 18),
+                    label: const Text('Jak działa aplikacja?'),
+                  ),
+                ),
+                TextButton(
+                  onPressed: onDismiss,
+                  child: const Text('Nie pokazuj ponownie'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Step extends StatelessWidget {
+  final bool done;
+  final String label;
+  final VoidCallback onTap;
+
+  const _Step({required this.done, required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: done ? null : onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          children: [
+            Icon(
+              done ? Icons.check_circle : Icons.radio_button_unchecked,
+              size: 20,
+              color: done ? Colors.green[700] : Colors.grey[500],
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: done ? Colors.grey[600] : null,
+                  decoration: done ? TextDecoration.lineThrough : null,
+                ),
+              ),
+            ),
+            if (!done)
+              Icon(Icons.chevron_right, size: 20, color: Colors.grey[500]),
+          ],
+        ),
       ),
     );
   }

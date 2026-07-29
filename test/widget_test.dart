@@ -63,6 +63,11 @@ void main() {
       expect(config.fullName, 'Ochotnicza Straż Pożarna Kielno');
     });
 
+    test('fullName is empty-safe when nothing was ever configured', () {
+      final c = UnitConfig(namePrefix: '', locality: '');
+      expect(c.fullName, '');
+    });
+
     test('fullName uses the manually entered unit name when set', () {
       final c = UnitConfig(
         namePrefix: 'Ochotnicza Straż Pożarna',

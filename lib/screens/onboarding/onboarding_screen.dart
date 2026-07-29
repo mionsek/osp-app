@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../models/models.dart';
 import '../../providers/providers.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
@@ -18,9 +17,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   bool _isCreating = false;
   bool _isJoining = false;
 
-  final _prefixController =
-      TextEditingController(text: 'Ochotnicza Straż Pożarna');
-  final _localityController = TextEditingController();
+  // Puste na starcie — podpowiedź w polu pokazuje oczekiwany format
+  // („np. Ochotnicza Straż Pożarna w Kielnie"), więc użytkownik wpisuje
+  // od razu poprawną, pełną nazwę zamiast dopisywać do prefiksu.
+  final _prefixController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
   final _codeController = TextEditingController();
@@ -33,7 +33,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   void dispose() {
     _pageController.dispose();
     _prefixController.dispose();
-    _localityController.dispose();
     _codeController.dispose();
     super.dispose();
   }
@@ -62,9 +61,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   Future<void> _handleCreateUnit() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final prefix = _prefixController.text.trim();
-    final locality = _localityController.text.trim();
-    final fullName = locality.isEmpty ? prefix : '$prefix $locality';
+    final fullName = _prefixController.text.trim();
 
     setState(() => _isCreating = true);
     try {
@@ -72,7 +69,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
       final configNotifier = ref.read(unitConfigProvider.notifier);
       final db = ref.read(databaseServiceProvider);
-      await configNotifier.completeOnboarding(prefix, locality);
+      await configNotifier.completeOnboarding(fullName);
       await db.initializeDefaultThreats();
       ref.read(threatsProvider.notifier).refresh();
 
@@ -97,12 +94,11 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   Future<void> _handleCreateOffline() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final prefix = _prefixController.text.trim();
-    final locality = _localityController.text.trim();
+    final fullName = _prefixController.text.trim();
 
     final configNotifier = ref.read(unitConfigProvider.notifier);
     final db = ref.read(databaseServiceProvider);
-    await configNotifier.completeOnboarding(prefix, locality);
+    await configNotifier.completeOnboarding(fullName);
     await db.initializeDefaultThreats();
     ref.read(threatsProvider.notifier).refresh();
 
@@ -125,9 +121,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         final configNotifier = ref.read(unitConfigProvider.notifier);
         final db = ref.read(databaseServiceProvider);
         final config = db.getConfig();
-        await configNotifier.save(UnitConfig(
-          namePrefix: config.namePrefix,
-          locality: config.locality,
+        // copyWith, a nie nowy obiekt — konfiguracja pobrana z Dysku
+        // zawiera m.in. pełną nazwę jednostki, której nie wolno zgubić.
+        await configNotifier.save(config.copyWith(
           onboardingCompleted: true,
           isAdmin: false,
         ));
@@ -197,12 +193,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     );
   }
 
-  String get _fullName {
-    final prefix = _prefixController.text.trim();
-    final locality = _localityController.text.trim();
-    if (locality.isEmpty) return prefix;
-    return '$prefix $locality';
-  }
+  String get _fullName => _prefixController.text.trim();
 
   @override
   Widget build(BuildContext context) {
@@ -224,6 +215,21 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 : _buildJoinPage(),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _bullet(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('•  ', style: TextStyle(fontWeight: FontWeight.bold)),
+          Expanded(
+            child: Text(text, style: const TextStyle(height: 1.4)),
+          ),
+        ],
       ),
     );
   }
@@ -256,7 +262,38 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 ),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 48),
+          const SizedBox(height: 28),
+          // Krótkie wyjaśnienie, zanim użytkownik wybierze ścieżkę —
+          // żeby wiedział, czym aplikacja właściwie jest.
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.grey[100],
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Wypełnisz tu na miejscu zdarzenia dwa dokumenty '
+                  'wymagane po działaniach ratowniczych:',
+                  style: TextStyle(height: 1.5),
+                ),
+                const SizedBox(height: 10),
+                _bullet('potwierdzenie udziału w działaniu ratowniczym'),
+                _bullet('potwierdzenie przekazania terenu, obiektu lub mienia'),
+                const SizedBox(height: 10),
+                Text(
+                  'Drukują się w układzie zgodnym z papierowymi formularzami '
+                  '— dwa egzemplarze A5 na kartce A4, do rozcięcia. '
+                  'Aplikacja prowadzi też ewidencję ratowników i pojazdów '
+                  'oraz roczne statystyki.',
+                  style: TextStyle(height: 1.5, color: Colors.grey[700]),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 32),
           _ChoiceCard(
             icon: Icons.add_circle_outline,
             title: 'Utwórz nową jednostkę',
@@ -431,30 +468,14 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             TextFormField(
               controller: _prefixController,
               decoration: const InputDecoration(
-                labelText: 'Nazwa jednostki',
-                hintText: 'Ochotnicza Straż Pożarna',
+                labelText: 'Pełna nazwa jednostki',
+                hintText: 'np. Ochotnicza Straż Pożarna w Kielnie',
+                helperText: 'Tak, jak ma się pojawić na wydrukach',
               ),
-              maxLength: 100,
+              maxLength: 120,
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {
                   return 'Podaj nazwę jednostki';
-                }
-                return null;
-              },
-              onChanged: (_) => setState(() {}),
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _localityController,
-              decoration: const InputDecoration(
-                labelText: 'Miejscowość',
-                hintText: 'np. Kielno',
-              ),
-              maxLength: 50,
-              textCapitalization: TextCapitalization.words,
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return 'Podaj miejscowość';
                 }
                 return null;
               },

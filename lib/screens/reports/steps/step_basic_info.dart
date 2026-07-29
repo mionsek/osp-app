@@ -178,7 +178,10 @@ class _StepBasicInfoState extends ConsumerState<StepBasicInfo>
         : <String>[];
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      // Zapas na systemowy pasek nawigacji — inaczej przycisk „Dalej"
+      // na dole kroku chowa się za przyciskami telefonu.
+      padding: EdgeInsets.fromLTRB(
+          20, 20, 20, 20 + MediaQuery.viewPaddingOf(context).bottom),
       child: Form(
         key: _formKey,
         child: Column(

@@ -76,10 +76,36 @@ class InfoScreen extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               const Text(
-                'Aplikacja do tworzenia raportów z wyjazdów ratowniczych '
-                'dla Ochotniczych Straży Pożarnych. Pozwala szybko '
-                'dokumentować interwencje, zarządzać składem osobowym '
-                'i pojazdami, a następnie generować raporty w formacie PDF.',
+                'Aplikacja dla Ochotniczych Straży Pożarnych — do wypełniania '
+                'na miejscu zdarzenia dwóch dokumentów wymaganych po '
+                'działaniach ratowniczych:',
+                style: TextStyle(height: 1.5),
+              ),
+              const SizedBox(height: 12),
+              const _DocumentItem(
+                title: 'Potwierdzenie udziału w działaniu ratowniczym',
+                description:
+                    'Kto brał udział, jakimi pojazdami, w jakich godzinach '
+                    'i przy jakim zagrożeniu.',
+              ),
+              const _DocumentItem(
+                title: 'Potwierdzenie przekazania terenu, obiektu lub mienia',
+                description:
+                    'Komu przekazano nadzór nad miejscem zdarzenia po '
+                    'zakończeniu działań (§ 21 ust. 2 pkt 2 rozporządzenia '
+                    'MSWiA z 17 września 2021 r.).',
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Oba dokumenty powstają w układzie zgodnym z papierowymi '
+                'formularzami — na kartce A4 drukują się dwa identyczne '
+                'egzemplarze A5 obok siebie, do rozcięcia wzdłuż '
+                'przerywanej linii: jeden zostaje w jednostce, drugi trafia '
+                'do drugiej strony.\n\n'
+                'Aplikacja prowadzi też ewidencję ratowników (z terminami '
+                'badań lekarskich) i pojazdów, liczy roczne statystyki '
+                'i potrafi synchronizować dane między telefonami całej '
+                'jednostki przez Dysk Google.',
                 style: TextStyle(height: 1.5),
               ),
               const SizedBox(height: 24),
@@ -95,6 +121,14 @@ class InfoScreen extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               const _HowToItem(
+                icon: Icons.settings,
+                title: 'Na początek: nazwa jednostki',
+                description:
+                    'W Ustawieniach wpisz pełną nazwę tak, jak ma widnieć '
+                    'na dokumentach, np. „Ochotnicza Straż Pożarna '
+                    'w Kielnie".',
+              ),
+              const _HowToItem(
                 icon: Icons.fire_truck,
                 title: 'Dodaj pojazdy',
                 description:
@@ -105,22 +139,36 @@ class InfoScreen extends StatelessWidget {
                 icon: Icons.people,
                 title: 'Dodaj ratowników',
                 description:
-                    'Wprowadź strażaków z jednostki '
-                    '(imię, nazwisko, funkcja).',
+                    'Wprowadź strażaków z jednostki (imię, nazwisko, '
+                    'funkcja). Możesz zapisać termin ważności badań '
+                    'lekarskich — aplikacja ostrzeże przy układaniu '
+                    'zastępu.',
               ),
               const _HowToItem(
                 icon: Icons.add_circle,
-                title: 'Twórz raporty',
+                title: 'Dodaj wyjazd',
                 description:
-                    'Dodaj wyjazd — wypełnij datę, godziny, adres, '
-                    'rodzaj zagrożenia i skład zastępu.',
+                    'Wypełnij datę, godziny, adres, rodzaj zagrożenia '
+                    'i skład zastępu. Adres podpowie przycisk „Wstaw adres '
+                    'z GPS" — zawsze możesz go poprawić.',
               ),
               const _HowToItem(
-                icon: Icons.picture_as_pdf,
-                title: 'Generuj PDF',
+                icon: Icons.inventory_2,
+                title: 'Dodaj przekazanie mienia',
                 description:
-                    'Z każdego raportu wygeneruj dokument PDF — '
-                    'wydrukuj, udostępnij lub zapisz.',
+                    'Gdy przekazujesz teren, obiekt lub mienie pod nadzór '
+                    'właścicielowi, policji czy innej służbie. Możesz '
+                    'powiązać je z wyjazdem — dane zdarzenia uzupełnią się '
+                    'same.',
+              ),
+              const _HowToItem(
+                icon: Icons.print,
+                title: 'Drukuj lub wyślij',
+                description:
+                    'Z każdego dokumentu: „Drukuj" (drukarki widoczne '
+                    'w systemie Android), druk przez Bluetooth albo '
+                    '„Udostępnij / Wyślij" — PDF-em mailem lub '
+                    'komunikatorem.',
               ),
               const _HowToItem(
                 icon: Icons.bar_chart,
@@ -244,6 +292,46 @@ class InfoScreen extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Pozycja na liście dokumentów, które aplikacja wystawia.
+class _DocumentItem extends StatelessWidget {
+  final String title;
+  final String description;
+
+  const _DocumentItem({required this.title, required this.description});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(top: 2),
+            child: Icon(Icons.description, size: 18, color: Color(0xFFB71C1C)),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 2),
+                Text(
+                  description,
+                  style: TextStyle(
+                      fontSize: 13, color: Colors.grey[700], height: 1.4),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

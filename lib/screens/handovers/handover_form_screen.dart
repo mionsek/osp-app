@@ -87,8 +87,10 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
     _eventTime = TimeOfDay.fromDateTime(now);
     _signDate = DateTime(now.year, now.month, now.day);
 
-    final config = ref.read(unitConfigProvider);
-    _signLocalityController.text = config.locality;
+    // Miejscowość w stopce zostaje pusta — uzupełnia ją przycisk GPS
+    // („Wstaw adres z GPS") albo użytkownik ręcznie. Formularz wypełnia
+    // się zwykle na miejscu zdarzenia, więc miejscowość jednostki z
+    // ustawień bywałaby po prostu nieprawdziwa.
 
     if (_isEditing) {
       final db = ref.read(databaseServiceProvider);
@@ -563,6 +565,7 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
                       controller: _signLocalityController,
                       decoration: const InputDecoration(
                         labelText: 'Miejscowość',
+                        hintText: 'z GPS lub ręcznie',
                         prefixIcon: Icon(Icons.location_city),
                       ),
                       textCapitalization: TextCapitalization.words,

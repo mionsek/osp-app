@@ -19,7 +19,6 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   late TextEditingController _fullNameController;
-  late TextEditingController _localityController;
   final _formKey = GlobalKey<FormState>();
 
   @override
@@ -31,19 +30,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       // z miejscowością — użytkownik może to od razu poprawić na
       // poprawną gramatycznie formę („... w Kielnie").
       _fullNameController = TextEditingController(text: config.fullName);
-      _localityController = TextEditingController(text: config.locality);
     } catch (e) {
       debugPrint('Settings initState error: $e');
-      _fullNameController =
-          TextEditingController(text: 'Ochotnicza Straż Pożarna');
-      _localityController = TextEditingController();
+      _fullNameController = TextEditingController();
     }
   }
 
   @override
   void dispose() {
     _fullNameController.dispose();
-    _localityController.dispose();
     super.dispose();
   }
 
@@ -54,7 +49,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     // ekran nie edytuje (konto właściciela, zapamiętana drukarka).
     final newConfig = currentConfig.copyWith(
       unitFullName: _fullNameController.text.trim(),
-      locality: _localityController.text.trim(),
       onboardingCompleted: true,
     );
     await ref.read(unitConfigProvider.notifier).save(newConfig);
@@ -102,21 +96,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   maxLength: 120,
                   validator: (v) => v == null || v.trim().isEmpty
                       ? 'Podaj nazwę jednostki'
-                      : null,
-                  onChanged: (_) => setState(() {}),
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _localityController,
-                  decoration: const InputDecoration(
-                    labelText: 'Miejscowość',
-                    hintText: 'np. Kielno',
-                    helperText: 'Do stopki „Miejscowość ... dnia ..."',
-                  ),
-                  textCapitalization: TextCapitalization.words,
-                  maxLength: 50,
-                  validator: (v) => v == null || v.trim().isEmpty
-                      ? 'Podaj miejscowość'
                       : null,
                   onChanged: (_) => setState(() {}),
                 ),

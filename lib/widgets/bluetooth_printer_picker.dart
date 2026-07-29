@@ -52,6 +52,10 @@ Future<PrinterPickResult> pickBluetoothPrinter(
 
   final selected = await showModalBottomSheet<BluetoothInfo>(
     context: context,
+    // Bez tego okno ma sztywną wysokość i przy dłuższej liście urządzeń
+    // treść się nie mieści — ostatnia pozycja znikała pod paskiem
+    // ostrzeżenia o przepełnieniu układu.
+    isScrollControlled: true,
     builder: (ctx) => SafeArea(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -63,13 +67,20 @@ Future<PrinterPickResult> pickBluetoothPrinter(
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
           ),
-          for (final info in paired)
-            ListTile(
-              leading: const Icon(Icons.print),
-              title: Text(info.name),
-              subtitle: Text(info.macAdress),
-              onTap: () => Navigator.pop(ctx, info),
+          Flexible(
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                for (final info in paired)
+                  ListTile(
+                    leading: const Icon(Icons.print),
+                    title: Text(info.name),
+                    subtitle: Text(info.macAdress),
+                    onTap: () => Navigator.pop(ctx, info),
+                  ),
+              ],
             ),
+          ),
           const SizedBox(height: 8),
         ],
       ),

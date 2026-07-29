@@ -65,7 +65,10 @@ class StepSummary extends ConsumerWidget {
     }
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      // Zapas na systemowy pasek nawigacji telefonu — pod spodem jest
+      // przycisk zapisu raportu.
+      padding: EdgeInsets.fromLTRB(
+          20, 20, 20, 20 + MediaQuery.viewPaddingOf(context).bottom),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

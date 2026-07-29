@@ -50,6 +50,19 @@ class DatabaseService {
 
   bool get isOnboardingCompleted => getConfig().onboardingCompleted;
 
+  // --- Podpowiedź „Pierwsze kroki" na ekranie głównym ---
+  //
+  // Trzymana lokalnie (settingsBox), a nie w UnitConfig, bo to preferencja
+  // widoku konkretnego telefonu — nie ma powodu, żeby zamknięcie karty na
+  // jednym urządzeniu synchronizowało się przez Dysk na wszystkie inne.
+  static const String _gettingStartedDismissedKey = 'gettingStartedDismissed';
+
+  bool get isGettingStartedDismissed =>
+      settingsBox.get(_gettingStartedDismissedKey) as bool? ?? false;
+
+  Future<void> dismissGettingStarted() =>
+      settingsBox.put(_gettingStartedDismissedKey, true);
+
   // --- Vehicles ---
 
   Box<Vehicle> get vehiclesBox => Hive.box<Vehicle>(_vehiclesBox);

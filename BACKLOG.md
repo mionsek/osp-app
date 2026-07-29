@@ -98,6 +98,23 @@
 - [x] **Zmiana nazwy aplikacji na „Raporty OSP"** (AndroidManifest, MaterialApp, ekran „O aplikacji", pubspec, web)
 - [x] Ekran „O aplikacji": dodano sekcję „Statystyki" w instrukcji, tematy maili kontaktowych zmienione na „Raporty OSP — …"
 
+## Zrobione (feature/019-info-i-poprawki-ux)
+
+### Poprawki zgłoszone po testach
+- [x] **Pasek nawigacji zasłaniał przycisk w kreatorze „Dodaj wyjazd"** — kreator ma trzy własne, osobno przewijane kroki (`step_basic_info`, `step_crew`, `step_summary`), których wcześniejsza poprawka nie objęła
+- [x] **Lista drukarek Bluetooth: czarno-żółty pasek przepełnienia** zasłaniał ostatnie urządzenie — okno ma teraz `isScrollControlled` + przewijaną listę
+- [x] **Miejscowość jednostki usunięta z Ustawień** — do stopki „Miejscowość ... dnia ..." trafia bieżąca lokalizacja (przycisk GPS) albo wpis ręczny, bo dokument wypełnia się na miejscu zdarzenia, gdzie miejscowość jednostki bywa nieprawdziwa
+- [x] **Onboarding ujednolicony z Ustawieniami** — było wciąż osobne „Nazwa jednostki" + „Miejscowość", czyli nowy użytkownik dostawał dokładnie tę gramatycznie błędną sklejkę, którą naprawialiśmy w feature/016. Teraz jedno puste pole z podpowiedzią „np. Ochotnicza Straż Pożarna w Kielnie"
+- [x] Pasek tytułu skraca nazwę: „Ochotnicza Straż Pożarna w Kielnie" → „OSP w Kielnie" (nierozpoznany format zostaje w całości)
+- [x] Naprawiono: dołączanie do jednostki nadpisywało `UnitConfig` nowym obiektem, gubiąc pełną nazwę pobraną z Dysku (ta sama klasa błędu, co wcześniej w Ustawieniach)
+
+### Informacje o aplikacji
+- [x] **Przepisany ekran „O aplikacji"** — wprost nazwane oba dokumenty (z podstawą prawną przy przekazaniu mienia), wyjaśniony układ 2 × A5 na kartce A4 do rozcięcia, instrukcja rozszerzona o przekazania mienia, adres z GPS, badania lekarskie i trzy sposoby wydania dokumentu
+- [x] **Wprowadzenie przy pierwszym uruchomieniu** — świadomie bez blokującego samouczka:
+  - ramka na ekranie powitalnym wyjaśniająca, czym aplikacja jest, zanim użytkownik wybierze „Utwórz jednostkę" / „Dołącz"
+  - karta „Pierwsze kroki" na ekranie głównym: lista kontrolna (wozy → ratownicy) z odhaczaniem, skrótami do właściwych ekranów i linkiem do opisu aplikacji
+- [x] Kartę można zamknąć („×" lub „Nie pokazuj ponownie"); flaga trzymana **lokalnie** w `settingsBox`, nie w synchronizowanym `UnitConfig` — inaczej zamknięcie u jednej osoby ukryłoby podpowiedź kolegom, którzy dopiero instalują aplikację
+
 ## Zrobione (feature/017-druk-bt-ux)
 - [x] **Drobny druk podstawy prawnej powiększony** z 6 do 7 pkt (`_handoverLegalFontSize`) — tyle, co reszta treści formularza; przy 203 DPI drukarki termicznej 6 pkt było na granicy czytelności
 - [x] **Wybór drukarki Bluetooth wprost z ekranu drukowania** — przycisk „Drukuj na drukarce Bluetooth..." jest widoczny zawsze; gdy drukarka nie jest jeszcze wybrana, kliknięcie od razu otwiera listę sparowanych urządzeń, bez odsyłania do Ustawień

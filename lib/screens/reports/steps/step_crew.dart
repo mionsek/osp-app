@@ -53,7 +53,9 @@ class _StepCrewState extends ConsumerState<StepCrew>
         widget.getAllAssignedIds(excludeVehicleId: vehicleId);
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      // Zapas na systemowy pasek nawigacji telefonu.
+      padding: EdgeInsets.fromLTRB(
+          20, 20, 20, 20 + MediaQuery.viewPaddingOf(context).bottom),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

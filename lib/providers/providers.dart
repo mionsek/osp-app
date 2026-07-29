@@ -121,10 +121,13 @@ class UnitConfigNotifier extends StateNotifier<UnitConfig> {
     state = config;
   }
 
-  Future<void> completeOnboarding(String prefix, String locality) async {
+  /// [fullName] to pełna nazwa wpisana przez użytkownika, np.
+  /// „Ochotnicza Straż Pożarna w Kielnie" — trzymamy ją w całości, bo
+  /// sklejanie prefiksu z miejscownikiem dawało błędne gramatycznie
+  /// „Ochotnicza Straż Pożarna Kielno".
+  Future<void> completeOnboarding(String fullName) async {
     final config = UnitConfig(
-      namePrefix: prefix,
-      locality: locality,
+      unitFullName: fullName,
       onboardingCompleted: true,
       isAdmin: true,
     );
