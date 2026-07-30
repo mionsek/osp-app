@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
+import '../../../core/utils/firefighter_search.dart';
 import '../../../models/models.dart';
 import '../../../providers/providers.dart';
 
@@ -176,7 +177,7 @@ class _StepCrewState extends ConsumerState<StepCrew>
                     onPressed: () =>
                         setState(() => _currentVehicleIndex--),
                     icon: const Icon(Icons.arrow_back),
-                    label: const Text('Poprzedni wóz'),
+                    label: const Text('Poprzedni pojazd'),
                   ),
                 ),
               if (_currentVehicleIndex > 0) const SizedBox(width: 12),
@@ -189,7 +190,7 @@ class _StepCrewState extends ConsumerState<StepCrew>
                       : Icons.check),
                   label: Text(_currentVehicleIndex <
                           widget.selectedVehicleIds.length - 1
-                      ? 'Następny wóz'
+                      ? 'Następny pojazd'
                       : 'Podsumowanie'),
                 ),
               ),
@@ -317,8 +318,11 @@ class _StepCrewState extends ConsumerState<StepCrew>
   String? _autoCreateFirefighterFromText(String text) {
     final parts = text.trim().split(RegExp(r'\s+'));
     if (parts.length < 2) return null;
-    final firstName = parts.first;
-    final lastName = parts.sublist(1).join(' ');
+    // Pole prosi o „Nazwisko Imię", więc tak też rozbijamy wpisany tekst.
+    // Nazwiska dwuczłonowe („Nowak-Kowalska Anna") nadal działają, bo
+    // imieniem jest tylko ostatni wyraz.
+    final lastName = parts.sublist(0, parts.length - 1).join(' ');
+    final firstName = parts.last;
     if (firstName.length < 2 || lastName.length < 2) return null;
     final ff = Firefighter(
       id: const Uuid().v4(),
@@ -342,17 +346,19 @@ class _StepCrewState extends ConsumerState<StepCrew>
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // Nazwisko przed imieniem — tak samo, jak wszędzie indziej
+              // w aplikacji i jak zgłaszamy skład telefonicznie.
               TextField(
-                controller: firstNameController,
-                decoration: const InputDecoration(labelText: 'Imię'),
+                controller: lastNameController,
+                decoration: const InputDecoration(labelText: 'Nazwisko'),
                 textCapitalization: TextCapitalization.words,
                 autofocus: true,
                 maxLength: 50,
               ),
               const SizedBox(height: 8),
               TextField(
-                controller: lastNameController,
-                decoration: const InputDecoration(labelText: 'Nazwisko'),
+                controller: firstNameController,
+                decoration: const InputDecoration(labelText: 'Imię'),
                 textCapitalization: TextCapitalization.words,
                 maxLength: 50,
               ),
@@ -439,9 +445,13 @@ class _SeatSelectorState extends State<_SeatSelector> {
     if (text.isEmpty) return;
     if (widget.selectedId != null && widget.selectedId!.isNotEmpty) return;
 
-    // Try exact match by full name
+    // Dopasowanie po pełnej nazwie — akceptujemy obie kolejności, bo
+    // ktoś przyzwyczajony może nadal wpisać „Imię Nazwisko".
+    final lower = text.toLowerCase();
     final match = widget.firefighters.where(
-      (f) => f.fullName.toLowerCase() == text.toLowerCase(),
+      (f) =>
+          f.lastNameFirst.toLowerCase() == lower ||
+          f.fullName.toLowerCase() == lower,
     ).firstOrNull;
 
     if (match != null) {
@@ -517,18 +527,15 @@ class _SeatSelectorState extends State<_SeatSelector> {
             ),
             const SizedBox(height: 8),
             Autocomplete<Firefighter>(
-              displayStringForOption: (ff) => ff.fullName,
+              displayStringForOption: (ff) => ff.lastNameFirst,
               optionsBuilder: (textEditingValue) {
-                final query = textEditingValue.text.toLowerCase();
-                return widget.firefighters.where((ff) {
-                  final isAssignedElsewhere =
-                      widget.assignedElsewhere.contains(ff.id);
-                  final isAssignedInVehicle =
-                      widget.assignedInThisVehicle.contains(ff.id);
-                  if (isAssignedElsewhere || isAssignedInVehicle) return false;
-                  if (query.isEmpty) return true;
-                  return ff.fullName.toLowerCase().contains(query);
-                });
+                // Pomijamy osoby już przypisane — w tym wyjeździe lub
+                // do innego pojazdu.
+                final available = widget.firefighters.where((ff) =>
+                    !widget.assignedElsewhere.contains(ff.id) &&
+                    !widget.assignedInThisVehicle.contains(ff.id));
+                return FirefighterSearch.filter(
+                    available, textEditingValue.text);
               },
               onSelected: (ff) {
                 widget.onChanged(ff.id);
@@ -538,15 +545,18 @@ class _SeatSelectorState extends State<_SeatSelector> {
                   (context, textController, focusNode, onFieldSubmitted) {
                 _attachFocusListener(textController, focusNode);
                 if (selectedFF != null &&
-                    textController.text != selectedFF.fullName) {
-                  textController.text = selectedFF.fullName;
+                    textController.text != selectedFF.lastNameFirst) {
+                  textController.text = selectedFF.lastNameFirst;
                 }
                 return TextField(
                   controller: textController,
                   focusNode: focusNode,
+                  // Z tego pola powstaje też nowy ratownik, więc wielka
+                  // litera w każdym członie nazwiska i imienia.
+                  textCapitalization: TextCapitalization.words,
                   decoration: InputDecoration(
-                    hintText: 'Wpisz imię i nazwisko...',
-                    helperText: 'np. Jan Kowalski — ratownik zostanie utworzony automatycznie',
+                    hintText: 'Wpisz nazwisko i imię...',
+                    helperText: 'np. Kowalski Jan — ratownik zostanie utworzony automatycznie',
                     suffixIcon: IconButton(
                       icon: const Icon(Icons.person_add),
                       onPressed: widget.onAddNew,
@@ -570,13 +580,12 @@ class _SeatSelectorState extends State<_SeatSelector> {
                         itemCount: options.length,
                         itemBuilder: (context, index) {
                           final ff = options.elementAt(index);
+                          // Na liście samo nazwisko i imię — uprawnienia
+                          // oraz badania pokazują się jako odznaki dopiero
+                          // po wybraniu osoby. Wcześniej były tu drobnym,
+                          // szarym drukiem i zlewały się z nazwiskiem.
                           return ListTile(
-                            dense: true,
-                            title: Text(ff.fullName),
-                            subtitle: _buildQualificationText(ff) != null
-                                ? Text(_buildQualificationText(ff)!,
-                                    style: const TextStyle(fontSize: 12))
-                                : null,
+                            title: Text(ff.lastNameFirst),
                             onTap: () => onSelected(ff),
                           );
                         },
@@ -643,36 +652,4 @@ class _SeatSelectorState extends State<_SeatSelector> {
     );
   }
 
-  String? _buildQualificationText(Firefighter ff) {
-    final quals = <String>[];
-    final isDriverSeat = widget.seatNumber == 1;
-    final isCommanderSeat = widget.seatNumber == 2;
-
-    if (isDriverSeat) {
-      quals.add(ff.isDriver
-          ? '✓ Uprawnienia kierowcy'
-          : '✗ Brak uprawnień kierowcy');
-    } else if (isCommanderSeat) {
-      quals.add(ff.isCommander
-          ? '✓ Uprawnienia dowódcy'
-          : '✗ Brak uprawnień dowódcy');
-    } else if (ff.isKPP) {
-      quals.add('✓ KPP');
-    }
-
-    if (ff.isMedicalExamExpired) {
-      quals.add('[X] Brak ważnych badań lekarskich');
-    } else if (!ff.hasMedicalExam) {
-      quals.add('[X] Brak daty badań lekarskich');
-    } else if (ff.isMedicalExamExpiringSoon) {
-      final daysUntilExpiry = ff.medicalExamExpiry!
-          .difference(DateTime.now())
-          .inDays;
-      quals.add('! Badania wygasną w ciągu $daysUntilExpiry dni');
-    } else {
-      quals.add('✓ Ważne badania lekarskie');
-    }
-
-    return quals.isEmpty ? null : quals.join(' · ');
-  }
 }

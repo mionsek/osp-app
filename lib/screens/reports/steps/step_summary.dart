@@ -15,10 +15,7 @@ class StepSummary extends ConsumerWidget {
   final String threatCategory;
   final String? threatSubtype;
   final Map<String, CrewAssignment> crewAssignments;
-  final String? operationCommanderId;
   final String notes;
-  final ValueChanged<String?> onOperationCommanderChanged;
-  final ValueChanged<String> onNotesChanged;
   final VoidCallback onSave;
   final VoidCallback onBack;
 
@@ -34,10 +31,7 @@ class StepSummary extends ConsumerWidget {
     required this.threatCategory,
     this.threatSubtype,
     required this.crewAssignments,
-    this.operationCommanderId,
     required this.notes,
-    required this.onOperationCommanderChanged,
-    required this.onNotesChanged,
     required this.onSave,
     required this.onBack,
   });
@@ -46,14 +40,10 @@ class StepSummary extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final firefighters = ref.watch(firefightersProvider);
 
-    // Collect all assigned firefighters for commander dropdown
     final allAssignedIds = <String>{};
     for (final crew in crewAssignments.values) {
       allAssignedIds.addAll(crew.allAssignedIds);
     }
-    final assignedFirefighters =
-        firefighters.where((f) => allAssignedIds.contains(f.id)).toList();
-
     final totalFirefighters = allAssignedIds.length;
 
     String formatTime(TimeOfDay t) =>
@@ -153,40 +143,19 @@ class StepSummary extends ConsumerWidget {
                 ),
               )),
 
-          const SizedBox(height: 16),
-
-          // Operation commander
-          Text('Kierujący działaniem ratowniczym',
-              style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
-          DropdownButtonFormField<String>(
-            initialValue: operationCommanderId,
-            decoration: const InputDecoration(
-              prefixIcon: Icon(Icons.military_tech),
-              hintText: 'Wybierz KDR',
+          // Uwagi — tylko do odczytu. Ten ekran jest wyłącznie
+          // podsumowaniem; edycja odbywa się w kroku 1.
+          if (notes.trim().isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Text('Uwagi', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Text(notes.trim()),
+              ),
             ),
-            items: assignedFirefighters
-                .map((ff) => DropdownMenuItem(
-                      value: ff.id,
-                      child: Text(ff.fullName),
-                    ))
-                .toList(),
-            onChanged: onOperationCommanderChanged,
-          ),
-          const SizedBox(height: 16),
-
-          // Notes
-          TextField(
-            decoration: const InputDecoration(
-              labelText: 'Uwagi',
-              prefixIcon: Icon(Icons.note),
-              hintText: 'Dodatkowe informacje...',
-            ),
-            maxLines: 3,
-            maxLength: 500,
-            controller: TextEditingController(text: notes),
-            onChanged: onNotesChanged,
-          ),
+          ],
           const SizedBox(height: 24),
 
           ElevatedButton.icon(

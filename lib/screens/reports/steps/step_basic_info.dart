@@ -17,6 +17,7 @@ class StepBasicInfo extends ConsumerStatefulWidget {
   final String threatCategory;
   final String? threatSubtype;
   final List<String> selectedVehicleIds;
+  final String notes;
   final void Function({
     String? reportNumber,
     DateTime? date,
@@ -30,6 +31,7 @@ class StepBasicInfo extends ConsumerStatefulWidget {
     String? threatSubtype,
     bool clearThreatSubtype,
     List<String>? selectedVehicleIds,
+    String? notes,
   })
   onChanged;
   final VoidCallback onNext;
@@ -46,6 +48,7 @@ class StepBasicInfo extends ConsumerStatefulWidget {
     required this.threatCategory,
     this.threatSubtype,
     required this.selectedVehicleIds,
+    required this.notes,
     required this.onChanged,
     required this.onNext,
   });
@@ -61,6 +64,7 @@ class _StepBasicInfoState extends ConsumerState<StepBasicInfo>
   late TextEditingController _localityController;
   late TextEditingController _streetController;
   late TextEditingController _descriptionController;
+  late TextEditingController _notesController;
 
   @override
   bool get wantKeepAlive => true;
@@ -74,6 +78,7 @@ class _StepBasicInfoState extends ConsumerState<StepBasicInfo>
     _descriptionController = TextEditingController(
       text: widget.addressDescription,
     );
+    _notesController = TextEditingController(text: widget.notes);
   }
 
   @override
@@ -82,6 +87,7 @@ class _StepBasicInfoState extends ConsumerState<StepBasicInfo>
     _localityController.dispose();
     _streetController.dispose();
     _descriptionController.dispose();
+    _notesController.dispose();
     super.dispose();
   }
 
@@ -295,6 +301,7 @@ class _StepBasicInfoState extends ConsumerState<StepBasicInfo>
                   ),
                 ),
               ),
+              textCapitalization: TextCapitalization.words,
               maxLength: 100,
               onChanged: (v) => widget.onChanged(addressStreet: v.trim()),
             ),
@@ -363,9 +370,26 @@ class _StepBasicInfoState extends ConsumerState<StepBasicInfo>
                 prefixIcon: Icon(Icons.description),
                 hintText: 'np. za stacją benzynową, przy lesie...',
               ),
+              textCapitalization: TextCapitalization.sentences,
               maxLength: 300,
               maxLines: 2,
               onChanged: (v) => widget.onChanged(addressDescription: v.trim()),
+            ),
+            const SizedBox(height: 8),
+
+            // Uwagi — tu, a nie w podsumowaniu, żeby ostatni krok był
+            // wyłącznie podsumowaniem, bez edycji czegokolwiek.
+            TextFormField(
+              controller: _notesController,
+              decoration: const InputDecoration(
+                labelText: 'Uwagi',
+                prefixIcon: Icon(Icons.note),
+                hintText: 'Dodatkowe informacje...',
+              ),
+              textCapitalization: TextCapitalization.sentences,
+              maxLength: 500,
+              maxLines: 3,
+              onChanged: (v) => widget.onChanged(notes: v),
             ),
             const SizedBox(height: 20),
 

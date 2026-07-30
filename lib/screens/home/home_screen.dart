@@ -132,7 +132,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               const SizedBox(height: 12),
               _MenuButton(
                 icon: Icons.fire_truck,
-                label: 'Wozy bojowe (${vehicles.length})',
+                label: 'Pojazdy (${vehicles.length})',
                 color: const Color(0xFFE65100),
                 onTap: () => context.push('/vehicles'),
               ),
@@ -283,7 +283,7 @@ class _GettingStartedCard extends StatelessWidget {
             const SizedBox(height: 8),
             _Step(
               done: hasVehicles,
-              label: 'Dodaj wozy bojowe',
+              label: 'Dodaj pojazdy',
               onTap: () => context.push('/vehicles'),
             ),
             _Step(

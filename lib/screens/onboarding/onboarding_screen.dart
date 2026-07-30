@@ -472,6 +472,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 hintText: 'np. Ochotnicza Straż Pożarna w Kielnie',
                 helperText: 'Tak, jak ma się pojawić na wydrukach',
               ),
+              textCapitalization: TextCapitalization.words,
               maxLength: 120,
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {

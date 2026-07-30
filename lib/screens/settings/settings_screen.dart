@@ -93,6 +93,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     hintText: 'np. Ochotnicza Straż Pożarna w Kielnie',
                     helperText: 'Tak, jak ma się pojawić na wydrukach',
                   ),
+                  textCapitalization: TextCapitalization.words,
                   maxLength: 120,
                   validator: (v) => v == null || v.trim().isEmpty
                       ? 'Podaj nazwę jednostki'

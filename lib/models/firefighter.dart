@@ -43,6 +43,25 @@ class Firefighter extends HiveObject {
   String get fullNameWithRank =>
       rank.trim().isEmpty ? fullName : '$fullName, $rank';
 
+  /// „Nazwisko Imię" — tak zgłaszamy skład telefonicznie do PSP, więc w tej
+  /// kolejności listujemy i wyszukujemy ratowników w aplikacji.
+  String get lastNameFirst => '$lastName $firstName'.trim();
+
+  /// Funkcje pełnione w jednostce. Kierowca, dowódca i KPP to dodatkowe
+  /// uprawnienia — kto nie ma żadnego, jest po prostu ratownikiem, więc
+  /// nigdy nie zwracamy pustej listy.
+  List<String> get functionLabels {
+    final labels = <String>[
+      if (isDriver) 'Kierowca',
+      if (isCommander) 'Dowódca',
+      if (isKPP) 'KPP',
+    ];
+    return labels.isEmpty ? const ['Ratownik'] : labels;
+  }
+
+  /// Funkcje w jednej linii, np. „Kierowca, KPP" albo „Ratownik".
+  String get functionsLabel => functionLabels.join(', ');
+
   bool get hasMedicalExam => medicalExamExpiry != null;
   bool get isMedicalExamExpired =>
       medicalExamExpiry != null && medicalExamExpiry!.isBefore(DateTime.now());

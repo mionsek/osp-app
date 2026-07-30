@@ -8,6 +8,7 @@ import '../../core/constants/handover_recipient_types.dart';
 import '../../models/models.dart';
 import '../../providers/providers.dart';
 import '../../services/location_service.dart';
+import '../../widgets/firefighter_picker.dart';
 
 /// Formularz „Potwierdzenie przekazania terenu, obiektu lub mienia".
 /// Jeden ekran (nie kreator) — pola są prostsze niż w wyjeździe.
@@ -274,6 +275,11 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
   Widget build(BuildContext context) {
     final reports = ref.watch(reportsProvider);
     final firefighters = ref.watch(firefightersProvider);
+    final selectedHandoverFF = _handoverFirefighterId == null
+        ? null
+        : firefighters
+            .where((f) => f.id == _handoverFirefighterId)
+            .firstOrNull;
 
     return Scaffold(
       appBar: AppBar(
@@ -356,6 +362,7 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
                     onPressed: _locating ? null : _fillAddressFromGps,
                   ),
                 ),
+                textCapitalization: TextCapitalization.words,
                 maxLength: 150,
                 validator: (v) => (v == null || v.trim().isEmpty)
                     ? 'Podaj miejsce zdarzenia'
@@ -423,6 +430,7 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
                     labelText: 'Podaj rodzaj podmiotu',
                     prefixIcon: Icon(Icons.edit),
                   ),
+                  textCapitalization: TextCapitalization.sentences,
                   maxLength: 80,
                   validator: (v) => (v == null || v.trim().isEmpty)
                       ? 'Podaj rodzaj podmiotu'
@@ -446,6 +454,7 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
                   labelText: 'Adres służbowy lub zamieszkania',
                   prefixIcon: Icon(Icons.home),
                 ),
+                textCapitalization: TextCapitalization.words,
                 maxLength: 150,
               ),
               const SizedBox(height: 12),
@@ -498,6 +507,7 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
                   prefixIcon: Icon(Icons.inventory_2),
                   alignLabelWithHint: true,
                 ),
+                textCapitalization: TextCapitalization.sentences,
                 maxLines: 3,
                 maxLength: 400,
                 validator: (v) => (v == null || v.trim().isEmpty)
@@ -512,6 +522,7 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
                   prefixIcon: Icon(Icons.note),
                   alignLabelWithHint: true,
                 ),
+                textCapitalization: TextCapitalization.sentences,
                 maxLines: 3,
                 maxLength: 400,
               ),
@@ -525,26 +536,41 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
                     ?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                initialValue: _handoverFirefighterId,
-                decoration: const InputDecoration(
-                  labelText: 'Przekazujący (stopień, imię i nazwisko)',
-                  prefixIcon: Icon(Icons.military_tech),
-                  hintText: 'Nie wybrano',
-                ),
-                isExpanded: true,
-                items: [
-                  const DropdownMenuItem<String>(
-                    value: null,
-                    child: Text('Nie wybrano'),
+              // Panel z wyszukiwarką zamiast listy rozwijanej — przy
+              // kilkudziesięciu ratownikach przewijanie było uciążliwe.
+              InkWell(
+                onTap: () async {
+                  final result = await showFirefighterPicker(
+                    context: context,
+                    firefighters: firefighters,
+                    title: 'Wybierz przekazującego',
+                  );
+                  if (result == null) return; // zamknięto bez wyboru
+                  setState(() =>
+                      _handoverFirefighterId = result.firefighter?.id);
+                },
+                child: InputDecorator(
+                  decoration: const InputDecoration(
+                    labelText: 'Przekazujący (stopień, nazwisko i imię)',
+                    prefixIcon: Icon(Icons.military_tech),
                   ),
-                  ...firefighters.map((f) => DropdownMenuItem(
-                        value: f.id,
-                        child: Text(f.fullNameWithRank,
-                            overflow: TextOverflow.ellipsis),
-                      )),
-                ],
-                onChanged: (id) => setState(() => _handoverFirefighterId = id),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          selectedHandoverFF == null
+                              ? 'Nie wybrano'
+                              : selectedHandoverFF.lastNameFirst,
+                          overflow: TextOverflow.ellipsis,
+                          style: selectedHandoverFF == null
+                              ? TextStyle(color: Colors.grey[600])
+                              : null,
+                        ),
+                      ),
+                      Icon(Icons.search, color: Colors.grey[600]),
+                    ],
+                  ),
+                ),
               ),
               if (_handoverFirefighterId == null) ...[
                 const SizedBox(height: 8),

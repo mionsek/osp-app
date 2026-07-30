@@ -188,9 +188,6 @@ class ReportDetailScreen extends ConsumerWidget {
                     ),
                     _Row('Pojazdy', '${report.vehicleCount}'),
                     _Row('Ratownicy', '${report.totalFirefighters}'),
-                    if (report.operationCommanderId != null)
-                      _Row('KDR',
-                          findFF(report.operationCommanderId)?.fullName ?? '—'),
                     if (report.notes != null && report.notes!.isNotEmpty)
                       _Row('Uwagi', report.notes!),
                   ],

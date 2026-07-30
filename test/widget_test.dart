@@ -21,6 +21,36 @@ void main() {
       expect(f.fullNameWithRank, 'Dawid Kowalski, Strażak');
     });
 
+    test('lastNameFirst puts the surname first for phone reporting', () {
+      final f = Firefighter(
+        id: '1',
+        firstName: 'Wiktoria',
+        lastName: 'Nowak',
+        rank: '',
+      );
+      expect(f.lastNameFirst, 'Nowak Wiktoria');
+    });
+
+    test('functionLabels falls back to "Ratownik" when no role is set', () {
+      final f = Firefighter(
+          id: '1', firstName: 'Anna', lastName: 'Kowalska', rank: '');
+      expect(f.functionLabels, ['Ratownik']);
+      expect(f.functionsLabel, 'Ratownik');
+    });
+
+    test('functionLabels lists only the roles actually granted', () {
+      final f = Firefighter(
+        id: '1',
+        firstName: 'Jan',
+        lastName: 'Kowalski',
+        rank: '',
+        isDriver: true,
+        isKPP: true,
+      );
+      expect(f.functionLabels, ['Kierowca', 'KPP']);
+      expect(f.functionsLabel, 'Kierowca, KPP');
+    });
+
     test('fullNameWithRank omits the comma when rank is empty', () {
       final f = Firefighter(
         id: '1',

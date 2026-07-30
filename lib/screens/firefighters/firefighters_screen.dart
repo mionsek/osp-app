@@ -25,12 +25,17 @@ class _FirefightersScreenState extends ConsumerState<FirefightersScreen> {
   @override
   Widget build(BuildContext context) {
     final allFirefighters = ref.watch(firefightersProvider);
-    final filtered = _searchQuery.isEmpty
-        ? allFirefighters
+    final query = _searchQuery.trim().toLowerCase();
+    // Kolejność „Nazwisko Imię" — tak zgłaszamy skład telefonicznie,
+    // więc i szukamy, i sortujemy po nazwisku.
+    final filtered = (query.isEmpty
+        ? [...allFirefighters]
         : allFirefighters
-            .where(
-                (f) => f.fullName.toLowerCase().contains(_searchQuery.toLowerCase()))
-            .toList();
+            .where((f) => f.lastNameFirst.toLowerCase().contains(query))
+            .toList())
+      ..sort((a, b) => a.lastNameFirst
+          .toLowerCase()
+          .compareTo(b.lastNameFirst.toLowerCase()));
 
     return Scaffold(
       appBar: AppBar(
@@ -103,7 +108,7 @@ class _FirefightersScreenState extends ConsumerState<FirefightersScreen> {
                             ),
                           ),
                           title: Text(
-                            ff.fullName,
+                            ff.lastNameFirst,
                             style:
                                 const TextStyle(fontWeight: FontWeight.w600),
                           ),
@@ -175,6 +180,18 @@ class _FirefightersScreenState extends ConsumerState<FirefightersScreen> {
 
   Widget _buildRoleIcons(BuildContext context, dynamic ff) {
     final icons = <Widget>[];
+
+    // Kierowca, dowódca i KPP to dodatkowe uprawnienia — kto nie ma
+    // żadnego, jest po prostu ratownikiem i tak też go oznaczamy, zamiast
+    // zostawiać wiersz bez żadnej informacji o funkcji.
+    if (!ff.isDriver && !ff.isCommander && !ff.isKPP) {
+      icons.add(_roleIcon(
+        context,
+        Icons.person,
+        'Ratownik',
+        'Ratownik: bez dodatkowych uprawnień (kierowca, dowódca, KPP).',
+      ));
+    }
 
     if (ff.isDriver) {
       icons.add(_roleIcon(

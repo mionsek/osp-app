@@ -13,13 +13,13 @@ class VehiclesScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Wozy bojowe'),
+        title: const Text('Pojazdy'),
       ),
       bottomNavigationBar: const BannerAdWidget(),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => context.push('/vehicles/add'),
         icon: const Icon(Icons.add),
-        label: const Text('Dodaj wóz'),
+        label: const Text('Dodaj pojazd'),
       ),
       body: vehicles.isEmpty
           ? Center(

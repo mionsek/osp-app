@@ -37,8 +37,6 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
   // Step 2 data
   final Map<String, CrewAssignment> _crewAssignments = {};
 
-  // Step 3 data
-  String? _operationCommanderId;
   String _notes = '';
 
   bool get _isEditing => widget.reportId != null;
@@ -50,7 +48,9 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
     _date = now;
     final h = now.hour - 1;
     _departureTime = TimeOfDay(hour: h < 0 ? 23 : h, minute: now.minute);
-    _returnTime = TimeOfDay(hour: now.hour, minute: now.minute);
+    // Godzina powrotu zostaje pusta — przy tworzeniu raportu zwykle jeszcze
+    // jej nie znamy, a PSP i tak wpisuje własne godziny.
+    _returnTime = null;
 
     if (_isEditing) {
       _loadExistingReport();
@@ -95,7 +95,6 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
     for (final crew in report.crewAssignments) {
       _crewAssignments[crew.vehicleId] = crew;
     }
-    _operationCommanderId = report.operationCommanderId;
     _notes = report.notes ?? '';
   }
 
@@ -243,7 +242,6 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
       threatCategory: _threatCategory,
       threatSubtype: _threatSubtype,
       crewAssignments: _crewAssignments.values.toList(),
-      operationCommanderId: _operationCommanderId,
       notes: _notes.isNotEmpty ? _notes : null,
       createdAt: _isEditing
           ? ref.read(databaseServiceProvider).getReport(widget.reportId!)?.createdAt ?? now
@@ -300,6 +298,7 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
             threatCategory: _threatCategory,
             threatSubtype: _threatSubtype,
             selectedVehicleIds: _selectedVehicleIds,
+            notes: _notes,
             onChanged: ({
               String? reportNumber,
               DateTime? date,
@@ -313,6 +312,7 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
               String? threatSubtype,
               bool clearThreatSubtype = false,
               List<String>? selectedVehicleIds,
+              String? notes,
             }) {
               setState(() {
                 if (reportNumber != null) _reportNumber = reportNumber;
@@ -333,6 +333,7 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
                 if (selectedVehicleIds != null) {
                   _selectedVehicleIds = selectedVehicleIds;
                 }
+                if (notes != null) _notes = notes;
               });
             },
             onNext: _nextPage,
@@ -356,11 +357,7 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
             threatCategory: _threatCategory,
             threatSubtype: _threatSubtype,
             crewAssignments: _crewAssignments,
-            operationCommanderId: _operationCommanderId,
             notes: _notes,
-            onOperationCommanderChanged: (id) =>
-                setState(() => _operationCommanderId = id),
-            onNotesChanged: (value) => setState(() => _notes = value),
             onSave: _saveReport,
             onBack: _prevPage,
           ),

@@ -155,10 +155,6 @@ class PdfService {
         ? '${report.returnTime!.hour.toString().padLeft(2, '0')}:${report.returnTime!.minute.toString().padLeft(2, '0')}'
         : '—';
 
-    final operationCommander = _findFF(
-      report.operationCommanderId,
-      allFirefighters,
-    );
 
     // Address + threat on one line: "Miejscowość, ul. X; Kategoria: rodzaj"
     final addressParts = <String>[
@@ -465,8 +461,12 @@ class PdfService {
                       ),
                     ),
                     padding: const pw.EdgeInsets.only(bottom: 1),
+                    // Linia zostaje pusta do wpisania odręcznie: PSP
+                    // uzupełnia kierującego działaniem po swojemu, a przy
+                    // raporcie na własny użytek to pole i tak nie jest
+                    // potrzebne. Dlatego usunęliśmy je z kreatora.
                     child: pw.Text(
-                      operationCommander?.fullName ?? '',
+                      '',
                       textAlign: pw.TextAlign.center,
                       style: const pw.TextStyle(fontSize: 7),
                     ),

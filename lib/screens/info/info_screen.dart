@@ -132,7 +132,7 @@ class InfoScreen extends StatelessWidget {
                 icon: Icons.fire_truck,
                 title: 'Dodaj pojazdy',
                 description:
-                    'Wprowadź wozy bojowe swojej jednostki '
+                    'Wprowadź pojazdy swojej jednostki '
                     '(numer operacyjny, typ, rejestracja).',
               ),
               const _HowToItem(

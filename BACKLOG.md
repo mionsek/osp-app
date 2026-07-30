@@ -98,6 +98,36 @@
 - [x] **Zmiana nazwy aplikacji na „Raporty OSP"** (AndroidManifest, MaterialApp, ekran „O aplikacji", pubspec, web)
 - [x] Ekran „O aplikacji": dodano sekcję „Statystyki" w instrukcji, tematy maili kontaktowych zmienione na „Raporty OSP — …"
 
+## Zrobione (feature/021-wybor-ratownika)
+- [x] **Naprawiono: lista podpowiedzi w kreatorze zastępów pokazywała „Imię Nazwisko"** — przeoczenie z feature/020: zmieniona była kolejność w polu tekstowym i po wyborze, ale nie w samej liście
+- [x] **Lista podpowiedzi bez uprawnień i badań** (wariant C) — wcześniej były drobnym, szarym drukiem pod nazwiskiem i zlewały się z nim. Odznaki uprawnień/badań pokazują się nadal, ale dopiero **po** wybraniu osoby
+- [x] **Wyszukiwanie ratowników wyciągnięte do `FirefighterSearch`** — wspólne dla kreatora zastępów i formularza przekazania. Ranking trzypoziomowy: początek nazwiska → początek imienia → dopasowanie w środku. Szuka po obu członach, wyświetla zawsze „Nazwisko Imię"
+- [x] **Wybór przekazującego z wyszukiwarką** (`showFirefighterPicker`) zamiast listy rozwijanej — przy kilkudziesięciu osobach przewijanie było uciążliwe
+- [x] W oknie „Dodaj ratownika" nazwisko przed imieniem, spójnie z resztą aplikacji
+- [x] **Wielkie litery w polach tekstowych** — 8 miejsc: przekazanie mienia (miejsce zdarzenia, rodzaj podmiotu, adres, opis, uwagi), nazwa jednostki w Ustawieniach i onboardingu, pole wyszukiwania/tworzenia ratownika w zastępach. Celowo pominięte: wyszukiwarki, numer ewidencyjny i numer telefonu
+
+### Do przetestowania z użytkownikami
+- Czy na liście podpowiedzi w zastępach brakuje informacji o uprawnieniach i badaniach? Usunięto je (wariant C), bo zlewały się z nazwiskiem. Alternatywy, gdyby okazały się potrzebne: **(A)** nazwisko pogrubione + uprawnienia mniejszym, szarym drukiem, **(B)** nazwisko pogrubione + uprawnienia kolorem (zielony ✓ / pomarańczowy ✗), spójnie z odznakami pokazywanymi po wyborze
+
+## Zrobione (feature/020-poprawki-raportu)
+
+### Błędy
+- [x] **Uwagi wpisywały się od tyłu i nie dało się kasować znaków** — `StepSummary` tworzył `TextEditingController` wewnątrz `build()`, więc każde naciśnięcie klawisza budowało nowy kontroler z kursorem na pozycji 0. Stąd odwrócona kolejność liter i backspace „działający raz". Pole uwag przeniesione do kroku 1, gdzie kontroler żyje w `initState()` (jedyne takie miejsce w aplikacji)
+- [x] **Wyszukiwanie ratownika łapało też imię** — wpisanie „Wi" zwracało zarówno Wiktorię, jak i osoby o nazwisku na „Wi". Teraz dopasowanie priorytetowo po początku nazwiska, reszta dopasowań niżej
+
+### Zmiany w kreatorze wyjazdu
+- [x] **Uwagi przeniesione do kroku 1** — ostatni krok jest wyłącznie podsumowaniem, bez edycji: albo powrót do edycji, albo zapis
+- [x] **Pole KDR usunięte z kreatora** — linia podpisu na wydruku zostaje, ale **zawsze pusta**, do wpisania odręcznie. PSP i tak wpisuje kierującego po swojemu, a przy raporcie na własny użytek pole nie jest potrzebne
+- [x] **Godzina powrotu startuje pusta** (wcześniej podstawiała bieżącą godzinę) — przy tworzeniu raportu zwykle jeszcze jej nie znamy
+- [x] Wielkie litery: ulica (`words`), opis miejsca zdarzenia i uwagi (`sentences`)
+
+### Ratownicy
+- [x] **„Nazwisko Imię"** — nowy getter `lastNameFirst`, użyty w wyszukiwarce zastępu, na liście ratowników i przy sortowaniu (tak zgłaszamy skład telefonicznie do PSP). Automatyczne tworzenie ratownika z wpisanego tekstu też rozbija nazwę w tej kolejności, ale rozpoznaje nadal obie
+- [x] **„Ratownik" jako funkcja** — wyliczana, gdy nie ma kierowcy/dowódcy/KPP (`functionLabels`), bez zmian w danych i bez migracji: każdy strażak jest ratownikiem, a pozostałe to dodatkowe uprawnienia. Osoba bez uprawnień nie jest już pokazywana bez żadnej funkcji
+
+### Nazewnictwo
+- [x] Ujednolicone na **„pojazd"** (było raz „wóz", raz „pojazd") — ekran główny, lista pojazdów, kreator zastępów, „O aplikacji"
+
 ## Zrobione (feature/019-info-i-poprawki-ux)
 
 ### Poprawki zgłoszone po testach
@@ -162,6 +192,30 @@
 - **Brak zabezpieczenia przed utworzeniem drugiej jednostki na koncie, które już ma jednostkę**: `SyncService.createUnit()` zawsze tworzy nowy folder Drive niezależnie od tego, czy zalogowane konto już jest właścicielem/uczestnikiem innej jednostki — do rozważenia w przyszłości (np. sprawdzenie istniejącego `unit_config.json`/`driveSync` przed „Utwórz jednostkę" i zaproponowanie dołączenia/przełączenia zamiast cichego utworzenia drugiej, rozłącznej jednostki)
 
 ## Do zrobienia — Kolejne branche
+
+### Przebieg pojazdów (kilometry)
+Ewidencja przebiegu per pojazd — Gospodarz jednostki rozlicza się miesięcznie
+z kilometrów przejechanych przez każdy pojazd. Do przemyślenia: czy wpisywać
+stan licznika przy wyjeździe i powrocie (dokładniejsze, ale dwa pola więcej
+w kreatorze), czy sam dystans po fakcie; plus ekran historii i podsumowanie
+miesięczne/roczne do wydruku.
+
+### Funkcje ratownika — możliwe rozszerzenia
+Obecnie „Ratownik" jest **wyliczany**: brak kierowcy/dowódcy/KPP = ratownik.
+Rozważane alternatywy, gdyby to przestało wystarczać:
+- jawny checkbox „Ratownik" (wymaga pilnowania sprzeczności i uzupełnienia
+  istniejących wpisów),
+- pełny słownik funkcji zamiast trzech flag (np. mechanik, operator sprzętu,
+  ratownik wodny) — pozwoliłby też odróżnić uprawnienia od funkcji na wyjeździe.
+
+### Godziny dla PSP vs OSP
+PSP nie potrzebuje godzin, OSP tak. Na razie rozwiązane tak, że godzina powrotu
+startuje pusta i wpisuje się ją samodzielnie. Gdyby okazało się to niewygodne,
+do rozważenia osobne pola „czas dla PSP" i „czas wewnętrzny OSP".
+
+### Podgląd wydruku przed drukiem Bluetooth
+Obecnie druk startuje od razu po kliknięciu.
+
 
 ### Przed publikacją w Play Store
 - [ ] Zastąpić testowe ID AdMob prawdziwymi w `ad_service.dart` i `AndroidManifest.xml` (patrz feature/007)
