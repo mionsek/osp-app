@@ -125,6 +125,34 @@ powstać razem, bo to ten sam zestaw danych i ten sam odbiorca.
 **Do ustalenia z Deringiem przed implementacją:** dokładny zestaw pól i to,
 czy rozliczenie ma być miesięczne per pojazd, czy per wyjazd.
 
+## Zrobione (feature/022-role-administratora)
+
+### Naprawa dołączania do jednostki (fundament)
+- [x] **Dołączenie z innego konta Google w ogóle nie działało** — `shareFolderWithUser` istniało, ale nie było nigdzie wywoływane, a `findUnitByInviteCode` przeszukuje wyłącznie pliki widoczne dla konta. Kolega z prawidłowym kodem dostawał „nie znaleziono jednostki". Nie było tego widać w testach, bo drugi telefon logował się tym samym kontem
+- [x] Administrator zaprasza podając adres Gmail → aplikacja udostępnia folder → kolega dołącza kodem
+- [x] Lista osób z dostępem (z Dysku) + odbieranie dostępu
+- [x] **Naprawiono: nazwa jednostki była przy synchronizacji rozbijana po spacjach** („ostatni wyraz to miejscowość") — po zmianie na pełną nazwę dawało to bezsens u każdego, kto dołączy. Teraz nazwa idzie w całości
+
+### Role
+- [x] Administratorzy w `config/admins.json` na Dysku jednostki; **założyciel** (`createdBy`) jest stałym administratorem i nie da się mu odebrać uprawnień — inaczej jednostka mogłaby zostać bez nikogo do zarządzania
+- [x] Kopia listy administratorów lokalnie (`settingsBox`) — bez niej po restarcie aplikacji lub bez zasięgu nikt nie byłby administratorem
+- [x] `isAdminProvider`; praca bez jednostki (offline) = własne dane, więc pełne uprawnienia
+- [x] Nadawanie i odbieranie uprawnień administratora w Ustawieniach
+- [x] **Zablokowane dla zwykłego użytkownika:** dodawanie/edycja/usuwanie pojazdów i ratowników, zmiana nazwy jednostki, zakładanie ratownika w kreatorze zastępów (pełna spójność — w razie potrzeby raport drukuje się i dopisuje odręcznie)
+- [x] **Raporty i przekazania:** każdy edytuje i usuwa własne (`createdBy`), administrator wszystkie. Dokumenty bez autora (starsze/offline) zostają edytowalne
+- [x] Zamiast ukrywania — wyjaśnienie „może zmieniać tylko administrator" z adresem administratora
+
+### Zgłaszanie poprawek
+- [x] Zwykły użytkownik ma przy każdym ratowniku przycisk „Zgłoś poprawkę" — wybiera powód (błąd w nazwisku, nieaktualne badania, błędne uprawnienia, nie należy do jednostki, inne), dopisuje komentarz i wysyła gotową wiadomość do administratora
+
+### Uwagi
+- Model uprawnień jest **miękki**: każdy członek ma prawo zapisu do folderu na Dysku (musi wysyłać raporty), więc technicznie mógłby podmienić `admins.json`. To zabezpieczenie przed pomyłką, nie przed złośliwością — realną granicą jest to, kogo w ogóle wpuszczamy do jednostki
+- Kod zaproszenia: 6 znaków z alfabetu 32-znakowego = **32⁶ ≈ 1,07 mld** kombinacji, losowane generatorem kryptograficznym. Sam kod i tak nie wystarcza — potrzebny jest dostęp do folderu na Dysku
+
+### Do rozważenia
+- Zgłoszenia poprawek jako obieg w aplikacji (lista u administratora, zatwierdzanie, historia) zamiast wiadomości — jeśli po testach okaże się, że zgłoszenia giną
+- Powiadomienie kolegi po zaproszeniu (obecnie trzeba mu przekazać kod osobno)
+
 ## Zrobione (feature/021-wybor-ratownika)
 - [x] **Naprawiono: lista podpowiedzi w kreatorze zastępów pokazywała „Imię Nazwisko"** — przeoczenie z feature/020: zmieniona była kolejność w polu tekstowym i po wyborze, ale nie w samej liście
 - [x] **Lista podpowiedzi bez uprawnień i badań** (wariant C) — wcześniej były drobnym, szarym drukiem pod nazwiskiem i zlewały się z nim. Odznaki uprawnień/badań pokazują się nadal, ale dopiero **po** wybraniu osoby

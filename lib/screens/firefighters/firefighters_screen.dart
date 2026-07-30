@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../models/models.dart';
 import '../../providers/providers.dart';
+import '../../widgets/admin_only_notice.dart';
 import '../../widgets/banner_ad_widget.dart';
+import '../../widgets/correction_request_dialog.dart';
 
 class FirefightersScreen extends ConsumerStatefulWidget {
   const FirefightersScreen({super.key});
@@ -25,6 +28,8 @@ class _FirefightersScreenState extends ConsumerState<FirefightersScreen> {
   @override
   Widget build(BuildContext context) {
     final allFirefighters = ref.watch(firefightersProvider);
+    final isAdmin = ref.watch(isAdminProvider);
+    final syncState = ref.watch(syncStateProvider);
     final query = _searchQuery.trim().toLowerCase();
     // Kolejność „Nazwisko Imię" — tak zgłaszamy skład telefonicznie,
     // więc i szukamy, i sortujemy po nazwisku.
@@ -42,13 +47,20 @@ class _FirefightersScreenState extends ConsumerState<FirefightersScreen> {
         title: const Text('Ratownicy'),
       ),
       bottomNavigationBar: const BannerAdWidget(),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.push('/firefighters/add'),
-        icon: const Icon(Icons.person_add),
-        label: const Text('Dodaj'),
-      ),
+      floatingActionButton: isAdmin
+          ? FloatingActionButton.extended(
+              onPressed: () => context.push('/firefighters/add'),
+              icon: const Icon(Icons.person_add),
+              label: const Text('Dodaj'),
+            )
+          : null,
       body: Column(
         children: [
+          if (!isAdmin)
+            AdminOnlyNotice(
+              what: 'Listę ratowników',
+              adminEmail: syncState.founderEmail,
+            ),
           Padding(
             padding: const EdgeInsets.all(16),
             child: TextField(
@@ -113,25 +125,33 @@ class _FirefightersScreenState extends ConsumerState<FirefightersScreen> {
                                 const TextStyle(fontWeight: FontWeight.w600),
                           ),
                           subtitle: _buildFirefighterSubtitle(context, ff),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.edit,
-                                    color: Color(0xFF1565C0)),
-                                onPressed: () => context
-                                    .push('/firefighters/edit/${ff.id}'),
-                                tooltip: 'Edytuj',
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.delete,
-                                    color: Color(0xFFB71C1C)),
-                                onPressed: () => _confirmDelete(
-                                    context, ref, ff.id, ff.fullName),
-                                tooltip: 'Usuń',
-                              ),
-                            ],
-                          ),
+                          trailing: !isAdmin
+                              ? IconButton(
+                                  icon: Icon(Icons.flag_outlined,
+                                      color: Colors.blueGrey[600]),
+                                  onPressed: () =>
+                                      _reportCorrection(context, ref, ff),
+                                  tooltip: 'Zgłoś poprawkę do administratora',
+                                )
+                              : Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(Icons.edit,
+                                          color: Color(0xFF1565C0)),
+                                      onPressed: () => context
+                                          .push('/firefighters/edit/${ff.id}'),
+                                      tooltip: 'Edytuj',
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete,
+                                          color: Color(0xFFB71C1C)),
+                                      onPressed: () => _confirmDelete(context,
+                                          ref, ff.id, ff.lastNameFirst),
+                                      tooltip: 'Usuń',
+                                    ),
+                                  ],
+                                ),
                         ),
                       );
                     },
@@ -296,6 +316,21 @@ class _FirefightersScreenState extends ConsumerState<FirefightersScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  /// Zwykły użytkownik nie edytuje danych ratowników, ale może zgłosić
+  /// administratorowi, że coś się nie zgadza — np. literówkę w nazwisku
+  /// albo nieaktualny termin badań.
+  void _reportCorrection(
+      BuildContext context, WidgetRef ref, Firefighter ff) {
+    final syncState = ref.read(syncStateProvider);
+    showCorrectionRequestDialog(
+      context: context,
+      firefighter: ff,
+      adminEmail: syncState.founderEmail,
+      reporterEmail: syncState.userEmail,
+      unitName: ref.read(unitConfigProvider).fullName,
     );
   }
 

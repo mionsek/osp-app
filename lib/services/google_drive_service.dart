@@ -3,6 +3,21 @@ import 'package:flutter/foundation.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
 import 'google_auth_service.dart';
 
+/// Osoba mająca dostęp do folderu jednostki na Dysku.
+class UnitMemberAccess {
+  final String permissionId;
+  final String email;
+
+  /// Właściciela folderu (założyciela) nie da się z niego usunąć.
+  final bool isOwner;
+
+  const UnitMemberAccess({
+    required this.permissionId,
+    required this.email,
+    required this.isOwner,
+  });
+}
+
 /// Service for CRUD operations on Google Drive.
 /// All data lives in a shared unit folder.
 class GoogleDriveService {
@@ -119,6 +134,10 @@ class GoogleDriveService {
   }
 
   /// Share the unit folder with a user (by email).
+  ///
+  /// Bez tego kolega nie dołączy do jednostki: sam kod zaproszenia nie
+  /// wystarczy, bo [findUnitByInviteCode] przeszukuje wyłącznie pliki,
+  /// do których jego konto ma już dostęp na Dysku.
   Future<void> shareFolderWithUser(String folderId, String email) async {
     final permission = drive.Permission()
       ..type = 'user'
@@ -128,6 +147,27 @@ class GoogleDriveService {
     await _api.permissions.create(permission, folderId,
         sendNotificationEmail: false);
   }
+
+  /// Osoby mające dostęp do folderu jednostki (bez właściciela).
+  Future<List<UnitMemberAccess>> listFolderMembers(String folderId) async {
+    final result = await _api.permissions.list(
+      folderId,
+      $fields: 'permissions(id, emailAddress, role, type)',
+    );
+    final permissions = result.permissions ?? [];
+    return permissions
+        .where((p) => p.type == 'user' && p.emailAddress != null)
+        .map((p) => UnitMemberAccess(
+              permissionId: p.id ?? '',
+              email: p.emailAddress!,
+              isOwner: p.role == 'owner',
+            ))
+        .toList();
+  }
+
+  /// Odbiera dostęp do folderu jednostki.
+  Future<void> revokeFolderAccess(String folderId, String permissionId) =>
+      _api.permissions.delete(folderId, permissionId);
 
   /// Find unit folder shared with current user by invite code.
   /// The invite code is stored in unit_config.json inside the config subfolder.

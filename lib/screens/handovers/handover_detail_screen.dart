@@ -99,16 +99,21 @@ class HandoverDetailScreen extends ConsumerWidget {
         ),
         title: const Text('Przekazanie mienia'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.edit),
-            onPressed: () => context.push('/handovers/edit/${handover.id}'),
-            tooltip: 'Edytuj',
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete),
-            onPressed: () => _confirmDelete(context, ref, handover),
-            tooltip: 'Usuń',
-          ),
+          // Cudze przekazania poprawia i usuwa tylko administrator.
+          if (ref
+              .watch(syncStateProvider)
+              .canEditDocument(handover.createdBy)) ...[
+            IconButton(
+              icon: const Icon(Icons.edit),
+              onPressed: () => context.push('/handovers/edit/${handover.id}'),
+              tooltip: 'Edytuj',
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete),
+              onPressed: () => _confirmDelete(context, ref, handover),
+              tooltip: 'Usuń',
+            ),
+          ],
         ],
       ),
       body: SingleChildScrollView(

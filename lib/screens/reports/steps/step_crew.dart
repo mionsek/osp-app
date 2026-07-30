@@ -39,6 +39,7 @@ class _StepCrewState extends ConsumerState<StepCrew>
     super.build(context);
     final vehicles = ref.watch(vehiclesProvider);
     final firefighters = ref.watch(firefightersProvider);
+    final canCreateFirefighters = ref.watch(isAdminProvider);
 
     if (widget.selectedVehicleIds.isEmpty) {
       return const Center(child: Text('Brak wybranych pojazdów'));
@@ -111,6 +112,7 @@ class _StepCrewState extends ConsumerState<StepCrew>
             },
             onAddNew: () => _showAddFirefighterDialog(context, ref),
             onAutoCreateFromText: _autoCreateFirefighterFromText,
+            canCreateFirefighters: canCreateFirefighters,
           ),
           const SizedBox(height: 12),
 
@@ -128,6 +130,7 @@ class _StepCrewState extends ConsumerState<StepCrew>
             },
             onAddNew: () => _showAddFirefighterDialog(context, ref),
             onAutoCreateFromText: _autoCreateFirefighterFromText,
+            canCreateFirefighters: canCreateFirefighters,
           ),
           const SizedBox(height: 12),
 
@@ -161,6 +164,7 @@ class _StepCrewState extends ConsumerState<StepCrew>
                 },
                 onAddNew: () => _showAddFirefighterDialog(context, ref),
                 onAutoCreateFromText: _autoCreateFirefighterFromText,
+            canCreateFirefighters: canCreateFirefighters,
               ),
             );
           }),
@@ -316,6 +320,11 @@ class _StepCrewState extends ConsumerState<StepCrew>
   }
 
   String? _autoCreateFirefighterFromText(String text) {
+    // Ratowników zakłada wyłącznie administrator — tak samo jak na
+    // ekranie „Ratownicy". Gdy w akcji pojawi się ktoś spoza listy,
+    // raport i tak można wydrukować i dopisać go odręcznie.
+    if (!ref.read(isAdminProvider)) return null;
+
     final parts = text.trim().split(RegExp(r'\s+'));
     if (parts.length < 2) return null;
     // Pole prosi o „Nazwisko Imię", więc tak też rozbijamy wpisany tekst.
@@ -404,6 +413,9 @@ class _SeatSelector extends StatefulWidget {
   final VoidCallback onAddNew;
   final String? Function(String text) onAutoCreateFromText;
 
+  /// Nowych ratowników zakłada wyłącznie administrator jednostki.
+  final bool canCreateFirefighters;
+
   const _SeatSelector({
     required this.seatNumber,
     required this.role,
@@ -414,6 +426,7 @@ class _SeatSelector extends StatefulWidget {
     required this.onChanged,
     required this.onAddNew,
     required this.onAutoCreateFromText,
+    required this.canCreateFirefighters,
   });
 
   @override
@@ -560,12 +573,17 @@ class _SeatSelectorState extends State<_SeatSelector> {
                   textCapitalization: TextCapitalization.words,
                   decoration: InputDecoration(
                     hintText: 'Wpisz nazwisko i imię...',
-                    helperText: 'np. Kowalski Jan — ratownik zostanie utworzony automatycznie',
-                    suffixIcon: IconButton(
-                      icon: const Icon(Icons.person_add),
-                      onPressed: widget.onAddNew,
-                      tooltip: 'Dodaj nowego ratownika',
-                    ),
+                    helperText: widget.canCreateFirefighters
+                        ? 'np. Kowalski Jan — ratownik zostanie utworzony automatycznie'
+                        : 'Wybierz z listy — nowych ratowników dodaje administrator',
+                    helperMaxLines: 2,
+                    suffixIcon: widget.canCreateFirefighters
+                        ? IconButton(
+                            icon: const Icon(Icons.person_add),
+                            onPressed: widget.onAddNew,
+                            tooltip: 'Dodaj nowego ratownika',
+                          )
+                        : null,
                     isDense: true,
                   ),
                 );

@@ -39,6 +39,15 @@ final syncStateProvider = StateNotifierProvider<SyncStateNotifier, SyncState>((
   return SyncStateNotifier(syncService);
 });
 
+/// Czy zalogowana osoba może zarządzać jednostką — dodawać pojazdy,
+/// ratowników i nadawać uprawnienia.
+///
+/// Praca bez jednostki (tryb offline) to własne, lokalne dane, więc wtedy
+/// wszystko jest dozwolone.
+final isAdminProvider = Provider<bool>((ref) {
+  return ref.watch(syncStateProvider).isCurrentUserAdmin;
+});
+
 class SyncStateNotifier extends StateNotifier<SyncState> {
   final SyncService _syncService;
 

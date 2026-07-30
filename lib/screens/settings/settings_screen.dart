@@ -8,7 +8,9 @@ import '../../providers/providers.dart';
 import '../../models/sync_state.dart';
 import '../../services/ad_service.dart';
 import '../../services/bluetooth_print_service.dart';
+import '../../widgets/admin_only_notice.dart';
 import '../../widgets/bluetooth_printer_picker.dart';
+import 'unit_members_section.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -66,6 +68,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget build(BuildContext context) {
     debugPrint('SettingsScreen.build() called');
     final config = ref.watch(unitConfigProvider);
+    final isAdmin = ref.watch(isAdminProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -86,26 +89,40 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 Text('Nazwa jednostki',
                     style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 8),
-                TextFormField(
-                  controller: _fullNameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Pełna nazwa jednostki',
-                    hintText: 'np. Ochotnicza Straż Pożarna w Kielnie',
-                    helperText: 'Tak, jak ma się pojawić na wydrukach',
+                if (!isAdmin) ...[
+                  // Nazwa trafia na wszystkie wydruki całej jednostki,
+                  // więc zmienia ją tylko administrator.
+                  Text(
+                    ref.watch(unitConfigProvider).fullName,
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w500),
                   ),
-                  textCapitalization: TextCapitalization.words,
-                  maxLength: 120,
-                  validator: (v) => v == null || v.trim().isEmpty
-                      ? 'Podaj nazwę jednostki'
-                      : null,
-                  onChanged: (_) => setState(() {}),
-                ),
-                const SizedBox(height: 24),
-                ElevatedButton.icon(
-                  onPressed: _save,
-                  icon: const Icon(Icons.save),
-                  label: const Text('Zapisz ustawienia'),
-                ),
+                  AdminOnlyNotice(
+                    what: 'Nazwę jednostki',
+                    adminEmail: ref.watch(syncStateProvider).founderEmail,
+                  ),
+                ] else ...[
+                  TextFormField(
+                    controller: _fullNameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Pełna nazwa jednostki',
+                      hintText: 'np. Ochotnicza Straż Pożarna w Kielnie',
+                      helperText: 'Tak, jak ma się pojawić na wydrukach',
+                    ),
+                    textCapitalization: TextCapitalization.words,
+                    maxLength: 120,
+                    validator: (v) => v == null || v.trim().isEmpty
+                        ? 'Podaj nazwę jednostki'
+                        : null,
+                    onChanged: (_) => setState(() {}),
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton.icon(
+                    onPressed: _save,
+                    icon: const Icon(Icons.save),
+                    label: const Text('Zapisz ustawienia'),
+                  ),
+                ],
                 const SizedBox(height: 32),
                 const Divider(),
                 const SizedBox(height: 16),
@@ -135,6 +152,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 const Divider(),
                 const SizedBox(height: 16),
                 _GoogleSyncSection(),
+                // Zarządzanie dostępem ma sens tylko przy podłączonej
+                // jednostce i tylko dla administratora.
+                if (isAdmin && ref.watch(syncStateProvider).isConnected) ...[
+                  const SizedBox(height: 32),
+                  const Divider(),
+                  const SizedBox(height: 16),
+                  const UnitMembersSection(),
+                ],
                 const SizedBox(height: 32),
                 const Divider(),
                 const SizedBox(height: 16),

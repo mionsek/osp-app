@@ -95,16 +95,20 @@ class ReportDetailScreen extends ConsumerWidget {
         ),
         title: Text('Wyjazd ${report.reportNumber}'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.edit),
-            onPressed: () => context.push('/reports/edit/${report.id}'),
-            tooltip: 'Edytuj',
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete),
-            onPressed: () => _confirmDelete(context, ref, report),
-            tooltip: 'Usuń',
-          ),
+          // Cudze raporty poprawia i usuwa tylko administrator — autor
+          // zawsze może zmienić swój własny.
+          if (ref.watch(syncStateProvider).canEditDocument(report.createdBy)) ...[
+            IconButton(
+              icon: const Icon(Icons.edit),
+              onPressed: () => context.push('/reports/edit/${report.id}'),
+              tooltip: 'Edytuj',
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete),
+              onPressed: () => _confirmDelete(context, ref, report),
+              tooltip: 'Usuń',
+            ),
+          ],
         ],
       ),
       body: SingleChildScrollView(

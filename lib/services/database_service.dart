@@ -63,6 +63,23 @@ class DatabaseService {
   Future<void> dismissGettingStarted() =>
       settingsBox.put(_gettingStartedDismissedKey, true);
 
+  // --- Administratorzy jednostki (kopia lokalna) ---
+  //
+  // Źródłem prawdy jest `config/admins.json` na Dysku, ale trzymamy też
+  // kopię lokalnie: bez niej po restarcie aplikacji — a zwłaszcza bez
+  // zasięgu — nikt nie byłby administratorem i własna jednostka stałaby
+  // się nieedytowalna.
+  static const String _adminEmailsKey = 'adminEmails';
+
+  List<String> get cachedAdminEmails =>
+      (settingsBox.get(_adminEmailsKey) as List?)
+          ?.map((e) => e.toString())
+          .toList() ??
+      const [];
+
+  Future<void> cacheAdminEmails(List<String> emails) =>
+      settingsBox.put(_adminEmailsKey, emails);
+
   // --- Vehicles ---
 
   Box<Vehicle> get vehiclesBox => Hive.box<Vehicle>(_vehiclesBox);

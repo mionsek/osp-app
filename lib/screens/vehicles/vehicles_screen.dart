@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../models/models.dart';
 import '../../providers/providers.dart';
+import '../../widgets/admin_only_notice.dart';
 import '../../widgets/banner_ad_widget.dart';
 
 class VehiclesScreen extends ConsumerWidget {
@@ -10,18 +12,43 @@ class VehiclesScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final vehicles = ref.watch(vehiclesProvider);
+    final isAdmin = ref.watch(isAdminProvider);
+    final syncState = ref.watch(syncStateProvider);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Pojazdy'),
       ),
       bottomNavigationBar: const BannerAdWidget(),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.push('/vehicles/add'),
-        icon: const Icon(Icons.add),
-        label: const Text('Dodaj pojazd'),
+      // Bez uprawnień administratora nie ma czego dodawać — zamiast
+      // wyłączonego przycisku pokazujemy wyjaśnienie nad listą.
+      floatingActionButton: isAdmin
+          ? FloatingActionButton.extended(
+              onPressed: () => context.push('/vehicles/add'),
+              icon: const Icon(Icons.add),
+              label: const Text('Dodaj pojazd'),
+            )
+          : null,
+      body: Column(
+        children: [
+          if (!isAdmin)
+            AdminOnlyNotice(
+              what: 'Listę pojazdów',
+              adminEmail: syncState.founderEmail,
+            ),
+          Expanded(child: _buildList(context, ref, vehicles, isAdmin)),
+        ],
       ),
-      body: vehicles.isEmpty
+    );
+  }
+
+  Widget _buildList(
+    BuildContext context,
+    WidgetRef ref,
+    List<Vehicle> vehicles,
+    bool isAdmin,
+  ) {
+    return vehicles.isEmpty
           ? Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -59,30 +86,31 @@ class VehiclesScreen extends ConsumerWidget {
                     ),
                     subtitle: Text(
                         '${vehicle.seats} ${_seatsLabel(vehicle.seats)}'),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon:
-                              const Icon(Icons.edit, color: Color(0xFF1565C0)),
-                          onPressed: () =>
-                              context.push('/vehicles/edit/${vehicle.id}'),
-                          tooltip: 'Edytuj',
-                        ),
-                        IconButton(
-                          icon:
-                              const Icon(Icons.delete, color: Color(0xFFB71C1C)),
-                          onPressed: () =>
-                              _confirmDelete(context, ref, vehicle.id, vehicle.name),
-                          tooltip: 'Usuń',
-                        ),
-                      ],
-                    ),
+                    trailing: !isAdmin
+                        ? null
+                        : Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.edit,
+                                    color: Color(0xFF1565C0)),
+                                onPressed: () => context
+                                    .push('/vehicles/edit/${vehicle.id}'),
+                                tooltip: 'Edytuj',
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete,
+                                    color: Color(0xFFB71C1C)),
+                                onPressed: () => _confirmDelete(
+                                    context, ref, vehicle.id, vehicle.name),
+                                tooltip: 'Usuń',
+                              ),
+                            ],
+                          ),
                   ),
                 );
               },
-            ),
-    );
+            );
   }
 
   String _seatsLabel(int count) {

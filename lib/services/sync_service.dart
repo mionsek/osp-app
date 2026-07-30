@@ -82,6 +82,9 @@ class SyncService {
         userEmail: authService.userEmail,
         unitFolderId: folderId,
         unitInviteCode: inviteCode,
+        // Zakładający jednostkę jest jej stałym administratorem.
+        founderEmail: authService.userEmail,
+        adminEmails: const [],
       ),
     );
 
@@ -122,6 +125,77 @@ class SyncService {
     await _pullAllData();
 
     return true;
+  }
+
+  // ── Dostęp do jednostki i uprawnienia ────────────────────────────────
+  //
+  // Samo podanie kodu zaproszenia nie wystarcza, żeby dołączyć: kolega
+  // musi mieć dostęp do folderu jednostki na Dysku, bo wyszukiwanie po
+  // kodzie przegląda wyłącznie pliki widoczne dla jego konta. Dlatego
+  // administrator najpierw udostępnia folder, a dopiero potem przekazuje
+  // kod.
+
+  /// Udostępnia folder jednostki koledze — po tym może dołączyć kodem.
+  Future<void> inviteMember(String email) async {
+    final folderId = _state.unitFolderId;
+    if (folderId == null) {
+      throw StateError('Brak połączenia z jednostką.');
+    }
+    await _driveService.shareFolderWithUser(folderId, email.trim());
+  }
+
+  /// Osoby mające dostęp do folderu jednostki.
+  Future<List<UnitMemberAccess>> listMembers() async {
+    final folderId = _state.unitFolderId;
+    if (folderId == null) return const [];
+    return _driveService.listFolderMembers(folderId);
+  }
+
+  /// Odbiera koledze dostęp do jednostki (i uprawnienia administratora).
+  Future<void> revokeMember(UnitMemberAccess member) async {
+    final folderId = _state.unitFolderId;
+    if (folderId == null) return;
+    await _driveService.revokeFolderAccess(folderId, member.permissionId);
+    if (_isAdminEmail(member.email)) {
+      await revokeAdmin(member.email);
+    }
+  }
+
+  bool _isAdminEmail(String email) {
+    final normalized = email.trim().toLowerCase();
+    return _state.adminEmails
+        .any((e) => e.trim().toLowerCase() == normalized);
+  }
+
+  /// Nadaje uprawnienia administratora.
+  Future<void> grantAdmin(String email) async {
+    if (_isAdminEmail(email) || _state.isFounder(email)) return;
+    await _writeAdmins([..._state.adminEmails, email.trim()]);
+  }
+
+  /// Odbiera uprawnienia administratora.
+  ///
+  /// Założyciela pomijamy — bez niego jednostka mogłaby zostać bez
+  /// żadnego administratora i nikt nie mógłby już nic zmienić.
+  Future<void> revokeAdmin(String email) async {
+    if (_state.isFounder(email)) return;
+    final normalized = email.trim().toLowerCase();
+    await _writeAdmins(_state.adminEmails
+        .where((e) => e.trim().toLowerCase() != normalized)
+        .toList());
+  }
+
+  Future<void> _writeAdmins(List<String> admins) async {
+    final folderId = _state.unitFolderId;
+    if (folderId == null) return;
+    var configFolderId = await _driveService.findConfigFolder(folderId);
+    configFolderId ??= await _driveService.createSubfolder(folderId, 'config');
+    await _driveService.writeJsonFile(configFolderId, 'admins.json', {
+      'admins': admins,
+      'updatedAt': DateTime.now().toIso8601String(),
+    });
+    await _db.cacheAdminEmails(admins);
+    _updateState(_state.copyWith(adminEmails: admins));
   }
 
   /// Disconnect from the unit (keep local data).
@@ -241,10 +315,12 @@ class SyncService {
     // Push unit config to config/
     final config = _db.getConfig();
     await _driveService.writeJsonFile(configFolderId, 'unit_config.json', {
-      'unitName': '${config.namePrefix} ${config.locality}'.trim(),
+      'unitName': config.fullName,
       'inviteCode': _state.unitInviteCode,
       'updatedAt': DateTime.now().toIso8601String(),
-      'createdBy': _state.userEmail,
+      // Założyciela ustala pierwszy zapis — potem go nie nadpisujemy,
+      // bo to on jest stałym administratorem jednostki.
+      'createdBy': _state.founderEmail ?? _state.userEmail,
     });
 
     // Push reports to reports/{year}/
@@ -391,23 +467,34 @@ class SyncService {
       'unit_config.json',
     );
     if (configData != null && configData['unitName'] != null) {
-      final parts = (configData['unitName'] as String).split(' ');
-      if (parts.length > 3) {
-        final locality = parts.last;
-        final prefix = parts.sublist(0, parts.length - 1).join(' ');
-        final config = _db.getConfig();
-        final ownerEmail = configData['createdBy'] as String? ?? '';
-        await _db.saveConfig(
-          UnitConfig(
-            namePrefix: prefix,
-            locality: locality,
-            onboardingCompleted: config.onboardingCompleted,
-            isAdmin: config.isAdmin,
-            ownerEmail: ownerEmail,
-          ),
-        );
-      }
+      // Nazwę bierzemy w całości. Wcześniej była rozbijana po spacjach
+      // („ostatni wyraz to miejscowość"), co przy nazwach w rodzaju
+      // „Ochotnicza Straż Pożarna w Kielnie" dawało bezsens — a widziałby
+      // to każdy, kto dołączy do jednostki.
+      final unitName = (configData['unitName'] as String).trim();
+      final config = _db.getConfig();
+      await _db.saveConfig(
+        config.copyWith(
+          unitFullName: unitName.isEmpty ? null : unitName,
+          ownerEmail: configData['createdBy'] as String? ?? '',
+        ),
+      );
     }
+
+    // Lista administratorów jednostki
+    final adminsData = await _driveService.readJsonFileByName(
+      dataFolderId,
+      'admins.json',
+    );
+    final admins = (adminsData?['admins'] as List?)
+            ?.map((e) => e.toString())
+            .toList() ??
+        const <String>[];
+    await _db.cacheAdminEmails(admins);
+    _updateState(_state.copyWith(
+      founderEmail: configData?['createdBy'] as String?,
+      adminEmails: admins,
+    ));
   }
 
   // â”€â”€ Restore state on app start â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -438,6 +525,12 @@ class SyncService {
         userEmail: authService.userEmail,
         unitFolderId: driveConfig.namePrefix, // we repurpose this field
         unitInviteCode: driveConfig.locality,
+        // Uprawnienia z ostatniej synchronizacji — inaczej po restarcie
+        // aplikacji (albo bez zasięgu) nikt nie byłby administratorem.
+        founderEmail: _db.getConfig().ownerEmail.isEmpty
+            ? null
+            : _db.getConfig().ownerEmail,
+        adminEmails: _db.cachedAdminEmails,
       ),
     );
   }
