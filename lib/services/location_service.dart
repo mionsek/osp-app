@@ -89,16 +89,13 @@ class LocationService {
         p.subAdministrativeArea,
         p.administrativeArea,
       ]);
-      final street = _firstNonEmpty([
-        [p.street, p.subThoroughfare].where(_notEmpty).join(' ').trim(),
-        p.thoroughfare,
-      ]);
-      // Geokoder czasem wstawia nazwę miejscowości również jako ulicę —
-      // nie powtarzamy jej wtedy dwa razy.
-      return ResolvedAddress(
+      final street = buildStreet(
+        thoroughfare: p.thoroughfare,
+        subThoroughfare: p.subThoroughfare,
+        streetLine: p.street,
         locality: locality,
-        street: street == locality ? '' : street,
       );
+      return ResolvedAddress(locality: locality, street: street);
     } on LocationFailure {
       rethrow;
     } catch (e) {
@@ -107,6 +104,51 @@ class LocationService {
         'internetu. Wpisz adres ręcznie.',
       );
     }
+  }
+
+  /// Składa pole „ulica i nr domu" z danych geokodera.
+  ///
+  /// Uwaga na znaczenie pól — pomyłka tutaj powodowała podwojony numer
+  /// domu („Józefa Sikorskiego 12 12"):
+  /// * [thoroughfare] — sama nazwa ulicy („Józefa Sikorskiego"),
+  /// * [subThoroughfare] — numer domu („12"),
+  /// * [streetLine] — **gotowa linia adresu, już z numerem** (na Androidzie
+  ///   to fragment sformatowanego adresu do pierwszego przecinka).
+  ///
+  /// Dlatego numer dokładamy tylko do nazwy ulicy, a nigdy do gotowej
+  /// linii, która już go zawiera.
+  static String buildStreet({
+    required String? thoroughfare,
+    required String? subThoroughfare,
+    required String? streetLine,
+    required String locality,
+  }) {
+    final name = (thoroughfare ?? '').trim();
+    final number = (subThoroughfare ?? '').trim();
+    final line = (streetLine ?? '').trim();
+
+    if (name.isNotEmpty) {
+      // Na wsi geokoder podaje jako „ulicę" nazwę miejscowości
+      // („Kielno 85") — wtedy w polu ulicy zostaje sam numer, żeby adres
+      // nie brzmiał „Kielno, Kielno 85".
+      if (name.toLowerCase() == locality.toLowerCase()) return number;
+      if (number.isEmpty) return name;
+      return '$name $number';
+    }
+
+    if (line.isEmpty) return number;
+    if (line.toLowerCase() == locality.toLowerCase()) return number;
+    // Gotowa linia zwykle zawiera już numer — dokładamy go tylko wtedy,
+    // gdy faktycznie go w niej brakuje.
+    if (number.isEmpty || _endsWithNumber(line, number)) return line;
+    return '$line $number';
+  }
+
+  /// Czy [line] kończy się osobnym wyrazem [number] (żeby „12" nie
+  /// „domknęło" numeru 112).
+  static bool _endsWithNumber(String line, String number) {
+    final parts = line.split(RegExp(r'\s+'));
+    return parts.isNotEmpty && parts.last.toLowerCase() == number.toLowerCase();
   }
 
   static bool _notEmpty(String? s) => s != null && s.trim().isNotEmpty;

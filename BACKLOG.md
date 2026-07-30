@@ -98,6 +98,27 @@
 - [x] **Zmiana nazwy aplikacji na „Raporty OSP"** (AndroidManifest, MaterialApp, ekran „O aplikacji", pubspec, web)
 - [x] Ekran „O aplikacji": dodano sekcję „Statystyki" w instrukcji, tematy maili kontaktowych zmienione na „Raporty OSP — …"
 
+## Zrobione (fix/023-adres-z-gps)
+- [x] **Naprawiono: podwojony numer domu przy adresie z GPS** („Józefa Sikorskiego 12 12"). Przyczyna potwierdzona w źródłach biblioteki `geocoding`: pole `street` to **gotowa linia adresu, już zawierająca numer** (na Androidzie fragment sformatowanego adresu do pierwszego przecinka), a nie sama nazwa ulicy. Doklejanie do niej `subThoroughfare` dublowało numer. Teraz numer dokładamy wyłącznie do nazwy ulicy (`thoroughfare`), a gotową linię bierzemy bez zmian
+- [x] **Adresy wiejskie**: gdy geokoder podaje miejscowość jako ulicę („Kielno 85"), w polu ulicy zostaje sam numer — adres brzmi „Kielno, 85" zamiast „Kielno, Kielno 85"
+- [x] 8 testów jednostkowych `buildStreet`, w tym dokładny przypadek ze zgłoszenia i zabezpieczenie, by numer „12" nie był uznany za obecny w „112"
+
+## Do zrobienia — Wyjazdy gospodarcze / tankowanie
+Zgłoszenie od Sebastiana: osobna ewidencja wyjazdów niealarmowych
+(gospodarczy, tankowanie, przewóz sprzętu), oddzielona od wyjazdów
+alarmowych — inna lista, inne statystyki.
+
+**Proponowane pola:** data, godzina wyjazdu i powrotu, pojazd, kierowca,
+przebieg (licznik przed/po lub sam dystans), miejscowość/trasa, cel wyjazdu
+(np. „Gdynia SLRR — wyjazd po pompę na plażę"), uwagi.
+
+**Powiązanie:** ten temat pokrywa się z zapisanym wcześniej pomysłem
+„przebieg pojazdów (kilometry)" dla Gospodarza — obie rzeczy powinny
+powstać razem, bo to ten sam zestaw danych i ten sam odbiorca.
+
+**Do ustalenia z Deringiem przed implementacją:** dokładny zestaw pól i to,
+czy rozliczenie ma być miesięczne per pojazd, czy per wyjazd.
+
 ## Zrobione (feature/021-wybor-ratownika)
 - [x] **Naprawiono: lista podpowiedzi w kreatorze zastępów pokazywała „Imię Nazwisko"** — przeoczenie z feature/020: zmieniona była kolejność w polu tekstowym i po wyborze, ale nie w samej liście
 - [x] **Lista podpowiedzi bez uprawnień i badań** (wariant C) — wcześniej były drobnym, szarym drukiem pod nazwiskiem i zlewały się z nim. Odznaki uprawnień/badań pokazują się nadal, ale dopiero **po** wybraniu osoby
