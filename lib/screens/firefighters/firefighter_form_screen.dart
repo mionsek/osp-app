@@ -205,12 +205,25 @@ class _FirefighterFormScreenState extends ConsumerState<FirefighterFormScreen> {
               ),
               const SizedBox(height: 16),
               Text(
-                'Funkcje (opcjonalne)',
+                'Funkcje',
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
                       color: Colors.grey[700],
                     ),
               ),
               const SizedBox(height: 4),
+              // Zaznaczone na stałe i nieaktywne. Każdy strażak jest
+              // ratownikiem, a pozostałe pozycje to dodatkowe uprawnienia —
+              // bez tego wiersza formularz z trzema pustymi kwadracikami
+              // wyglądał na niedokończony i nie było widać, że osobę bez
+              // uprawnień też można zapisać.
+              CheckboxListTile(
+                title: const Text('Ratownik'),
+                secondary: const Icon(Icons.person),
+                value: true,
+                onChanged: null,
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+              ),
               CheckboxListTile(
                 title: const Text('Kierowca'),
                 secondary: const Icon(Icons.drive_eta),

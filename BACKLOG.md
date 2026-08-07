@@ -98,6 +98,12 @@
 - [x] **Zmiana nazwy aplikacji na „Raporty OSP"** (AndroidManifest, MaterialApp, ekran „O aplikacji", pubspec, web)
 - [x] Ekran „O aplikacji": dodano sekcję „Statystyki" w instrukcji, tematy maili kontaktowych zmienione na „Raporty OSP — …"
 
+## Zrobione (feature/024-ratownik-i-podpowiedzi)
+- [x] **„Ratownik" w formularzu ratownika** — pozycja zaznaczona na stałe i nieaktywna, na górze listy funkcji. Zgłoszenie Wojtka („nie ma opcji, jak wpisać zwykłego ratownika") zweryfikowane w kodzie: taką osobę **dało się** zapisać (funkcje były opcjonalne) i na liście widniała już jako „Ratownik", ale formularz z trzema pustymi kwadracikami wyglądał na niedokończony. Świadomie **nie** dodano zwykłego, odznaczalnego pola — byłby to czwarty niezależny przełącznik, możliwy do ustawienia sprzecznie i wymagający migracji istniejących wpisów
+- [x] Nagłówek sekcji „Funkcje (opcjonalne)" → „Funkcje"
+- [x] **Podpowiedzi w zastępach zależne od miejsca** — pod nazwiskiem wyłącznie to, co dotyczy wybieranego miejsca (kierowca / dowódca / KPP) i wyłącznie u osób, które to mają, plus „✓ Badania". Nazwisko wytłuszczone. Znikły „✗ brak uprawnień" przy każdym nazwisku, które zajmowały miejsce i zlewały się z nazwiskiem — dzięki temu na liście mieści się prawie dwa razy więcej osób
+- [x] **Ostrzeżenie po wyborze osoby bez wymaganego uprawnienia** — bez blokowania wyboru (ktoś mógł zrobić kurs, którego nie ma jeszcze w aplikacji, a w akcji nie ma czasu na kartoteki). Działa zarówno przy wyborze z listy, jak i przy wpisaniu nazwiska z ręki
+
 ## Zrobione (fix/023-adres-z-gps)
 - [x] **Naprawiono: podwojony numer domu przy adresie z GPS** („Józefa Sikorskiego 12 12"). Przyczyna potwierdzona w źródłach biblioteki `geocoding`: pole `street` to **gotowa linia adresu, już zawierająca numer** (na Androidzie fragment sformatowanego adresu do pierwszego przecinka), a nie sama nazwa ulicy. Doklejanie do niej `subThoroughfare` dublowało numer. Teraz numer dokładamy wyłącznie do nazwy ulicy (`thoroughfare`), a gotową linię bierzemy bez zmian
 - [x] **Adresy wiejskie**: gdy geokoder podaje miejscowość jako ulicę („Kielno 85"), w polu ulicy zostaje sam numer — adres brzmi „Kielno, 85" zamiast „Kielno, Kielno 85"

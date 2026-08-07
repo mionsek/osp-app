@@ -456,6 +456,9 @@ class _SeatSelectorState extends State<_SeatSelector> {
 
     if (match != null) {
       widget.onChanged(match.id);
+      // Ta sama informacja, co przy wyborze z listy — nazwisko wpisane
+      // z ręki nie powinno omijać ostrzeżenia o braku uprawnień.
+      _warnIfMissingQualification(match);
       return;
     }
 
@@ -540,6 +543,7 @@ class _SeatSelectorState extends State<_SeatSelector> {
               onSelected: (ff) {
                 widget.onChanged(ff.id);
                 setState(() {});
+                _warnIfMissingQualification(ff);
               },
               fieldViewBuilder:
                   (context, textController, focusNode, onFieldSubmitted) {
@@ -580,12 +584,29 @@ class _SeatSelectorState extends State<_SeatSelector> {
                         itemCount: options.length,
                         itemBuilder: (context, index) {
                           final ff = options.elementAt(index);
-                          // Na liście samo nazwisko i imię — uprawnienia
-                          // oraz badania pokazują się jako odznaki dopiero
-                          // po wybraniu osoby. Wcześniej były tu drobnym,
-                          // szarym drukiem i zlewały się z nazwiskiem.
+                          // Nazwisko wytłuszczone, a pod nim wyłącznie to,
+                          // co dotyczy tego miejsca i wyłącznie wtedy, gdy
+                          // dana osoba to ma. Wypisywanie przy każdym
+                          // nazwisku również braków („✗ brak uprawnień")
+                          // zabierało miejsce i zlewało się z nazwiskiem.
+                          final hint = _seatHint(ff);
                           return ListTile(
-                            title: Text(ff.lastNameFirst),
+                            dense: true,
+                            visualDensity: VisualDensity.compact,
+                            title: Text(
+                              ff.lastNameFirst,
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            subtitle: hint == null
+                                ? null
+                                : Text(
+                                    hint,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.green[700],
+                                    ),
+                                  ),
                             onTap: () => onSelected(ff),
                           );
                         },
@@ -599,6 +620,49 @@ class _SeatSelectorState extends State<_SeatSelector> {
         ),
       ),
     );
+  }
+
+  /// Uprawnienie wymagane na tym miejscu w zastępie.
+  /// Miejsce 1 to kierowca, miejsce 2 dowódca, pozostałe — ratownicy z KPP.
+  bool _hasSeatQualification(Firefighter ff) {
+    if (widget.seatNumber == 1) return ff.isDriver;
+    if (widget.seatNumber == 2) return ff.isCommander;
+    return ff.isKPP;
+  }
+
+  String get _seatQualificationName {
+    if (widget.seatNumber == 1) return 'Kierowca';
+    if (widget.seatNumber == 2) return 'Dowódca';
+    return 'KPP';
+  }
+
+  /// Podpowiedź pod nazwiskiem na liście wyboru — **tylko to, co dana
+  /// osoba ma**, i tylko w zakresie istotnym dla tego miejsca.
+  /// `null` oznacza brak podpowiedzi, czyli sam wiersz z nazwiskiem.
+  String? _seatHint(Firefighter ff) {
+    final parts = <String>[
+      if (_hasSeatQualification(ff)) '✓ $_seatQualificationName',
+      if (ff.hasMedicalExam && !ff.isMedicalExamExpired) '✓ Badania',
+    ];
+    return parts.isEmpty ? null : parts.join(' · ');
+  }
+
+  /// Ostrzeżenie po wybraniu osoby bez wymaganego uprawnienia —
+  /// **bez blokowania wyboru**. Ktoś mógł zrobić kurs, którego nie ma
+  /// jeszcze w aplikacji, a w akcji nie ma czasu na kartoteki.
+  void _warnIfMissingQualification(Firefighter ff) {
+    if (_hasSeatQualification(ff)) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(SnackBar(
+      backgroundColor: Colors.orange[800],
+      duration: const Duration(seconds: 4),
+      content: Text(
+        '${ff.lastNameFirst} nie ma w aplikacji uprawnień '
+        '„$_seatQualificationName". Możesz kontynuować — jeśli je posiada, '
+        'uzupełnij dane w kartotece ratownika.',
+      ),
+    ));
   }
 
   List<Widget> _buildQualificationBadges(Firefighter ff) {
