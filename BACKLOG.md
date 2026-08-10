@@ -98,6 +98,13 @@
 - [x] **Zmiana nazwy aplikacji na „Raporty OSP"** (AndroidManifest, MaterialApp, ekran „O aplikacji", pubspec, web)
 - [x] Ekran „O aplikacji": dodano sekcję „Statystyki" w instrukcji, tematy maili kontaktowych zmienione na „Raporty OSP — …"
 
+## Zrobione (fix/025-crash-release-r8)
+- [x] **Aplikacja w wersji release zawieszała się na ekranie startowym** — dotyczyło każdego builda release, czyli także APK do rozdania; w debug wszystko działało, więc problem był niewidoczny przy codziennym testowaniu
+- [x] Przyczyna ustalona ze śladu stosu z urządzenia, nie z domysłu: `ClassNotFoundException: io/flutter/util/PathUtils` → `path_provider_android` → `Hive.initFlutter()` → `DatabaseService.initialize()` → pierwsza linijka `main()`. Wyjątek leciał przed `runApp()`, dlatego Flutter nigdy nie rysował pierwszej klatki i zostawał systemowy splash Androida z ikoną
+- [x] `path_provider_android` sięga po `io.flutter.util.PathUtils` przez JNI, czyli **po nazwie klasy**. R8 takiego odwołania nie widzi, uznaje klasę za nieużywaną, wkleja jej metody w miejsca wywołań i usuwa samą klasę. Potwierdzone w raporcie R8 `build/app/outputs/mapping/release/usage.txt`
+- [x] Naprawa: `android/app/proguard-rules.pro` z regułami `-keep` dla `io.flutter.**` i pakietu `jni`, podpięty przez `proguardFiles` w bloku `release`. Reguła obejmuje cały `io.flutter.**`, a nie samą `PathUtils`, żeby ten sam problem nie wrócił przy kolejnej wtyczce sięgającej refleksyjnie
+- [x] Zweryfikowane: `PathUtils` zniknęła z `usage.txt` (usunięte) i pojawiła się w `seeds.txt` (zachowane jawnie); build release uruchomiony na emulatorze wstaje do ekranu powitalnego, logcat bez błędów
+
 ## Zrobione (feature/024-ratownik-i-podpowiedzi)
 - [x] **„Ratownik" w formularzu ratownika** — pozycja zaznaczona na stałe i nieaktywna, na górze listy funkcji. Zgłoszenie Wojtka („nie ma opcji, jak wpisać zwykłego ratownika") zweryfikowane w kodzie: taką osobę **dało się** zapisać (funkcje były opcjonalne) i na liście widniała już jako „Ratownik", ale formularz z trzema pustymi kwadracikami wyglądał na niedokończony. Świadomie **nie** dodano zwykłego, odznaczalnego pola — byłby to czwarty niezależny przełącznik, możliwy do ustawienia sprzecznie i wymagający migracji istniejących wpisów
 - [x] Nagłówek sekcji „Funkcje (opcjonalne)" → „Funkcje"
