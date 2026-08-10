@@ -131,6 +131,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
               const SizedBox(height: 12),
               _MenuButton(
+                icon: Icons.route,
+                label: 'Ewidencja przejazdów',
+                color: const Color(0xFF00695C),
+                onTap: () => context.push('/trips'),
+              ),
+              const SizedBox(height: 12),
+              _MenuButton(
                 icon: Icons.fire_truck,
                 label: 'Pojazdy (${vehicles.length})',
                 color: const Color(0xFFE65100),

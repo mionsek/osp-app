@@ -274,6 +274,58 @@ class HandoversNotifier extends StateNotifier<List<PropertyHandover>> {
   }
 }
 
+// --- Ewidencja przejazdów pojazdu (karta drogowa) ---
+
+final vehicleTripsProvider =
+    StateNotifierProvider<VehicleTripsNotifier, List<VehicleTrip>>((ref) {
+      return VehicleTripsNotifier(ref.watch(databaseServiceProvider));
+    });
+
+class VehicleTripsNotifier extends StateNotifier<List<VehicleTrip>> {
+  final DatabaseService _db;
+  VehicleTripsNotifier(this._db) : super(_db.getAllTrips());
+
+  Future<void> add(VehicleTrip trip) async {
+    await _db.addTrip(trip);
+    state = _db.getAllTrips();
+  }
+
+  Future<void> update(VehicleTrip trip) async {
+    await _db.updateTrip(trip);
+    state = _db.getAllTrips();
+  }
+
+  Future<void> delete(String id) async {
+    await _db.deleteTrip(id);
+    state = _db.getAllTrips();
+  }
+
+  void refresh() {
+    state = _db.getAllTrips();
+  }
+}
+
+/// Przejazdy jednej karty: pojazd + miesiąc, w kolejności chronologicznej.
+final tripsForCardProvider = Provider.family<List<VehicleTrip>,
+    ({String vehicleId, int year, int month})>((ref, key) {
+  // Zależność od listy przejazdów, żeby karta odświeżała się po każdej zmianie.
+  ref.watch(vehicleTripsProvider);
+  return ref
+      .watch(databaseServiceProvider)
+      .getTripsForCard(
+        vehicleId: key.vehicleId,
+        year: key.year,
+        month: key.month,
+      );
+});
+
+/// Miesiące, w których dany pojazd ma przejazdy — lista kart do wyboru.
+final tripMonthsProvider =
+    Provider.family<List<({int year, int month})>, String>((ref, vehicleId) {
+  ref.watch(vehicleTripsProvider);
+  return ref.watch(databaseServiceProvider).getMonthsWithTrips(vehicleId);
+});
+
 // --- Ads & Premium ---
 
 final purchaseServiceProvider = Provider<PurchaseService>((ref) {

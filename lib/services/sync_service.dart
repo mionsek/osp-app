@@ -355,6 +355,26 @@ class SyncService {
         _handoverToJson(handover),
       );
     }
+
+    // Push ewidencji przejazdów pojazdów do trips/
+    var tripsFolderId = await _findTripsFolder(folderId);
+    tripsFolderId ??= await _driveService.createSubfolder(folderId, 'trips');
+    for (final trip in _db.getAllTrips()) {
+      await _driveService.writeJsonFile(
+        tripsFolderId,
+        _buildTripFileName(trip),
+        _tripToJson(trip),
+      );
+    }
+  }
+
+  /// Podfolder `trips/` z ewidencją przejazdów.
+  Future<String?> _findTripsFolder(String unitFolderId) async {
+    final subfolders = await _driveService.listSubfolders(unitFolderId);
+    for (final f in subfolders) {
+      if (f.name == 'trips') return f.id;
+    }
+    return null;
   }
 
   // â”€â”€ Pull Drive â†’ local â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -457,6 +477,21 @@ class SyncService {
           if (local == null || handover.updatedAt.isAfter(local.updatedAt)) {
             await _db.addHandover(handover);
           }
+        }
+      }
+    }
+
+    // Pull ewidencji przejazdów z trips/
+    final tripsFolderId = await _findTripsFolder(folderId);
+    if (tripsFolderId != null) {
+      final tripFiles = await _driveService.listJsonFiles(tripsFolderId);
+      for (final file in tripFiles) {
+        final data = await _driveService.readJsonFile(file.id!);
+        if (data == null) continue;
+        final trip = _tripFromJson(data);
+        final local = _db.getTrip(trip.id);
+        if (local == null || trip.updatedAt.isAfter(local.updatedAt)) {
+          await _db.addTrip(trip);
         }
       }
     }
@@ -671,6 +706,71 @@ class SyncService {
         [],
     operationCommanderId: j['operationCommanderId'] as String?,
     notes: j['notes'] as String?,
+    createdAt: DateTime.parse(j['createdAt'] as String),
+    updatedAt: DateTime.parse(j['updatedAt'] as String),
+    createdBy: j['createdBy'] as String? ?? '',
+    syncStatus: 'synced',
+  );
+
+  /// Nazwa pliku przejazdu: 2026-08-10_GBA_`id-prefix`.json
+  ///
+  /// Data i pojazd w nazwie, żeby zawartość folderu dała się przejrzeć na
+  /// Dysku bez otwierania każdego pliku — kartę czyta się po miesiącach.
+  String _buildTripFileName(VehicleTrip t) {
+    final date =
+        '${t.date.year.toString().padLeft(4, '0')}-'
+        '${t.date.month.toString().padLeft(2, '0')}-'
+        '${t.date.day.toString().padLeft(2, '0')}';
+    final vehicle = (_db.getVehicle(t.vehicleId)?.name ?? t.vehicleId)
+        .replaceAll(RegExp(r'[^\w\-]+'), '_');
+    final idPrefix = t.id.length >= 8 ? t.id.substring(0, 8) : t.id;
+    return '${date}_${vehicle}_$idPrefix.json';
+  }
+
+  Map<String, dynamic> _tripToJson(VehicleTrip t) => {
+    'id': t.id,
+    'vehicleId': t.vehicleId,
+    'date': t.date.toIso8601String(),
+    'dispatcherName': t.dispatcherName,
+    'routeFrom': t.routeFrom,
+    'routeTo': t.routeTo,
+    'purpose': t.purpose,
+    'driverName': t.driverName,
+    'driverId': t.driverId,
+    'departureTime': t.departureTime.toIso8601String(),
+    'returnTime': t.returnTime?.toIso8601String(),
+    'odometerStart': t.odometerStart,
+    'odometerEnd': t.odometerEnd,
+    'odometerStartManual': t.odometerStartManual,
+    'specialEquipmentMinutes': t.specialEquipmentMinutes,
+    'notes': t.notes,
+    'reportId': t.reportId,
+    'createdAt': t.createdAt.toIso8601String(),
+    'updatedAt': t.updatedAt.toIso8601String(),
+    'createdBy': t.createdBy,
+    'syncStatus': 'synced',
+  };
+
+  VehicleTrip _tripFromJson(Map<String, dynamic> j) => VehicleTrip(
+    id: j['id'] as String,
+    vehicleId: j['vehicleId'] as String? ?? '',
+    date: DateTime.parse(j['date'] as String),
+    dispatcherName: j['dispatcherName'] as String? ?? '',
+    routeFrom: j['routeFrom'] as String? ?? '',
+    routeTo: j['routeTo'] as String? ?? '',
+    purpose: j['purpose'] as String? ?? TripPurposes.economic,
+    driverName: j['driverName'] as String? ?? '',
+    driverId: j['driverId'] as String?,
+    departureTime: DateTime.parse(j['departureTime'] as String),
+    returnTime: j['returnTime'] == null
+        ? null
+        : DateTime.parse(j['returnTime'] as String),
+    odometerStart: (j['odometerStart'] as num?)?.toInt(),
+    odometerEnd: (j['odometerEnd'] as num?)?.toInt(),
+    odometerStartManual: j['odometerStartManual'] as bool? ?? false,
+    specialEquipmentMinutes: (j['specialEquipmentMinutes'] as num?)?.toInt(),
+    notes: j['notes'] as String?,
+    reportId: j['reportId'] as String?,
     createdAt: DateTime.parse(j['createdAt'] as String),
     updatedAt: DateTime.parse(j['updatedAt'] as String),
     createdBy: j['createdBy'] as String? ?? '',

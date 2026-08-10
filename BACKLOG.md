@@ -98,6 +98,20 @@
 - [x] **Zmiana nazwy aplikacji na „Raporty OSP"** (AndroidManifest, MaterialApp, ekran „O aplikacji", pubspec, web)
 - [x] Ekran „O aplikacji": dodano sekcję „Statystyki" w instrukcji, tematy maili kontaktowych zmienione na „Raporty OSP — …"
 
+## Zrobione (feature/026-ewidencja-przejazdow)
+- [x] **Ewidencja przejazdów pojazdu** — odpowiednik miesięcznej karty drogowej. Karta nie jest osobnym bytem do zakładania, tylko widokiem: para *pojazd + miesiąc* nad zbiorem przejazdów. Nie trzeba niczego otwierać na początku miesiąca ani zamykać na końcu
+- [x] Model `VehicleTrip` (Hive `typeId: 7`) pokrywający wszystkie 11 kolumn druku plus to, czego druk nie ma: powiązanie z raportem, autor wpisu, status synchronizacji
+- [x] **Łańcuch licznika** — aplikacja pyta o **jedną liczbę na przejazd**: stan po powrocie. Stan przed wyjazdem podstawia ze stanu po poprzednim przejeździe tego pojazdu. Wynika z uwagi użytkownika: kartę oddaje się często w środku akcji, więc licznik notuje się dopiero po powrocie do jednostki, i ten stan staje się stanem przed następnym wyjazdem
+- [x] Łańcuch liczony **po godzinie odjazdu, nie po kolejności wpisywania** — ktoś uzupełniający zaległości wpisze wczorajszy przejazd po dzisiejszym, a licznik i tak rósł chronologicznie. Wpis dodany wstecz przelicza stany wszystkich późniejszych
+- [x] **Kłódka przy stanie początkowym** — pominięty przejazd rozjeżdżałby licznik do końca miesiąca bez możliwości korekty. Ręcznie wpisana wartość nie jest nadpisywana i staje się punktem odniesienia dla dalszej części łańcucha
+- [x] Ostrzeżenie, gdy stan po powrocie jest mniejszy niż przed wyjazdem — **bez blokady**, bo papierowa karta jest dokumentem źródłowym i czasem trzeba odwzorować to, co ktoś już wpisał długopisem
+- [x] **Wyjazd alarmowy dopisuje się sam** po zapisaniu raportu — 7 z 11 kolumn wypełnionych z raportu (data, trasa, cel, kierowca, godziny odjazdu i przyjazdu). Jeden raport z dwoma zastępami daje dwa wpisy, bo każdy pojazd ma własną kartę. Identyfikator wyprowadzony z raportu i pojazdu, więc ponowny zapis raportu nie dubluje wiersza
+- [x] Ekran listy z wyborem pojazdu i miesiąca, podsumowaniem (liczba przejazdów, suma km, ile bez zapisanego powrotu) i oznaczeniem wpisów niedokończonych
+- [x] Uprawnienia wg zasady z feature/022: dodawać może każdy, edytować cudze — autor lub administrator. Użyta istniejąca `canEditDocument`, bez drugiej równoległej reguły
+- [x] Synchronizacja przez Dysk w podfolderze `trips/`, nazwy plików z datą i pojazdem, rozstrzyganie „nowszy wygrywa" jak przy raportach
+- [x] **22 nowe testy jednostkowe** łańcucha licznika i generowania przejazdów z raportu (łącznie 104). Jeden z nich złapał realny błąd: `rechain` kasował ręcznie wpisany stan początkowy pierwszego przejazdu pojazdu, bo nie miał poprzednika — czyli ginęła jedyna liczba, od której zaczyna się cały łańcuch
+- [ ] **Wydruk karty drogowej** — świadomie poza zakresem tej gałęzi. Dane zbierają się od teraz, wydruk powstanie na realnych wpisach. Wymaga norm i linii rozliczeniowych **per pojazd**, bo druk jest załącznikiem do zarządzenia wójta i różni się między gminami (porównane Kielno, Osielsko, Świętajno)
+
 ## Zrobione (fix/025-crash-release-r8)
 - [x] **Aplikacja w wersji release zawieszała się na ekranie startowym** — dotyczyło każdego builda release, czyli także APK do rozdania; w debug wszystko działało, więc problem był niewidoczny przy codziennym testowaniu
 - [x] Przyczyna ustalona ze śladu stosu z urządzenia, nie z domysłu: `ClassNotFoundException: io/flutter/util/PathUtils` → `path_provider_android` → `Hive.initFlutter()` → `DatabaseService.initialize()` → pierwsza linijka `main()`. Wyjątek leciał przed `runApp()`, dlatego Flutter nigdy nie rysował pierwszej klatki i zostawał systemowy splash Androida z ikoną

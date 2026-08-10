@@ -14,6 +14,8 @@ import '../../screens/reports/report_detail_screen.dart';
 import '../../screens/handovers/handovers_list_screen.dart';
 import '../../screens/handovers/handover_form_screen.dart';
 import '../../screens/handovers/handover_detail_screen.dart';
+import '../../screens/trips/trips_list_screen.dart';
+import '../../screens/trips/trip_form_screen.dart';
 import '../../screens/settings/settings_screen.dart';
 import '../../screens/info/info_screen.dart';
 import '../../screens/statistics/statistics_screen.dart';
@@ -105,6 +107,21 @@ final routerProvider = Provider<GoRouter>((ref) {
           final id = state.pathParameters['id']!;
           return HandoverDetailScreen(handoverId: id);
         },
+      ),
+      GoRoute(
+        path: '/trips',
+        builder: (context, state) => const TripsListScreen(),
+      ),
+      GoRoute(
+        path: '/trips/new',
+        builder: (context, state) => TripFormScreen(
+          initialVehicleId: state.uri.queryParameters['vehicleId'],
+        ),
+      ),
+      GoRoute(
+        path: '/trips/edit/:id',
+        builder: (context, state) =>
+            TripFormScreen(tripId: state.pathParameters['id']!),
       ),
       GoRoute(
         path: '/statistics',

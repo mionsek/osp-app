@@ -1,6 +1,7 @@
 import 'package:hive_flutter/hive_flutter.dart';
 import '../core/constants/threat_types.dart';
 import '../models/models.dart';
+import 'trip_odometer.dart';
 
 class DatabaseService {
   static const String _vehiclesBox = 'vehicles';
@@ -10,6 +11,7 @@ class DatabaseService {
   static const String _threatsBox = 'threats';
   static const String _settingsBox = 'settings';
   static const String _handoversBox = 'property_handovers';
+  static const String _tripsBox = 'vehicle_trips';
 
   static Future<void> initialize() async {
     await Hive.initFlutter();
@@ -21,6 +23,7 @@ class DatabaseService {
     Hive.registerAdapter(ReportAdapter());
     Hive.registerAdapter(UnitConfigAdapter());
     Hive.registerAdapter(PropertyHandoverAdapter());
+    Hive.registerAdapter(VehicleTripAdapter());
 
     await Future.wait([
       Hive.openBox<Vehicle>(_vehiclesBox),
@@ -30,6 +33,7 @@ class DatabaseService {
       Hive.openBox<ThreatEntry>(_threatsBox),
       Hive.openBox<dynamic>(_settingsBox),
       Hive.openBox<PropertyHandover>(_handoversBox),
+      Hive.openBox<VehicleTrip>(_tripsBox),
     ]);
   }
 
@@ -205,6 +209,105 @@ class DatabaseService {
   }
 
   PropertyHandover? getHandover(String id) => handoversBox.get(id);
+
+  // --- Ewidencja przejazdów pojazdu (karta drogowa) ---
+
+  Box<VehicleTrip> get tripsBox => Hive.box<VehicleTrip>(_tripsBox);
+
+  /// Wszystkie przejazdy, najnowsze pierwsze.
+  List<VehicleTrip> getAllTrips() {
+    final trips = tripsBox.values.toList();
+    trips.sort((a, b) => b.departureTime.compareTo(a.departureTime));
+    return trips;
+  }
+
+  /// Przejazdy jednego pojazdu w danym miesiącu — zawartość jednej karty.
+  ///
+  /// W kolejności chronologicznej, bo tak wygląda druk: pierwszy wiersz to
+  /// pierwszy przejazd miesiąca.
+  List<VehicleTrip> getTripsForCard({
+    required String vehicleId,
+    required int year,
+    required int month,
+  }) {
+    final ofCard = tripsBox.values.where(
+      (t) => t.vehicleId == vehicleId && t.year == year && t.month == month,
+    );
+    return TripOdometer.inChainOrder(ofCard);
+  }
+
+  /// Miesiące, w których pojazd ma jakiekolwiek przejazdy — do listy kart.
+  /// Najnowsze pierwsze.
+  List<({int year, int month})> getMonthsWithTrips(String vehicleId) {
+    final seen = <String, ({int year, int month})>{};
+    for (final t in tripsBox.values) {
+      if (t.vehicleId != vehicleId) continue;
+      seen['${t.year}-${t.month}'] = (year: t.year, month: t.month);
+    }
+    final months = seen.values.toList()
+      ..sort((a, b) {
+        final byYear = b.year.compareTo(a.year);
+        return byYear != 0 ? byYear : b.month.compareTo(a.month);
+      });
+    return months;
+  }
+
+  VehicleTrip? getTrip(String id) => tripsBox.get(id);
+
+  /// Przejazd powiązany z danym raportem, jeśli już powstał.
+  /// Chroni przed dopisaniem tego samego wyjazdu alarmowego dwa razy.
+  VehicleTrip? getTripForReport(String reportId) {
+    for (final t in tripsBox.values) {
+      if (t.reportId == reportId) return t;
+    }
+    return null;
+  }
+
+  Future<void> addTrip(VehicleTrip trip) async {
+    await tripsBox.put(trip.id, trip);
+    await _rechainVehicle(trip.vehicleId);
+  }
+
+  Future<void> updateTrip(VehicleTrip trip) async {
+    trip.updatedAt = DateTime.now();
+    await tripsBox.put(trip.id, trip);
+    await _rechainVehicle(trip.vehicleId);
+  }
+
+  Future<void> deleteTrip(String id) async {
+    final trip = tripsBox.get(id);
+    await tripsBox.delete(id);
+    if (trip != null) await _rechainVehicle(trip.vehicleId);
+  }
+
+  /// Przelicza łańcuch licznika po każdej zmianie i zapisuje to, co się
+  /// przesunęło.
+  ///
+  /// Konieczne, bo wpis dodany wstecz zmienia stan początkowy wszystkich
+  /// późniejszych przejazdów tego pojazdu.
+  Future<void> _rechainVehicle(String vehicleId) async {
+    final changed = TripOdometer.rechain(
+      tripsBox.values,
+      vehicleId: vehicleId,
+    );
+    for (final trip in changed) {
+      await tripsBox.put(trip.id, trip);
+    }
+  }
+
+  /// Stan licznika podpowiadany przy nowym przejeździe pojazdu.
+  int? suggestedOdometerStart({
+    required String vehicleId,
+    required DateTime departureTime,
+    String? excludeTripId,
+  }) {
+    return TripOdometer.previousReading(
+      tripsBox.values,
+      vehicleId: vehicleId,
+      before: departureTime,
+      excludeTripId: excludeTripId,
+    );
+  }
 
   // --- Threats ---
 

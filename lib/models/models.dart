@@ -5,3 +5,4 @@ export 'threat_entry.dart';
 export 'report.dart';
 export 'unit_config.dart';
 export 'property_handover.dart';
+export 'vehicle_trip.dart';

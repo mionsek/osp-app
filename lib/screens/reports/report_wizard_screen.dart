@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
 import '../../models/models.dart';
 import '../../providers/providers.dart';
+import '../../services/trip_from_report.dart';
 import 'steps/step_basic_info.dart';
 import 'steps/step_crew.dart';
 import 'steps/step_summary.dart';
@@ -255,6 +256,8 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
       await ref.read(reportsProvider.notifier).add(report);
     }
 
+    final addedTrips = await _addToVehicleLog(report);
+
     if (mounted) {
       final syncState = ref.read(syncStateProvider);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -266,8 +269,56 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
           duration: const Duration(seconds: 3),
         ),
       );
+      if (addedTrips > 0) _promptForOdometer(addedTrips);
       context.go('/reports/view/${report.id}');
     }
+  }
+
+  /// Dopisuje wyjazd do ewidencji przejazdów każdego z pojazdów zastępu.
+  ///
+  /// Zwraca liczbę nowych wpisów. Przy edycji raportu pojazdy już dopisane
+  /// są pomijane, żeby ponowny zapis nie mnożył wierszy w karcie.
+  Future<int> _addToVehicleLog(Report report) async {
+    final db = ref.read(databaseServiceProvider);
+
+    final alreadyLogged = db
+        .getAllTrips()
+        .where((t) => t.reportId == report.id)
+        .map((t) => t.vehicleId)
+        .toSet();
+
+    final trips = TripFromReport.build(
+      report: report,
+      unitLocality: ref.read(unitConfigProvider).locality,
+      resolveDriverName: (id) => db.getFirefighter(id)?.fullName ?? '',
+      existingVehicleIdsForReport: alreadyLogged,
+      createdBy: ref.read(syncStateProvider).userEmail ?? '',
+    );
+
+    final notifier = ref.read(vehicleTripsProvider.notifier);
+    for (final trip in trips) {
+      await notifier.add(trip);
+    }
+    return trips.length;
+  }
+
+  /// Przypomnienie o jedynej rzeczy, której z raportu wyczytać się nie da.
+  ///
+  /// Nie blokuje i nie otwiera formularza od razu — kierowca wpisuje licznik
+  /// po powrocie do jednostki, a nie w chwili zamykania raportu.
+  void _promptForOdometer(int count) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(count == 1
+            ? 'Wyjazd dopisany do ewidencji przejazdów. Po powrocie uzupełnij stan licznika.'
+            : 'Wyjazd dopisany do ewidencji przejazdów ($count pojazdy). Po powrocie uzupełnij stany liczników.'),
+        duration: const Duration(seconds: 6),
+        action: SnackBarAction(
+          label: 'Otwórz',
+          onPressed: () => context.push('/trips'),
+        ),
+      ),
+    );
   }
 
   @override
