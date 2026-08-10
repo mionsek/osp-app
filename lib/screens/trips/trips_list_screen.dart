@@ -281,9 +281,11 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
             if (trip.driverName.trim().isNotEmpty)
               Text('Kierowca: ${trip.driverName}',
                   maxLines: 1, overflow: TextOverflow.ellipsis),
-            if (!trip.isClosed)
-              const Text('Brak stanu licznika po powrocie',
-                  style: TextStyle(
+            // Nazywamy dokładnie to, czego brakuje. Wspólny komunikat
+            // „brak licznika" wysyłał szukać liczby, która bywa już wpisana.
+            if (_missingLabel(trip) != null)
+              Text(_missingLabel(trip)!,
+                  style: const TextStyle(
                       color: Color(0xFFE65100), fontWeight: FontWeight.w600)),
             if (trip.hasOdometerConflict)
               const Text('Licznik po powrocie mniejszy niż przed wyjazdem',
@@ -307,6 +309,16 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
               ),
       ),
     );
+  }
+
+  /// Czego brakuje, żeby wiersz karty był kompletny — albo `null`, gdy nic.
+  String? _missingLabel(VehicleTrip trip) {
+    final noTime = trip.returnTime == null;
+    final noOdometer = trip.odometerEnd == null;
+    if (noTime && noOdometer) return 'Brak godziny przyjazdu i licznika';
+    if (noOdometer) return 'Brak stanu licznika po powrocie';
+    if (noTime) return 'Brak godziny przyjazdu';
+    return null;
   }
 
   IconData _purposeIcon(String purpose) {

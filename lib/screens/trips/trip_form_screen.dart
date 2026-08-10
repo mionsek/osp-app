@@ -359,6 +359,7 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
                       )
                     : null,
               ),
+              onChanged: (_) => setState(() {}),
             ),
 
           const SizedBox(height: 12),
@@ -417,13 +418,20 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
     );
   }
 
+  /// Stan przed wyjazdem, który faktycznie zostanie zapisany.
+  ///
+  /// Jedno źródło prawdy dla podglądu, ostrzeżenia i zapisu. Przy pierwszym
+  /// przejeździe pojazdu nie ma łańcucha, a [_manualStart] jest jeszcze
+  /// `false` — wpisana wtedy liczba i tak musi się liczyć.
+  int? get _effectiveStart {
+    if (_manualStart) return int.tryParse(_odometerStartCtrl.text.trim());
+    return _chainedStart ?? int.tryParse(_odometerStartCtrl.text.trim());
+  }
+
   int? get _distancePreview {
     final end = int.tryParse(_odometerEndCtrl.text.trim());
-    if (end == null) return null;
-    final start = _manualStart
-        ? int.tryParse(_odometerStartCtrl.text.trim())
-        : _chainedStart;
-    if (start == null) return null;
+    final start = _effectiveStart;
+    if (end == null || start == null) return null;
     return end - start;
   }
 
@@ -632,9 +640,7 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
     final now = DateTime.now();
 
     final odometerEnd = int.tryParse(_odometerEndCtrl.text.trim());
-    final odometerStart = _manualStart
-        ? int.tryParse(_odometerStartCtrl.text.trim())
-        : _chainedStart ?? int.tryParse(_odometerStartCtrl.text.trim());
+    final odometerStart = _effectiveStart;
 
     // Pierwszy przejazd pojazdu: wpisany stan początkowy jest jedynym punktem
     // odniesienia dla całego dalszego łańcucha, więc musi przetrwać przeliczanie.
