@@ -10,8 +10,14 @@ import 'providers/providers.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await DatabaseService.initialize();
+  final db = DatabaseService();
   // Migracja słownika zagrożeń do aktualnych stałych list
-  await DatabaseService().ensureDefaultThreats();
+  await db.ensureDefaultThreats();
+  // Wyjazdy zapisane zanim istniała ewidencja przejazdów nie mają swojego
+  // wiersza w karcie drogowej — dopisujemy je raz, przy starcie.
+  await db.backfillTripsFromReports(
+    stationAddress: db.getConfig().stationAddress,
+  );
   await MobileAds.instance.initialize();
   runApp(const ProviderScope(child: OspApp()));
 }

@@ -1,6 +1,7 @@
 import 'package:hive_flutter/hive_flutter.dart';
 import '../core/constants/threat_types.dart';
 import '../models/models.dart';
+import 'trip_from_report.dart';
 import 'trip_odometer.dart';
 
 class DatabaseService {
@@ -294,6 +295,70 @@ class DatabaseService {
       await tripsBox.put(trip.id, trip);
     }
   }
+
+  /// Jednorazowe uzupełnienie ewidencji o wyjazdy sprzed jej wprowadzenia.
+  ///
+  /// Przejazd powstaje w chwili zapisania raportu, więc wyjazdy zapisane
+  /// zanim ewidencja istniała nie mają swojego wiersza w karcie. Ta migracja
+  /// domyka tę lukę — jednorazowo, bo od tego momentu nowe wyjazdy dopisują
+  /// się same.
+  ///
+  /// Bezpieczna do powtórzenia: identyfikator przejazdu jest wyprowadzony
+  /// z raportu i pojazdu, więc ponowne przejście trafia w istniejące wpisy
+  /// zamiast tworzyć nowe.
+  ///
+  /// Zwraca liczbę dopisanych przejazdów.
+  Future<int> backfillTripsFromReports({
+    required String stationAddress,
+  }) async {
+    final processed = _backfilledReportIds;
+    final existingIds = tripsBox.keys.map((k) => k.toString()).toSet();
+    final affectedVehicles = <String>{};
+    var added = 0;
+
+    for (final report in reportsBox.values) {
+      // Raport przerabiamy raz. Gdybyśmy przechodzili po wszystkich przy
+      // każdym starcie, przejazd skasowany ręcznie wracałby po restarcie.
+      if (processed.contains(report.id)) continue;
+      processed.add(report.id);
+
+      final trips = TripFromReport.build(
+        report: report,
+        stationAddress: stationAddress,
+        resolveDriverName: (id) => getFirefighter(id)?.fullName ?? '',
+        existingVehicleIdsForReport: const {},
+        createdBy: report.createdBy,
+        // Znacznik z raportu, nie „teraz" — patrz komentarz w TripFromReport.
+        timestamp: report.updatedAt,
+      );
+
+      for (final trip in trips) {
+        if (existingIds.contains(trip.id)) continue;
+        await tripsBox.put(trip.id, trip);
+        affectedVehicles.add(trip.vehicleId);
+        added++;
+      }
+    }
+
+    for (final vehicleId in affectedVehicles) {
+      await _rechainVehicle(vehicleId);
+    }
+
+    await settingsBox.put(_backfilledReportIdsKey, processed.toList());
+    return added;
+  }
+
+  /// Raporty już przepisane do ewidencji.
+  ///
+  /// Lista, a nie pojedyncza flaga „zrobione": raporty potrafią dojść później
+  /// z Dysku i one też muszą trafić do ewidencji, a jednocześnie przejazd
+  /// skasowany ręcznie nie może wracać przy każdym uruchomieniu.
+  static const String _backfilledReportIdsKey = 'tripsBackfilledReportIds';
+
+  Set<String> get _backfilledReportIds =>
+      ((settingsBox.get(_backfilledReportIdsKey) as List?) ?? const [])
+          .map((e) => e.toString())
+          .toSet();
 
   /// Stan licznika podpowiadany przy nowym przejeździe pojazdu.
   int? suggestedOdometerStart({

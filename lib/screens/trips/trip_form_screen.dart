@@ -101,8 +101,9 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
     _date = DateTime(now.year, now.month, now.day);
     _departure = TimeOfDay.fromDateTime(now);
 
-    // Trasa prawie zawsze zaczyna się w remizie.
-    _routeFromCtrl.text = ref.read(unitConfigProvider).locality;
+    // Trasa prawie zawsze zaczyna się w remizie — podpowiadamy jej adres
+    // z danych jednostki, ale zostaje edytowalny.
+    _routeFromCtrl.text = ref.read(unitConfigProvider).stationAddress;
   }
 
   /// Stan licznika przed wyjazdem podstawiony z poprzedniego przejazdu.
@@ -307,7 +308,6 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
   /// Licznik — jedyne miejsce, gdzie ten ekran różni się od zwykłego formularza.
   Widget _odometerSection() {
     final chained = _chainedStart;
-    final isFirstEver = chained == null && !_manualStart;
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -344,9 +344,12 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
                 labelText: 'Przed wyjazdem (km)',
                 border: const OutlineInputBorder(),
                 isDense: true,
-                helperText: isFirstEver
-                    ? 'Pierwszy przejazd tego pojazdu — wpisz stan początkowy'
-                    : 'Wpisany ręcznie',
+                // Gdy nie ma poprzedniego przejazdu, mówimy wprost, że to
+                // jedyny raz. Sam komunikat „Wpisany ręcznie" brzmiał jak
+                // zapowiedź, że tak już będzie zawsze.
+                helperText: chained == null
+                    ? 'Pierwszy przejazd tego pojazdu — przy kolejnych podstawi się sam'
+                    : 'Wpisany ręcznie — zamiast stanu z poprzedniego przejazdu',
                 helperMaxLines: 2,
                 suffixIcon: _manualStart && chained != null
                     ? IconButton(

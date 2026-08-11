@@ -21,6 +21,8 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   late TextEditingController _fullNameController;
+  late TextEditingController _localityController;
+  late TextEditingController _streetController;
   final _formKey = GlobalKey<FormState>();
 
   @override
@@ -32,15 +34,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       // z miejscowością — użytkownik może to od razu poprawić na
       // poprawną gramatycznie formę („... w Kielnie").
       _fullNameController = TextEditingController(text: config.fullName);
+      _localityController = TextEditingController(text: config.locality);
+      _streetController = TextEditingController(text: config.unitStreet);
     } catch (e) {
       debugPrint('Settings initState error: $e');
       _fullNameController = TextEditingController();
+      _localityController = TextEditingController();
+      _streetController = TextEditingController();
     }
   }
 
   @override
   void dispose() {
     _fullNameController.dispose();
+    _localityController.dispose();
+    _streetController.dispose();
     super.dispose();
   }
 
@@ -51,6 +59,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     // ekran nie edytuje (konto właściciela, zapamiętana drukarka).
     final newConfig = currentConfig.copyWith(
       unitFullName: _fullNameController.text.trim(),
+      locality: _localityController.text.trim(),
+      unitStreet: _streetController.text.trim(),
       onboardingCompleted: true,
     );
     await ref.read(unitConfigProvider.notifier).save(newConfig);
@@ -97,8 +107,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     style: const TextStyle(
                         fontSize: 16, fontWeight: FontWeight.w500),
                   ),
+                  if (ref.watch(unitConfigProvider).stationAddress.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        ref.watch(unitConfigProvider).stationAddress,
+                        style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+                      ),
+                    ),
                   AdminOnlyNotice(
-                    what: 'Nazwę jednostki',
+                    what: 'Dane jednostki',
                     adminEmail: ref.watch(syncStateProvider).founderEmail,
                   ),
                 ] else ...[
@@ -115,6 +133,32 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         ? 'Podaj nazwę jednostki'
                         : null,
                     onChanged: (_) => setState(() {}),
+                  ),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: _localityController,
+                    decoration: const InputDecoration(
+                      labelText: 'Miejscowość',
+                      hintText: 'np. Kielno',
+                      helperText:
+                          'Trafia do stopki „Miejscowość… dnia…” na drukach',
+                      helperMaxLines: 2,
+                    ),
+                    textCapitalization: TextCapitalization.words,
+                    maxLength: 50,
+                  ),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: _streetController,
+                    decoration: const InputDecoration(
+                      labelText: 'Ulica i numer (opcjonalnie)',
+                      hintText: 'np. Oliwska 12',
+                      helperText:
+                          'Adres remizy — podpowiadany jako „Skąd” w ewidencji przejazdów',
+                      helperMaxLines: 2,
+                    ),
+                    textCapitalization: TextCapitalization.words,
+                    maxLength: 100,
                   ),
                   const SizedBox(height: 24),
                   ElevatedButton.icon(

@@ -316,6 +316,10 @@ class SyncService {
     final config = _db.getConfig();
     await _driveService.writeJsonFile(configFolderId, 'unit_config.json', {
       'unitName': config.fullName,
+      // Adres remizy jest wspólny dla całej jednostki — kolega, który
+      // dołącza kodem, ma dostać podpowiedź „Skąd” bez wpisywania jej u siebie.
+      'locality': config.locality,
+      'unitStreet': config.unitStreet,
       'inviteCode': _state.unitInviteCode,
       'updatedAt': DateTime.now().toIso8601String(),
       // Założyciela ustala pierwszy zapis — potem go nie nadpisujemy,
@@ -508,9 +512,15 @@ class SyncService {
       // to każdy, kto dołączy do jednostki.
       final unitName = (configData['unitName'] as String).trim();
       final config = _db.getConfig();
+      // Adresu z Dysku nie wymuszamy na pustkę: starsze jednostki nie mają go
+      // jeszcze zapisanego, a nadpisanie skasowałoby to, co ktoś wpisał lokalnie.
+      final remoteLocality = (configData['locality'] as String? ?? '').trim();
+      final remoteStreet = (configData['unitStreet'] as String? ?? '').trim();
       await _db.saveConfig(
         config.copyWith(
           unitFullName: unitName.isEmpty ? null : unitName,
+          locality: remoteLocality.isEmpty ? null : remoteLocality,
+          unitStreet: remoteStreet.isEmpty ? null : remoteStreet,
           ownerEmail: configData['createdBy'] as String? ?? '',
         ),
       );
@@ -530,6 +540,13 @@ class SyncService {
       founderEmail: configData?['createdBy'] as String?,
       adminEmails: admins,
     ));
+
+    // Raporty ściągnięte przed chwilą mogą pochodzić sprzed wprowadzenia
+    // ewidencji — wtedy nie mają swojego wiersza w karcie. Uzupełniamy je
+    // tak samo jak przy starcie aplikacji.
+    await _db.backfillTripsFromReports(
+      stationAddress: _db.getConfig().stationAddress,
+    );
   }
 
   // â”€â”€ Restore state on app start â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

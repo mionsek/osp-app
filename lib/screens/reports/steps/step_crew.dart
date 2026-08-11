@@ -99,7 +99,14 @@ class _StepCrewState extends ConsumerState<StepCrew>
           const SizedBox(height: 16),
 
           // Seat 1 — Driver
+          //
+          // Klucz z identyfikatorem pojazdu jest tu konieczny, nie kosmetyczny.
+          // Przełączenie pojazdu zmienia tylko dane, a drzewo widgetów zostaje
+          // identyczne — bez klucza Flutter zachowuje stan pola, czyli tekst
+          // nazwiska z poprzedniego zastępu. Po utracie fokusu takie nazwisko
+          // było dopasowywane i realnie przypisywane do drugiego pojazdu.
           _SeatSelector(
+            key: ValueKey('$vehicleId-driver'),
             seatNumber: 1,
             role: '🚗 Kierowca',
             selectedId: crew.driverId,
@@ -118,6 +125,7 @@ class _StepCrewState extends ConsumerState<StepCrew>
 
           // Seat 2 — Commander
           _SeatSelector(
+            key: ValueKey('$vehicleId-commander'),
             seatNumber: 2,
             role: '🎖️ Dowódca',
             selectedId: crew.commanderId,
@@ -143,6 +151,7 @@ class _StepCrewState extends ConsumerState<StepCrew>
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: _SeatSelector(
+                key: ValueKey('$vehicleId-crew-$crewIndex'),
                 seatNumber: i + 3,
                 role: 'Ratownik',
                 selectedId: selectedId,
@@ -417,6 +426,7 @@ class _SeatSelector extends StatefulWidget {
   final bool canCreateFirefighters;
 
   const _SeatSelector({
+    super.key,
     required this.seatNumber,
     required this.role,
     this.selectedId,

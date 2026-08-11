@@ -21,6 +21,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   // („np. Ochotnicza Straż Pożarna w Kielnie"), więc użytkownik wpisuje
   // od razu poprawną, pełną nazwę zamiast dopisywać do prefiksu.
   final _prefixController = TextEditingController();
+  final _localityController = TextEditingController();
+  final _streetController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
   final _codeController = TextEditingController();
@@ -33,6 +35,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   void dispose() {
     _pageController.dispose();
     _prefixController.dispose();
+    _localityController.dispose();
+    _streetController.dispose();
     _codeController.dispose();
     super.dispose();
   }
@@ -69,7 +73,11 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
       final configNotifier = ref.read(unitConfigProvider.notifier);
       final db = ref.read(databaseServiceProvider);
-      await configNotifier.completeOnboarding(fullName);
+      await configNotifier.completeOnboarding(
+        fullName,
+        locality: _localityController.text,
+        street: _streetController.text,
+      );
       await db.initializeDefaultThreats();
       ref.read(threatsProvider.notifier).refresh();
 
@@ -98,7 +106,11 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
     final configNotifier = ref.read(unitConfigProvider.notifier);
     final db = ref.read(databaseServiceProvider);
-    await configNotifier.completeOnboarding(fullName);
+    await configNotifier.completeOnboarding(
+      fullName,
+      locality: _localityController.text,
+      street: _streetController.text,
+    );
     await db.initializeDefaultThreats();
     ref.read(threatsProvider.notifier).refresh();
 
@@ -481,6 +493,37 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 return null;
               },
               onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 8),
+            TextFormField(
+              controller: _localityController,
+              decoration: const InputDecoration(
+                labelText: 'Miejscowość',
+                hintText: 'np. Kielno',
+                helperText: 'Trafia do stopki „Miejscowość… dnia…” na drukach',
+                helperMaxLines: 2,
+              ),
+              textCapitalization: TextCapitalization.words,
+              maxLength: 50,
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'Podaj miejscowość';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 8),
+            TextFormField(
+              controller: _streetController,
+              decoration: const InputDecoration(
+                labelText: 'Ulica i numer (opcjonalnie)',
+                hintText: 'np. Oliwska 12',
+                helperText:
+                    'Adres remizy — podpowiadany jako „Skąd” w ewidencji przejazdów',
+                helperMaxLines: 2,
+              ),
+              textCapitalization: TextCapitalization.words,
+              maxLength: 100,
             ),
             const SizedBox(height: 24),
             Container(

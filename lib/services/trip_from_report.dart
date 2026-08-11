@@ -19,13 +19,17 @@ class TripFromReport {
   /// mnożyłoby wiersze w karcie.
   static List<VehicleTrip> build({
     required Report report,
-    required String unitLocality,
+    required String stationAddress,
     required String Function(String firefighterId)? resolveDriverName,
     required Set<String> existingVehicleIdsForReport,
     String createdBy = '',
+    DateTime? timestamp,
   }) {
     final trips = <VehicleTrip>[];
-    final now = DateTime.now();
+    // Przy uzupełnianiu historii podajemy znacznik z raportu, a nie „teraz".
+    // Dzięki temu każde urządzenie wygeneruje identyczny rekord i Dysk nie
+    // wpadnie w pętlę „mój wpis jest nowszy" przy każdej synchronizacji.
+    final now = timestamp ?? DateTime.now();
 
     for (final crew in report.crewAssignments) {
       if (crew.vehicleId.isEmpty) continue;
@@ -42,7 +46,7 @@ class TripFromReport {
         id: 'trip_${report.id}_${crew.vehicleId}',
         vehicleId: crew.vehicleId,
         date: report.date,
-        routeFrom: unitLocality,
+        routeFrom: stationAddress,
         routeTo: _destination(report),
         purpose: TripPurposes.alarm,
         driverName: driverName,
@@ -57,6 +61,50 @@ class TripFromReport {
     }
 
     return trips;
+  }
+
+  /// Odświeża w istniejącym przejeździe te kolumny, których źródłem jest
+  /// raport. Zwraca `true`, gdy cokolwiek się zmieniło.
+  ///
+  /// Potrzebne, bo dopisanie godziny powrotu w wyjeździe nie trafiało do
+  /// ewidencji — przejazd powstawał raz i już nigdy się nie aktualizował.
+  ///
+  /// Świadomie **nie ruszamy** licznika, dysponenta, minut pracy urządzeń,
+  /// uwag ani pola „skąd": to dane wpisywane w ewidencji, o których raport nic
+  /// nie wie. Nadpisanie ich kasowałoby pracę kierowcy.
+  static bool applyReportFields(
+    VehicleTrip trip,
+    Report report, {
+    String Function(String firefighterId)? resolveDriverName,
+  }) {
+    final crew = report.crewAssignments
+        .where((c) => c.vehicleId == trip.vehicleId)
+        .firstOrNull;
+
+    final driverId = crew?.driverId;
+    final driverName = (driverId != null && resolveDriverName != null)
+        ? resolveDriverName(driverId)
+        : trip.driverName;
+
+    final newRouteTo = _destination(report);
+
+    final changed = trip.date != report.date ||
+        trip.departureTime != report.departureTime ||
+        trip.returnTime != report.returnTime ||
+        trip.routeTo != newRouteTo ||
+        trip.driverId != driverId ||
+        trip.driverName != driverName;
+
+    if (!changed) return false;
+
+    trip.date = report.date;
+    trip.departureTime = report.departureTime;
+    trip.returnTime = report.returnTime;
+    trip.routeTo = newRouteTo;
+    trip.driverId = driverId;
+    trip.driverName = driverName;
+    trip.updatedAt = DateTime.now();
+    return true;
   }
 
   /// Cel wyjazdu w formacie kolumny „dokąd": ulica z numerem, a gdy jej brak —

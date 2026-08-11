@@ -35,7 +35,7 @@ void main() {
 
       final trips = TripFromReport.build(
         report: report,
-        unitLocality: 'Kielno',
+        stationAddress: 'Kielno',
         resolveDriverName: (id) => id == 'f1' ? 'Jan Kowalski' : 'Adam Nowak',
         existingVehicleIdsForReport: const {},
       );
@@ -52,7 +52,7 @@ void main() {
 
       final trip = TripFromReport.build(
         report: report,
-        unitLocality: 'Kielno',
+        stationAddress: 'Kielno',
         resolveDriverName: (_) => 'Jan Kowalski',
         existingVehicleIdsForReport: const {},
       ).single;
@@ -71,7 +71,7 @@ void main() {
         report: buildReport(crews: [
           CrewAssignment(vehicleId: 'v1', vehicleName: 'GBA'),
         ]),
-        unitLocality: 'Kielno',
+        stationAddress: 'Kielno',
         resolveDriverName: (_) => '',
         existingVehicleIdsForReport: const {},
       ).single;
@@ -89,7 +89,7 @@ void main() {
 
       final trips = TripFromReport.build(
         report: report,
-        unitLocality: 'Kielno',
+        stationAddress: 'Kielno',
         resolveDriverName: (_) => '',
         existingVehicleIdsForReport: {'v1'},
       );
@@ -105,13 +105,13 @@ void main() {
 
       final a = TripFromReport.build(
         report: report,
-        unitLocality: 'Kielno',
+        stationAddress: 'Kielno',
         resolveDriverName: (_) => '',
         existingVehicleIdsForReport: const {},
       ).single;
       final b = TripFromReport.build(
         report: report,
-        unitLocality: 'Kielno',
+        stationAddress: 'Kielno',
         resolveDriverName: (_) => '',
         existingVehicleIdsForReport: const {},
       ).single;
@@ -125,7 +125,7 @@ void main() {
           crews: [CrewAssignment(vehicleId: 'v1', vehicleName: 'GBA')],
           street: '',
         ),
-        unitLocality: 'Kielno',
+        stationAddress: 'Kielno',
         resolveDriverName: (_) => '',
         existingVehicleIdsForReport: const {},
       ).single;
@@ -133,17 +133,136 @@ void main() {
       expect(trip.routeTo, 'Kielno');
     });
 
+    test('mozna podac znacznik czasu zamiast "teraz"', () {
+      // Uzupelnianie historii musi dac identyczne rekordy na kazdym telefonie,
+      // inaczej kazda synchronizacja nadpisywalaby cudzy wpis jako "nowszy".
+      final stamp = DateTime(2026, 7, 1, 12);
+      final trip = TripFromReport.build(
+        report: buildReport(crews: [
+          CrewAssignment(vehicleId: 'v1', vehicleName: 'GBA'),
+        ]),
+        stationAddress: 'Kielno, Oliwska 12',
+        resolveDriverName: (_) => '',
+        existingVehicleIdsForReport: const {},
+        timestamp: stamp,
+      ).single;
+
+      expect(trip.createdAt, stamp);
+      expect(trip.updatedAt, stamp);
+    });
+
     test('zastep bez pojazdu jest pomijany', () {
       final trips = TripFromReport.build(
         report: buildReport(crews: [
           CrewAssignment(vehicleId: '', vehicleName: ''),
         ]),
-        unitLocality: 'Kielno',
+        stationAddress: 'Kielno',
         resolveDriverName: (_) => '',
         existingVehicleIdsForReport: const {},
       );
 
       expect(trips, isEmpty);
+    });
+  });
+
+  group('TripFromReport.applyReportFields', () {
+    VehicleTrip existingTripFor(Report report) => TripFromReport.build(
+          report: report,
+          stationAddress: 'Kielno, Oliwska 12',
+          resolveDriverName: (_) => 'Jan Kowalski',
+          existingVehicleIdsForReport: const {},
+        ).single;
+
+    test('dopisana godzina powrotu trafia do przejazdu', () {
+      final report = buildReport(crews: [
+        CrewAssignment(vehicleId: 'v1', vehicleName: 'GBA', driverId: 'f1'),
+      ]);
+      final trip = existingTripFor(report);
+      trip.returnTime = null;
+
+      final changed = TripFromReport.applyReportFields(
+        trip,
+        report,
+        resolveDriverName: (_) => 'Jan Kowalski',
+      );
+
+      expect(changed, isTrue);
+      expect(trip.returnTime, DateTime(2026, 8, 10, 16, 0));
+    });
+
+    test('nie rusza licznika ani danych wpisanych w ewidencji', () {
+      final report = buildReport(crews: [
+        CrewAssignment(vehicleId: 'v1', vehicleName: 'GBA', driverId: 'f1'),
+      ]);
+      final trip = existingTripFor(report);
+      trip.odometerStart = 1654;
+      trip.odometerEnd = 1683;
+      trip.dispatcherName = 'SKKM Kartuzy';
+      trip.specialEquipmentMinutes = 25;
+      trip.notes = 'autopompa';
+      trip.routeFrom = 'Kielno, remiza';
+      trip.returnTime = null;
+
+      TripFromReport.applyReportFields(trip, report,
+          resolveDriverName: (_) => 'Jan Kowalski');
+
+      expect(trip.odometerStart, 1654);
+      expect(trip.odometerEnd, 1683);
+      expect(trip.dispatcherName, 'SKKM Kartuzy');
+      expect(trip.specialEquipmentMinutes, 25);
+      expect(trip.notes, 'autopompa');
+      expect(trip.routeFrom, 'Kielno, remiza');
+    });
+
+    test('bez zmian w raporcie nie zglasza zmiany', () {
+      final report = buildReport(crews: [
+        CrewAssignment(vehicleId: 'v1', vehicleName: 'GBA', driverId: 'f1'),
+      ]);
+      final trip = existingTripFor(report);
+
+      final changed = TripFromReport.applyReportFields(
+        trip,
+        report,
+        resolveDriverName: (_) => 'Jan Kowalski',
+      );
+
+      expect(changed, isFalse);
+    });
+
+    test('zmiana kierowcy w raporcie aktualizuje przejazd', () {
+      final report = buildReport(crews: [
+        CrewAssignment(vehicleId: 'v1', vehicleName: 'GBA', driverId: 'f1'),
+      ]);
+      final trip = existingTripFor(report);
+
+      report.crewAssignments.first.driverId = 'f2';
+      final changed = TripFromReport.applyReportFields(
+        trip,
+        report,
+        resolveDriverName: (id) => id == 'f2' ? 'Adam Nowak' : 'Jan Kowalski',
+      );
+
+      expect(changed, isTrue);
+      expect(trip.driverId, 'f2');
+      expect(trip.driverName, 'Adam Nowak');
+    });
+  });
+
+  group('UnitConfig.stationAddress', () {
+    UnitConfig cfg({String locality = '', String street = ''}) =>
+        UnitConfig(locality: locality, unitStreet: street);
+
+    test('miejscowosc i ulica sklejane przecinkiem', () {
+      expect(cfg(locality: 'Kielno', street: 'Oliwska 12').stationAddress,
+          'Kielno, Oliwska 12');
+    });
+
+    test('sama miejscowosc gdy brak ulicy', () {
+      expect(cfg(locality: 'Kielno').stationAddress, 'Kielno');
+    });
+
+    test('pusty adres gdy nic nie podano - bez zmyslonej podpowiedzi', () {
+      expect(cfg().stationAddress, '');
     });
   });
 }

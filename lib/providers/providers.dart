@@ -134,9 +134,15 @@ class UnitConfigNotifier extends StateNotifier<UnitConfig> {
   /// „Ochotnicza Straż Pożarna w Kielnie" — trzymamy ją w całości, bo
   /// sklejanie prefiksu z miejscownikiem dawało błędne gramatycznie
   /// „Ochotnicza Straż Pożarna Kielno".
-  Future<void> completeOnboarding(String fullName) async {
+  Future<void> completeOnboarding(
+    String fullName, {
+    String locality = '',
+    String street = '',
+  }) async {
     final config = UnitConfig(
       unitFullName: fullName,
+      locality: locality.trim(),
+      unitStreet: street.trim(),
       onboardingCompleted: true,
       isAdmin: true,
     );

@@ -37,6 +37,17 @@ class UnitConfig extends HiveObject {
   @HiveField(7)
   String? unitFullName;
 
+  /// Ulica i numer siedziby jednostki, np. „Oliwska 12”.
+  ///
+  /// Razem z [locality] składa się na adres remizy, od której zaczyna się
+  /// większość przejazdów. Trzymane osobno od miejscowości, bo miejscowość
+  /// jest potrzebna sama — trafia do stopki „Miejscowość… dnia…” na drukach.
+  ///
+  /// Puste oznacza konfigurację sprzed wprowadzenia pola — wtedy jako adres
+  /// siedziby wystarcza sama miejscowość.
+  @HiveField(8, defaultValue: '')
+  String unitStreet;
+
   UnitConfig({
     this.namePrefix = 'Ochotnicza Straż Pożarna',
     this.locality = '',
@@ -46,6 +57,7 @@ class UnitConfig extends HiveObject {
     this.btPrinterMac,
     this.btPrinterName,
     this.unitFullName,
+    this.unitStreet = '',
   });
 
   String get fullName {
@@ -53,6 +65,18 @@ class UnitConfig extends HiveObject {
     if (custom != null && custom.isNotEmpty) return custom;
     if (locality.isEmpty) return namePrefix;
     return '$namePrefix $locality';
+  }
+
+  /// Adres siedziby do wstawienia jako „Skąd” w ewidencji przejazdów.
+  ///
+  /// Pusty, gdy nie podano nawet miejscowości — wtedy pole zostaje puste
+  /// do ręcznego wpisania, zamiast podpowiadać zmyśloną wartość.
+  String get stationAddress {
+    final city = locality.trim();
+    final street = unitStreet.trim();
+    if (city.isEmpty) return street;
+    if (street.isEmpty) return city;
+    return '$city, $street';
   }
 
   UnitConfig copyWith({
@@ -64,6 +88,7 @@ class UnitConfig extends HiveObject {
     String? btPrinterMac,
     String? btPrinterName,
     String? unitFullName,
+    String? unitStreet,
   }) {
     return UnitConfig(
       namePrefix: namePrefix ?? this.namePrefix,
@@ -74,6 +99,7 @@ class UnitConfig extends HiveObject {
       btPrinterMac: btPrinterMac ?? this.btPrinterMac,
       btPrinterName: btPrinterName ?? this.btPrinterName,
       unitFullName: unitFullName ?? this.unitFullName,
+      unitStreet: unitStreet ?? this.unitStreet,
     );
   }
 }

@@ -25,13 +25,14 @@ class UnitConfigAdapter extends TypeAdapter<UnitConfig> {
       btPrinterMac: fields[5] as String?,
       btPrinterName: fields[6] as String?,
       unitFullName: fields[7] as String?,
+      unitStreet: fields[8] == null ? '' : fields[8] as String,
     );
   }
 
   @override
   void write(BinaryWriter writer, UnitConfig obj) {
     writer
-      ..writeByte(8)
+      ..writeByte(9)
       ..writeByte(0)
       ..write(obj.namePrefix)
       ..writeByte(1)
@@ -47,7 +48,9 @@ class UnitConfigAdapter extends TypeAdapter<UnitConfig> {
       ..writeByte(6)
       ..write(obj.btPrinterName)
       ..writeByte(7)
-      ..write(obj.unitFullName);
+      ..write(obj.unitFullName)
+      ..writeByte(8)
+      ..write(obj.unitStreet);
   }
 
   @override

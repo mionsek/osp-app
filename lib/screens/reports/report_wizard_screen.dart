@@ -269,7 +269,11 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
           duration: const Duration(seconds: 3),
         ),
       );
-      if (addedTrips > 0) _promptForOdometer(addedTrips);
+      // Router pobrany, zanim opuścimy ten ekran. Przycisk „Otwórz" w pasku
+      // działa już po zniszczeniu kreatora, więc jego własny context jest
+      // wtedy bezużyteczny — wcześniej naciśnięcie nic nie robiło.
+      final router = GoRouter.of(context);
+      if (addedTrips > 0) _promptForOdometer(addedTrips, router);
       context.go('/reports/view/${report.id}');
     }
   }
@@ -280,22 +284,30 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
   /// są pomijane, żeby ponowny zapis nie mnożył wierszy w karcie.
   Future<int> _addToVehicleLog(Report report) async {
     final db = ref.read(databaseServiceProvider);
+    final notifier = ref.read(vehicleTripsProvider.notifier);
+    String driverName(String id) => db.getFirefighter(id)?.fullName ?? '';
 
-    final alreadyLogged = db
-        .getAllTrips()
-        .where((t) => t.reportId == report.id)
-        .map((t) => t.vehicleId)
-        .toSet();
+    // Najpierw odśwież przejazdy już powiązane z tym raportem — dopisana
+    // godzina powrotu albo zmieniony kierowca muszą trafić do ewidencji.
+    final linked =
+        db.getAllTrips().where((t) => t.reportId == report.id).toList();
+    for (final trip in linked) {
+      if (TripFromReport.applyReportFields(trip, report,
+          resolveDriverName: driverName)) {
+        await notifier.update(trip);
+      }
+    }
+
+    final alreadyLogged = linked.map((t) => t.vehicleId).toSet();
 
     final trips = TripFromReport.build(
       report: report,
-      unitLocality: ref.read(unitConfigProvider).locality,
-      resolveDriverName: (id) => db.getFirefighter(id)?.fullName ?? '',
+      stationAddress: ref.read(unitConfigProvider).stationAddress,
+      resolveDriverName: driverName,
       existingVehicleIdsForReport: alreadyLogged,
       createdBy: ref.read(syncStateProvider).userEmail ?? '',
     );
 
-    final notifier = ref.read(vehicleTripsProvider.notifier);
     for (final trip in trips) {
       await notifier.add(trip);
     }
@@ -306,7 +318,7 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
   ///
   /// Nie blokuje i nie otwiera formularza od razu — kierowca wpisuje licznik
   /// po powrocie do jednostki, a nie w chwili zamykania raportu.
-  void _promptForOdometer(int count) {
+  void _promptForOdometer(int count, GoRouter router) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(count == 1
@@ -315,7 +327,7 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
         duration: const Duration(seconds: 6),
         action: SnackBarAction(
           label: 'Otwórz',
-          onPressed: () => context.push('/trips'),
+          onPressed: () => router.push('/trips'),
         ),
       ),
     );

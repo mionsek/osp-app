@@ -139,6 +139,14 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
         _eventLocationController.text = parts;
         _eventDate = report.date;
         _eventTime = TimeOfDay.fromDateTime(report.departureTime);
+
+        // Stopka „Miejscowość… dnia…” wypełniała się tylko przy pobraniu
+        // adresu z GPS — ten sam druk wypełniony przez powiązanie z wyjazdem
+        // zostawiał ją pustą. Nie nadpisujemy tego, co ktoś już wpisał.
+        if (_signLocalityController.text.trim().isEmpty &&
+            report.addressLocality.trim().isNotEmpty) {
+          _signLocalityController.text = report.addressLocality.trim();
+        }
       }
     });
   }
