@@ -288,12 +288,52 @@ czy rozliczenie ma być miesięczne per pojazd, czy per wyjazd.
 
 ## Do zrobienia — Kolejne branche
 
-### Przebieg pojazdów (kilometry)
-Ewidencja przebiegu per pojazd — Gospodarz jednostki rozlicza się miesięcznie
-z kilometrów przejechanych przez każdy pojazd. Do przemyślenia: czy wpisywać
-stan licznika przy wyjeździe i powrocie (dokładniejsze, ale dwa pola więcej
-w kreatorze), czy sam dystans po fakcie; plus ekran historii i podsumowanie
-miesięczne/roczne do wydruku.
+### Usunięcie reklam + „postaw mi kawę”
+**Decyzja podjęta 12.08.2026: rezygnujemy z reklam.**
+
+Powód nie jest taki, że reklamy przeszkadzają — baner na dole nikomu nie wadził.
+Powód jest taki, że przy realnej skali tej aplikacji **nie zarabiają nic
+sensownego, a komplikują prostą sytuację prawną**.
+
+Arytmetyka na której oparta jest decyzja (przy założeniu 1000 użytkowników
+i ~3000 wypełnionych raportów rocznie):
+
+| Format | Stawka / 1000 wyśw. | Wyświetleń rocznie | Przychód rocznie |
+|---|---|---|---|
+| Baner na dole | 2–5 zł | 15–30 tys. | 30–150 zł |
+| Pełnoekranowa | 15–40 zł | ~3 tys. | 45–120 zł |
+| Filmik z nagrodą | 30–80 zł | 150–300 | 10–25 zł |
+
+Kluczowa obserwacja: pełnoekranowa płaci **ośmiokrotnie lepiej za wyświetlenie**,
+a daje mniej więcej tyle samo pieniędzy — bo wąskim gardłem jest liczba zdarzeń
+(3000 raportów), nie stawka. Zmiana formatu nie rusza rzędu wielkości, rusza
+tylko to, jak bardzo aplikacja przeszkadza przy zdarzeniu.
+
+Czego naprawdę kosztują reklamy (opłat **nie ma** — platforma zgód Google jest
+darmowa; kosztem jest praca i odpowiedzialność):
+- okno zgody RODO przy pierwszym uruchomieniu (wymagane dla użytkowników z UE
+  przy każdym formacie, także zwykłym banerze) — **nie jest wdrożone**,
+- polityka prywatności opisująca zbieranie identyfikatorów reklamowych,
+- deklaracja zbieranych danych w Google Play,
+- odpowiedzialność za to przetwarzanie po stronie autora aplikacji.
+
+Bez reklam aplikacja nie zbiera praktycznie nic — dane leżą na Dysku Google
+samego użytkownika. Polityka prywatności mieści się w akapicie.
+
+Do zrobienia:
+- [ ] Usunąć `google_mobile_ads`, `BannerAdWidget`, `AdService` i `showAdsProvider`
+- [ ] Usunąć sekcję „Premium / Wyłącz reklamy" z Ustawień wraz z `PurchaseService`
+- [ ] Usunąć `com.google.android.gms.ads.APPLICATION_ID` z `AndroidManifest.xml`
+- [ ] Dodać skromny przycisk **„Postaw mi kawę"** w „O aplikacji" (link zewnętrzny,
+      bez płatności w aplikacji — inaczej wchodzimy w regulamin płatności Google)
+- [ ] Sprawdzić, o ile schudnie APK (dziś 64 MB, spora część to biblioteka reklamowa)
+- [ ] Przy okazji odpada podejrzany o `OutOfMemoryError` z sekcji „Do obserwacji”
+
+Model płatny (roczna licencja na jednostkę) **odłożony do czasu, aż powstanie
+wydruk karty drogowej** — to jedyna funkcja, która realnie oszczędza komuś czas,
+więc dopiero po niej będzie wiadomo, czy ktokolwiek chce za to płacić. Uwaga na
+przyszłość: OSP finansuje gmina, a gmina kupuje na fakturę i przelew — subskrypcja
+w Google Play jest kupowana przez osobę prywatną kartą, bez faktury dla gminy.
 
 ### Funkcje ratownika — możliwe rozszerzenia
 Obecnie „Ratownik" jest **wyliczany**: brak kierowcy/dowódcy/KPP = ratownik.
