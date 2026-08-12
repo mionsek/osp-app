@@ -110,6 +110,10 @@ Poprawki po testach Wojtka na telefonie.
 - [x] **Opis licznika przy pierwszym przejeździe** — „Wpisany ręcznie" brzmiało jak zapowiedź, że tak już będzie zawsze, i wywołało dokładnie takie pytanie. Teraz mówi wprost, że przy kolejnych przejazdach stan podstawi się sam
 - [x] Wersja podbita na `1.1.0+2` — `versionCode` stał na 1 od początku, więc nie dało się odróżnić wydań ani zablokować przypadkowego cofnięcia
 - [x] 8 nowych testów (łącznie 112): aktualizacja przejazdu z raportu, nienaruszalność danych z ewidencji, deterministyczne znaczniki przy uzupełnianiu historii, składanie adresu jednostki
+- [x] Przejechane na emulatorze w wersji release: aktualizacja przez `adb install -r` zachowuje dane (jednostka, pojazdy, przejazdy, łańcuch licznika); adres jednostki podpowiada się jako „Skąd" i jako miejscowość w nowym wyjeździe; **drugi pojazd ma puste pola kierowcy i dowódcy**; „Otwórz" w powiadomieniu przenosi do ewidencji; wyjazd alarmowy dopisuje się z trasą „Kielno, Oliwska 12 – Kielno"; nowe komunikaty rozróżniają „Brak godziny przyjazdu" od „Brak godziny przyjazdu i licznika"
+
+## Do obserwacji
+- [ ] **`OutOfMemoryError` w wątku AdMob** (`com.google.android.gms.internal.ads`) po ~7 godzinach ciągłej pracy na emulatorze z reklamami testowymi — proces zabity, sterta 192 MB wyczerpana. Nie pochodzi z naszego kodu i nie da się tego przypisać konkretnemu błędowi na podstawie jednego zdarzenia. `BannerAdWidget` ładuje baner raz i zwalnia go w `dispose`, więc na oko jest poprawny. Warto sprawdzić, czy zgłosi to ktoś przy normalnym użyciu — jeśli tak, podejrzany numer jeden to tworzenie osobnego banera na każdym ekranie przy częstej nawigacji
 
 ## Zrobione (feature/026-ewidencja-przejazdow)
 - [x] **Ewidencja przejazdów pojazdu** — odpowiednik miesięcznej karty drogowej. Karta nie jest osobnym bytem do zakładania, tylko widokiem: para *pojazd + miesiąc* nad zbiorem przejazdów. Nie trzeba niczego otwierać na początku miesiąca ani zamykać na końcu
