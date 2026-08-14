@@ -1,13 +1,9 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:in_app_purchase/in_app_purchase.dart';
 import '../models/models.dart';
 import '../models/sync_state.dart';
-import '../services/ad_service.dart';
 import '../services/database_service.dart';
 import '../services/google_auth_service.dart';
 import '../services/google_drive_service.dart';
-import '../services/purchase_service.dart';
 import '../services/sync_service.dart';
 
 final databaseServiceProvider = Provider<DatabaseService>((ref) {
@@ -330,56 +326,6 @@ final tripMonthsProvider =
     Provider.family<List<({int year, int month})>, String>((ref, vehicleId) {
   ref.watch(vehicleTripsProvider);
   return ref.watch(databaseServiceProvider).getMonthsWithTrips(vehicleId);
-});
-
-// --- Ads & Premium ---
-
-final purchaseServiceProvider = Provider<PurchaseService>((ref) {
-  final service = PurchaseService(ref.watch(databaseServiceProvider));
-  ref.onDispose(service.dispose);
-  return service;
-});
-
-/// Whether the user has purchased the Remove Ads IAP.
-final premiumProvider = StateNotifierProvider<PremiumNotifier, bool>((ref) {
-  return PremiumNotifier(ref.watch(purchaseServiceProvider));
-});
-
-class PremiumNotifier extends StateNotifier<bool> {
-  final PurchaseService _purchaseService;
-
-  PremiumNotifier(this._purchaseService) : super(_purchaseService.isPremium) {
-    // Listen for purchase stream updates
-    final controller = _purchaseService.initialize();
-    controller.stream.listen(
-      (isPremium) {
-        if (mounted) state = isPremium;
-      },
-      onError: (e) => debugPrint('PremiumNotifier: stream error — $e'),
-      cancelOnError: false,
-    );
-  }
-
-  Future<bool> buyRemoveAds() async {
-    return _purchaseService.buyRemoveAds();
-  }
-
-  Future<void> restorePurchases() async {
-    await _purchaseService.restorePurchases();
-    if (mounted) state = _purchaseService.isPremium;
-  }
-
-  Future<ProductDetails?> fetchProductDetails() {
-    return _purchaseService.fetchProductDetails();
-  }
-}
-
-/// Returns true if banner ads should be shown.
-/// False for the ospkielno unit OR if user purchased premium.
-final showAdsProvider = Provider<bool>((ref) {
-  final unitConfig = ref.watch(unitConfigProvider);
-  final isPremium = ref.watch(premiumProvider);
-  return !isPremium && shouldShowAds(unitConfig.ownerEmail);
 });
 
 // --- Threats ---

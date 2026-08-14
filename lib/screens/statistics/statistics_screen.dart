@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/providers.dart';
 import '../../providers/statistics_provider.dart';
 import '../../services/pdf_service.dart';
-import '../../widgets/banner_ad_widget.dart';
 
 class StatisticsScreen extends ConsumerWidget {
   const StatisticsScreen({super.key});
@@ -19,7 +18,6 @@ class StatisticsScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Statystyki'),
       ),
-      bottomNavigationBar: const BannerAdWidget(),
       body: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.viewPaddingOf(context).bottom),
         child: Column(

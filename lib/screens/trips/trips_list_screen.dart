@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import '../../models/models.dart';
 import '../../providers/providers.dart';
 import '../../services/trip_odometer.dart';
-import '../../widgets/banner_ad_widget.dart';
 
 /// Ewidencja przejazdów pojazdu — odpowiednik miesięcznej karty drogowej.
 ///
@@ -47,7 +46,6 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Ewidencja przejazdów')),
-      bottomNavigationBar: const BannerAdWidget(),
       floatingActionButton: vehicles.isEmpty
           ? null
           : FloatingActionButton.extended(

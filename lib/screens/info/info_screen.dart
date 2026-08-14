@@ -20,6 +20,26 @@ class InfoScreen extends StatelessWidget {
     }
   }
 
+  /// Adres zbiórki „na kawę". Pusty = przycisk się nie pokazuje.
+  ///
+  /// Link zewnętrzny, **nie** płatność w aplikacji — płatność wewnątrz
+  /// aplikacji wchodzi w regulamin rozliczeń Google, czyli dokładnie tę
+  /// komplikację, dla której uniknięcia zrezygnowaliśmy z reklam.
+  static const String _coffeeUrl = '';
+
+  Future<void> _launchCoffee(BuildContext context) async {
+    if (!await launchUrl(
+      Uri.parse(_coffeeUrl),
+      mode: LaunchMode.externalApplication,
+    )) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Nie udało się otworzyć strony')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -257,6 +277,15 @@ class InfoScreen extends StatelessWidget {
                   'Raporty OSP — Propozycja usprawnienia',
                 ),
               ),
+              if (_coffeeUrl.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                _ContactButton(
+                  icon: Icons.coffee,
+                  label: 'Postaw mi kawę',
+                  subtitle: 'Aplikacja jest darmowa i bez reklam',
+                  onTap: () => _launchCoffee(context),
+                ),
+              ],
               const SizedBox(height: 32),
 
               // --- Autor ---

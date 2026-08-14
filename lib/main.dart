@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'core/theme/osp_theme.dart';
 import 'core/router/app_router.dart';
 import 'services/database_service.dart';
@@ -22,7 +21,6 @@ void main() async {
   // raport → ewidencja (np. godzina powrotu dopisana w starszej wersji).
   await db.reconcileTripsWithReports();
   await db.fillMissingRouteFrom(db.getConfig().stationAddress);
-  await MobileAds.instance.initialize();
   runApp(const ProviderScope(child: OspApp()));
 }
 

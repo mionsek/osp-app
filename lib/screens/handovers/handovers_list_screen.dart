@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../providers/providers.dart';
-import '../../widgets/banner_ad_widget.dart';
 
 class HandoversListScreen extends ConsumerWidget {
   const HandoversListScreen({super.key});
@@ -16,7 +15,6 @@ class HandoversListScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Przekazania mienia'),
       ),
-      bottomNavigationBar: const BannerAdWidget(),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
           final firefighters = ref.read(firefightersProvider);

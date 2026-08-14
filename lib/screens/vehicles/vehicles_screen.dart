@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import '../../models/models.dart';
 import '../../providers/providers.dart';
 import '../../widgets/admin_only_notice.dart';
-import '../../widgets/banner_ad_widget.dart';
 
 class VehiclesScreen extends ConsumerWidget {
   const VehiclesScreen({super.key});
@@ -19,7 +18,6 @@ class VehiclesScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Pojazdy'),
       ),
-      bottomNavigationBar: const BannerAdWidget(),
       // Bez uprawnień administratora nie ma czego dodawać — zamiast
       // wyłączonego przycisku pokazujemy wyjaśnienie nad listą.
       floatingActionButton: isAdmin

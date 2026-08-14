@@ -2,11 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../../providers/providers.dart';
 import '../../models/sync_state.dart';
-import '../../services/ad_service.dart';
 import '../../services/bluetooth_print_service.dart';
 import '../../widgets/admin_only_notice.dart';
 import '../../widgets/bluetooth_printer_picker.dart';
@@ -197,10 +195,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   icon: const Icon(Icons.info_outline, size: 18),
                   label: const Text('Więcej o aplikacji'),
                 ),
-                const SizedBox(height: 32),
-                const Divider(),
-                const SizedBox(height: 16),
-                _PremiumSection(),
                 const SizedBox(height: 32),
                 const Divider(),
                 const SizedBox(height: 16),
@@ -553,193 +547,6 @@ class _BluetoothPrinterSectionState
           ),
         ],
       ],
-    );
-  }
-}
-
-class _PremiumSection extends ConsumerStatefulWidget {
-  @override
-  ConsumerState<_PremiumSection> createState() => _PremiumSectionState();
-}
-
-class _PremiumSectionState extends ConsumerState<_PremiumSection> {
-  bool _loading = false;
-  ProductDetails? _product;
-  String? _errorMessage;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadProduct();
-  }
-
-  Future<void> _loadProduct() async {
-    final product = await ref
-        .read(premiumProvider.notifier)
-        .fetchProductDetails();
-    if (mounted) setState(() => _product = product);
-  }
-
-  Future<void> _buy() async {
-    setState(() {
-      _loading = true;
-      _errorMessage = null;
-    });
-    try {
-      final success =
-          await ref.read(premiumProvider.notifier).buyRemoveAds();
-      if (!success && mounted) {
-        setState(() => _errorMessage = 'Nie udało się uruchomić sklepu.');
-      }
-    } catch (e) {
-      if (mounted) setState(() => _errorMessage = 'Błąd: $e');
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  Future<void> _restore() async {
-    setState(() {
-      _loading = true;
-      _errorMessage = null;
-    });
-    try {
-      await ref.read(premiumProvider.notifier).restorePurchases();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Zakupy przywrócone')),
-        );
-      }
-    } catch (e) {
-      if (mounted) setState(() => _errorMessage = 'Błąd przywracania: $e');
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isPremium = ref.watch(premiumProvider);
-    final unitConfig = ref.watch(unitConfigProvider);
-    final isUnitFree = !shouldShowAds(unitConfig.ownerEmail);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text('Premium', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 12),
-        if (isUnitFree) ...[
-          _PremiumStatusTile(
-            icon: Icons.verified,
-            color: Colors.green,
-            title: 'Brak reklam',
-            subtitle: 'Twoja jednostka ma wyłączone reklamy.',
-          ),
-        ] else if (isPremium) ...[
-          _PremiumStatusTile(
-            icon: Icons.star,
-            color: Colors.amber[700]!,
-            title: 'Premium aktywne',
-            subtitle: 'Reklamy są wyłączone. Dziękujemy za wsparcie!',
-          ),
-        ] else ...[
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.grey[50],
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.grey[300]!),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Row(
-                  children: [
-                    Icon(Icons.block, color: Colors.grey, size: 20),
-                    SizedBox(width: 8),
-                    Text('Wyłącz reklamy',
-                        style: TextStyle(fontWeight: FontWeight.w600)),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  _product != null
-                      ? 'Jednorazowy zakup — ${_product!.price}'
-                      : 'Jednorazowy zakup (brak połączenia ze sklepem)',
-                  style: TextStyle(color: Colors.grey[600], fontSize: 13),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
-          if (_errorMessage != null) ...[
-            Text(_errorMessage!,
-                style: const TextStyle(color: Colors.red, fontSize: 12)),
-            const SizedBox(height: 8),
-          ],
-          ElevatedButton.icon(
-            onPressed: _loading || _product == null ? null : _buy,
-            icon: _loading
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.shopping_cart),
-            label: const Text('Kup — wyłącz reklamy'),
-          ),
-          const SizedBox(height: 8),
-          TextButton.icon(
-            onPressed: _loading ? null : _restore,
-            icon: const Icon(Icons.restore, size: 18),
-            label: const Text('Przywróć zakupy'),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-class _PremiumStatusTile extends StatelessWidget {
-  final IconData icon;
-  final Color color;
-  final String title;
-  final String subtitle;
-
-  const _PremiumStatusTile({
-    required this.icon,
-    required this.color,
-    required this.title,
-    required this.subtitle,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withAlpha(20),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withAlpha(80)),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: color),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title,
-                    style: TextStyle(
-                        fontWeight: FontWeight.w600, color: color)),
-                Text(subtitle,
-                    style: TextStyle(
-                        fontSize: 12, color: Colors.grey[700])),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

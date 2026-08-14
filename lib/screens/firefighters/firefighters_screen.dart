@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import '../../models/models.dart';
 import '../../providers/providers.dart';
 import '../../widgets/admin_only_notice.dart';
-import '../../widgets/banner_ad_widget.dart';
 import '../../widgets/correction_request_dialog.dart';
 
 class FirefightersScreen extends ConsumerStatefulWidget {
@@ -46,7 +45,6 @@ class _FirefightersScreenState extends ConsumerState<FirefightersScreen> {
       appBar: AppBar(
         title: const Text('Ratownicy'),
       ),
-      bottomNavigationBar: const BannerAdWidget(),
       floatingActionButton: isAdmin
           ? FloatingActionButton.extended(
               onPressed: () => context.push('/firefighters/add'),

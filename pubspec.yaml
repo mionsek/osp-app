@@ -1,7 +1,7 @@
 name: osp_app
 description: "Raporty OSP — raporty z wyjazdów ratowniczych dla jednostek OSP"
 publish_to: 'none'
-version: 1.1.1+3
+version: 1.2.0+4
 
 environment:
   sdk: ^3.11.4
@@ -33,8 +33,6 @@ dependencies:
   connectivity_plus: ^6.1.0
   url_launcher: ^6.3.1
   package_info_plus: ^8.1.3
-  google_mobile_ads: ^5.3.1
-  in_app_purchase: ^3.2.0
   print_bluetooth_thermal: ^1.2.1
   permission_handler: ^12.0.3
   geolocator: ^14.0.2
