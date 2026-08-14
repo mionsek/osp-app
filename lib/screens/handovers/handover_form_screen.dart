@@ -33,6 +33,15 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
   final _notesController = TextEditingController();
   final _signLocalityController = TextEditingController();
 
+  /// Czy miejscowość w stopce wpisał człowiek, czy podstawiła ją aplikacja.
+  ///
+  /// Bez tego rozróżnienia nie da się jednocześnie spełnić dwóch wymagań:
+  /// nie kasować tego, co ktoś wpisał ręcznie, i jednocześnie nadążać za
+  /// zmianą źródła adresu. Wcześniejszy warunek „aktualizuj tylko gdy puste”
+  /// spełniał pierwsze kosztem drugiego — po pobraniu adresu z GPS albo po
+  /// zmianie powiązanego wyjazdu w stopce zostawała poprzednia miejscowość.
+  bool _signLocalityEditedByUser = false;
+
   late DateTime _eventDate;
   late TimeOfDay _eventTime;
   late DateTime _signDate;
@@ -58,8 +67,12 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
       }
       setState(() {
         _eventLocationController.text = address.oneLine;
+        // Świadome pobranie adresu z GPS jest silniejszą deklaracją niż to,
+        // co w stopce zostało z wcześniejszego wyboru — nadpisujemy nawet
+        // wpis ręczny, bo użytkownik właśnie poprosił o adres stąd.
         if (address.locality.isNotEmpty) {
           _signLocalityController.text = address.locality;
+          _signLocalityEditedByUser = false;
         }
       });
       _showSnack('Wstawiono adres z GPS — sprawdź i popraw w razie potrzeby.',
@@ -111,6 +124,9 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
         _notesController.text = h.notes ?? '';
         _handoverFirefighterId = h.handoverFirefighterId;
         _signLocalityController.text = h.signLocality;
+        // Zapisany druk ma już ustaloną miejscowość — traktujemy ją jak
+        // decyzję autora, a nie jak wartość do podmiany.
+        _signLocalityEditedByUser = h.signLocality.trim().isNotEmpty;
         _signDate = h.signDate;
       }
     }
@@ -140,10 +156,11 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
         _eventDate = report.date;
         _eventTime = TimeOfDay.fromDateTime(report.departureTime);
 
-        // Stopka „Miejscowość… dnia…” wypełniała się tylko przy pobraniu
-        // adresu z GPS — ten sam druk wypełniony przez powiązanie z wyjazdem
-        // zostawiał ją pustą. Nie nadpisujemy tego, co ktoś już wpisał.
-        if (_signLocalityController.text.trim().isEmpty &&
+        // Stopka „Miejscowość… dnia…” idzie za wybranym wyjazdem, dopóki
+        // użytkownik nie wpisze tam czegoś sam. Zmiana powiązanego wyjazdu
+        // musi zmieniać też miejscowość — inaczej na druku zostaje ta
+        // z poprzednio wybranego zdarzenia.
+        if (!_signLocalityEditedByUser &&
             report.addressLocality.trim().isNotEmpty) {
           _signLocalityController.text = report.addressLocality.trim();
         }
@@ -606,6 +623,9 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
                       maxLength: 50,
                       validator: (v) =>
                           (v == null || v.trim().isEmpty) ? 'Podaj miejscowość' : null,
+                      // Od tego momentu miejscowość należy do użytkownika
+                      // i nie podmieniamy jej przy zmianie wyjazdu.
+                      onChanged: (_) => _signLocalityEditedByUser = true,
                     ),
                   ),
                   const SizedBox(width: 12),

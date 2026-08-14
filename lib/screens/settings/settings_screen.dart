@@ -64,6 +64,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       onboardingCompleted: true,
     );
     await ref.read(unitConfigProvider.notifier).save(newConfig);
+
+    // Adres remizy przepisuje się do przejazdu przy jego tworzeniu, więc
+    // wpisanie go dopiero teraz zostawiłoby puste „skąd" we wszystkim, co
+    // powstało wcześniej. Uzupełniamy tylko puste pola.
+    final filled = await ref
+        .read(databaseServiceProvider)
+        .fillMissingRouteFrom(newConfig.stationAddress);
+    if (filled > 0) ref.read(vehicleTripsProvider.notifier).refresh();
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

@@ -98,6 +98,14 @@
 - [x] **Zmiana nazwy aplikacji na „Raporty OSP"** (AndroidManifest, MaterialApp, ekran „O aplikacji", pubspec, web)
 - [x] Ekran „O aplikacji": dodano sekcję „Statystyki" w instrukcji, tematy maili kontaktowych zmienione na „Raporty OSP — …"
 
+## Zrobione (fix/029-poprawki-ewidencji)
+Druga tura poprawek po testach Wojtka — tym razem na wersji 1.1.0, więc były to realne błędy, a nie brak aktualizacji.
+- [x] **Miejscowość w stopce przekazania nie nadążała za źródłem adresu** — moje własne zabezpieczenie z fix/027 („aktualizuj tylko gdy pole puste") chroniło ręczny wpis, ale przy okazji blokowało każdą kolejną aktualizację: po pobraniu adresu z GPS albo po zmianie powiązanego wyjazdu w stopce zostawała **poprzednia** miejscowość. Rozwiązane rozróżnieniem, czy wartość wpisał człowiek, czy podstawiła ją aplikacja — ręczny wpis jest chroniony, automatyczny idzie za zmianą źródła. Świadome kliknięcie „Wstaw adres z GPS" nadpisuje nawet wpis ręczny, bo to wyraźna prośba o adres stąd
+- [x] **Godzina powrotu dopisana w starszej wersji nigdy nie trafiała do ewidencji** — synchronizacja raport → przejazd z fix/027 działa wyłącznie w momencie **zapisania raportu**, więc dane rozjechane wcześniej zostawały rozjechane na zawsze; sama aktualizacja aplikacji niczego nie leczyła. Dodane uzgadnianie przy starcie aplikacji i po każdym pobraniu z Dysku (`reconcileTripsWithReports`), zmieniające wyłącznie kolumny pochodzące z raportu
+- [x] **„Skąd" zostawało puste w przejazdach sprzed wpisania adresu jednostki** — adres remizy jest przepisywany do przejazdu przy jego tworzeniu, więc uzupełnienie go w ustawieniach nie naprawiało wstecz istniejących wpisów. Dodane `fillMissingRouteFrom`, wywoływane przy starcie, po synchronizacji i zaraz po zapisaniu adresu w ustawieniach. Rusza **wyłącznie puste** pola — trasa wpisana ręcznie zostaje
+- [x] **Trasa pionowo zamiast poziomo** — „Kielno, Oliwska 12" nie mieści się w połowie szerokości telefonu, oba pola urywały tekst. Teraz jedno pod drugim, na pełną szerokość, ze strzałką w dół między nimi
+- [x] **Dysponent wybierany z załogi zastępu** — lista rozwijana z osób z powiązanego wyjazdu alarmowego, **dowódca pierwszy i podpowiadany domyślnie**, bo to on w praktyce dysponuje pojazdem. Pozycja „Inna osoba…" odsłania zwykłe pole, bo dysponować może ktoś spoza zastępu (dyżurny, naczelnik). Przy przejazdach gospodarczych, gdzie nie ma z czego wybierać, pole zostaje zwykłym wpisem
+
 ## Zrobione (fix/027-poprawki-po-testach)
 Poprawki po testach Wojtka na telefonie.
 - [x] **Kierowca i dowódca kopiowali się do drugiego pojazdu** — najgroźniejszy z listy. Dane były poprawne, ale pole pokazywało tekst z poprzedniego zastępu: przełączenie pojazdu nie zmienia struktury drzewa widgetów, więc Flutter zachowywał stan pola razem z wpisanym nazwiskiem. Gorzej, niż zgłoszono: po utracie fokusu `_tryAutoResolve` dopasowywał ten tekst po nazwisku i **realnie przypisywał osobę do drugiego pojazdu** — kto nie skasował pola ręcznie, mógł mieć kogoś w dwóch zastępach. Naprawione kluczami `ValueKey` z identyfikatorem pojazdu i miejsca
@@ -287,6 +295,31 @@ czy rozliczenie ma być miesięczne per pojazd, czy per wyjazd.
 - **Brak zabezpieczenia przed utworzeniem drugiej jednostki na koncie, które już ma jednostkę**: `SyncService.createUnit()` zawsze tworzy nowy folder Drive niezależnie od tego, czy zalogowane konto już jest właścicielem/uczestnikiem innej jednostki — do rozważenia w przyszłości (np. sprawdzenie istniejącego `unit_config.json`/`driveSync` przed „Utwórz jednostkę" i zaproponowanie dołączenia/przełączenia zamiast cichego utworzenia drugiej, rozłącznej jednostki)
 
 ## Do zrobienia — Kolejne branche
+
+### Urządzenia specjalne per pojazd + rozbicie minut pracy
+Dziś minuty pracy urządzeń specjalnych to **jedna liczba** (`VehicleTrip.specialEquipmentMinutes`)
+— tyle, ile ma kolumna 10 papierowej karty. Propozycja: rozbić na pozycje,
+np. `Agregat 30 min`, `Autopompa 60 min`, wybierane z listy urządzeń danego pojazdu.
+
+**Argument za jest mocniejszy, niż się wydaje.** Przy analizie druków wyszło,
+że gminy mają **osobne normy dla różnych urządzeń** — zarządzenie Świętajna
+rozlicza osobno postój, rozruch i autopompę. Jeśli wydruk karty ma sam liczyć
+zużycie według norm, jedna zbiorcza liczba minut do tego nie wystarczy.
+
+**Dlaczego nie teraz.** To zmiana modelu danych (pole w Hive), a ewidencja już
+zbiera realne wpisy. Zrobiona osobno wymusi migrację teraz i **drugą migrację**
+po ustaleniach z Deringiem i po dobraniu norm do wydruku. Lepiej raz, razem
+z normami per pojazd, które i tak są warunkiem wydruku karty.
+
+Do rozstrzygnięcia przed implementacją:
+- lista urządzeń **stała** (autopompa, agregat, pilarka, wyciągarka…) czy
+  definiowana per pojazd? Stała jest prostsza i pewnie wystarczy, ale nie każdy
+  pojazd ma autopompę — pokazywanie jej przy GLM byłoby mylące,
+- czy wydruk potrzebuje sumy minut, czy rozbicia na urządzenia — zależy od
+  wzoru druku obowiązującego w gminie Kielno,
+- czy normy zużycia trzymamy przy urządzeniu, czy przy pojeździe.
+
+Do potwierdzenia u Deringa. Do tego czasu jedna liczba zostaje i działa.
 
 ### Usunięcie reklam + „postaw mi kawę”
 **Decyzja podjęta 12.08.2026: rezygnujemy z reklam.**

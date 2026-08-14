@@ -348,6 +348,70 @@ class DatabaseService {
     return added;
   }
 
+  /// Uzgadnia istniejące przejazdy z ich raportami.
+  ///
+  /// Dane z raportu trafiają do przejazdu w chwili **zapisania raportu**.
+  /// Wszystko, co rozjechało się wcześniej — na przykład godzina powrotu
+  /// dopisana w wersji sprzed tej synchronizacji — zostawało rozjechane na
+  /// zawsze, bo sama aktualizacja aplikacji niczego wstecz nie naprawia.
+  /// Ten przebieg to leczy.
+  ///
+  /// Zmieniamy wyłącznie kolumny, których źródłem jest raport. Licznik,
+  /// dysponent, minuty pracy urządzeń, uwagi i „skąd" zostają nietknięte.
+  ///
+  /// Zwraca liczbę uzgodnionych przejazdów.
+  Future<int> reconcileTripsWithReports() async {
+    final byReport = <String, Report>{
+      for (final r in reportsBox.values) r.id: r,
+    };
+
+    final affectedVehicles = <String>{};
+    var changed = 0;
+
+    for (final trip in tripsBox.values.toList()) {
+      final reportId = trip.reportId;
+      if (reportId == null) continue;
+      final report = byReport[reportId];
+      if (report == null) continue;
+
+      final updated = TripFromReport.applyReportFields(
+        trip,
+        report,
+        resolveDriverName: (id) => getFirefighter(id)?.fullName ?? '',
+      );
+      if (!updated) continue;
+
+      await tripsBox.put(trip.id, trip);
+      affectedVehicles.add(trip.vehicleId);
+      changed++;
+    }
+
+    for (final vehicleId in affectedVehicles) {
+      await _rechainVehicle(vehicleId);
+    }
+    return changed;
+  }
+
+  /// Uzupełnia „skąd" w przejazdach, które powstały, zanim jednostka miała
+  /// zapisany adres remizy.
+  ///
+  /// Adres jest przepisywany do przejazdu w chwili jego utworzenia, więc
+  /// wpisanie go w ustawieniach nie naprawiało wstecz pustej kolumny. Ruszamy
+  /// wyłącznie puste pola — trasa wpisana ręcznie zostaje.
+  Future<int> fillMissingRouteFrom(String stationAddress) async {
+    final address = stationAddress.trim();
+    if (address.isEmpty) return 0;
+
+    var changed = 0;
+    for (final trip in tripsBox.values.toList()) {
+      if (trip.routeFrom.trim().isNotEmpty) continue;
+      trip.routeFrom = address;
+      await tripsBox.put(trip.id, trip);
+      changed++;
+    }
+    return changed;
+  }
+
   /// Raporty już przepisane do ewidencji.
   ///
   /// Lista, a nie pojedyncza flaga „zrobione": raporty potrafią dojść później

@@ -46,6 +46,9 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
   /// Czy stan przed wyjazdem jest wpisywany ręcznie zamiast z łańcucha.
   bool _manualStart = false;
 
+  /// Czy dysponent jest wpisywany z ręki zamiast wybierany z załogi.
+  bool _dispatcherManual = false;
+
   VehicleTrip? _existing;
   bool _loaded = false;
 
@@ -90,6 +93,15 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
         _odometerEndCtrl.text = trip.odometerEnd?.toString() ?? '';
         _equipmentCtrl.text = trip.specialEquipmentMinutes?.toString() ?? '';
         _notesCtrl.text = trip.notes ?? '';
+
+        _loadCrewOfLinkedReport();
+
+        // Wyjazd alarmowy dopisuje się bez dysponenta — podpowiadamy dowódcę
+        // tego zastępu, bo to on w praktyce dysponuje pojazdem.
+        if (_dispatcherCtrl.text.trim().isEmpty) {
+          final commander = _crewOfLinkedReport.firstOrNull;
+          if (commander != null) _dispatcherCtrl.text = commander.fullName;
+        }
         return;
       }
     }
@@ -104,6 +116,45 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
     // Trasa prawie zawsze zaczyna się w remizie — podpowiadamy jej adres
     // z danych jednostki, ale zostaje edytowalny.
     _routeFromCtrl.text = ref.read(unitConfigProvider).stationAddress;
+  }
+
+  /// Załoga tego pojazdu z powiązanego wyjazdu alarmowego.
+  ///
+  /// Kolejność ma znaczenie: **dowódca pierwszy**, bo to on trafia do pola
+  /// dysponenta jako podpowiedź. Dalej kierowca i reszta zastępu.
+  ///
+  /// Pusta lista dla przejazdów gospodarczych — tam nie ma z czego wybierać
+  /// i pole zostaje zwykłym wpisem z podpowiedziami ze wszystkich ratowników.
+  List<Firefighter> _crewOfLinkedReport = const [];
+
+  void _loadCrewOfLinkedReport() {
+    final reportId = _existing?.reportId;
+    if (reportId == null || _vehicleId.isEmpty) {
+      _crewOfLinkedReport = const [];
+      return;
+    }
+    final db = ref.read(databaseServiceProvider);
+    final report = db.getReport(reportId);
+    final crew = report?.crewAssignments
+        .where((c) => c.vehicleId == _vehicleId)
+        .firstOrNull;
+    if (crew == null) {
+      _crewOfLinkedReport = const [];
+      return;
+    }
+
+    final ids = <String>[
+      if (crew.commanderId != null && crew.commanderId!.isNotEmpty)
+        crew.commanderId!,
+      if (crew.driverId != null && crew.driverId!.isNotEmpty) crew.driverId!,
+      ...crew.crewMemberIds.where((id) => id.isNotEmpty),
+    ];
+
+    final seen = <String>{};
+    _crewOfLinkedReport = [
+      for (final id in ids)
+        if (seen.add(id)) db.getFirefighter(id),
+    ].whereType<Firefighter>().toList();
   }
 
   /// Stan licznika przed wyjazdem podstawiony z poprzedniego przejazdu.
@@ -454,33 +505,35 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
     );
   }
 
+  /// Trasa jeden pod drugim, a nie obok siebie.
+  ///
+  /// Adres w rodzaju „Kielno, Oliwska 12” nie mieści się w połowie szerokości
+  /// ekranu telefonu — obok siebie oba pola urywały tekst w połowie.
   Widget _routeFields() {
-    return Row(
+    return Column(
       children: [
-        Expanded(
-          child: TextFormField(
-            controller: _routeFromCtrl,
-            textCapitalization: TextCapitalization.sentences,
-            decoration: const InputDecoration(
-              labelText: 'Skąd',
-              border: OutlineInputBorder(),
-              isDense: true,
-            ),
+        TextFormField(
+          controller: _routeFromCtrl,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: const InputDecoration(
+            labelText: 'Skąd',
+            border: OutlineInputBorder(),
+            isDense: true,
+            prefixIcon: Icon(Icons.trip_origin, size: 18),
           ),
         ),
         const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 8),
-          child: Icon(Icons.arrow_forward, size: 18),
+          padding: EdgeInsets.symmetric(vertical: 2),
+          child: Icon(Icons.arrow_downward, size: 18),
         ),
-        Expanded(
-          child: TextFormField(
-            controller: _routeToCtrl,
-            textCapitalization: TextCapitalization.sentences,
-            decoration: const InputDecoration(
-              labelText: 'Dokąd',
-              border: OutlineInputBorder(),
-              isDense: true,
-            ),
+        TextFormField(
+          controller: _routeToCtrl,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: const InputDecoration(
+            labelText: 'Dokąd',
+            border: OutlineInputBorder(),
+            isDense: true,
+            prefixIcon: Icon(Icons.place_outlined, size: 18),
           ),
         ),
       ],
@@ -531,18 +584,79 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
     );
   }
 
+  /// Dysponent — przy wyjeździe alarmowym wybierany z załogi tego zastępu.
+  ///
+  /// Lista jest krótka i konkretna, więc rozwijana bije wpisywanie z ręki.
+  /// Zostaje pozycja „Inna osoba", bo dysponować może ktoś spoza zastępu
+  /// (dyżurny, naczelnik) — wtedy odsłania się zwykłe pole tekstowe.
   Widget _dispatcherField() {
-    return TextFormField(
-      controller: _dispatcherCtrl,
-      textCapitalization: TextCapitalization.words,
+    final crew = _crewOfLinkedReport;
+    if (crew.isEmpty || _dispatcherManual) {
+      return TextFormField(
+        controller: _dispatcherCtrl,
+        textCapitalization: TextCapitalization.words,
+        decoration: InputDecoration(
+          labelText: 'Dysponent',
+          border: const OutlineInputBorder(),
+          prefixIcon: const Icon(Icons.record_voice_over),
+          helperText: 'Kto zadysponował pojazd',
+          suffixIcon: crew.isEmpty
+              ? null
+              : IconButton(
+                  icon: const Icon(Icons.undo, size: 20),
+                  tooltip: 'Wróć do listy zastępu',
+                  onPressed: () => setState(() {
+                    _dispatcherManual = false;
+                    _dispatcherCtrl.text = crew.first.fullName;
+                  }),
+                ),
+        ),
+      );
+    }
+
+    final current = crew
+        .where((f) => f.fullName == _dispatcherCtrl.text.trim())
+        .firstOrNull;
+
+    return DropdownButtonFormField<String>(
+      initialValue: current?.id,
+      isExpanded: true,
       decoration: const InputDecoration(
         labelText: 'Dysponent',
         border: OutlineInputBorder(),
         prefixIcon: Icon(Icons.record_voice_over),
-        helperText: 'Kto zadysponował pojazd',
+        helperText: 'Z zastępu tego pojazdu — domyślnie dowódca',
+        helperMaxLines: 2,
       ),
+      items: [
+        for (final f in crew)
+          DropdownMenuItem(
+            value: f.id,
+            child: Text(
+              crew.first.id == f.id ? '${f.fullName} (dowódca)' : f.fullName,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        const DropdownMenuItem(
+          value: _otherDispatcher,
+          child: Text('Inna osoba…'),
+        ),
+      ],
+      onChanged: (value) {
+        setState(() {
+          if (value == _otherDispatcher) {
+            _dispatcherManual = true;
+            _dispatcherCtrl.clear();
+            return;
+          }
+          final picked = crew.where((f) => f.id == value).firstOrNull;
+          if (picked != null) _dispatcherCtrl.text = picked.fullName;
+        });
+      },
     );
   }
+
+  static const String _otherDispatcher = '__other__';
 
   Widget _equipmentField() {
     return TextFormField(

@@ -229,6 +229,56 @@ void main() {
       expect(changed, isFalse);
     });
 
+    test('godzina powrotu dopisana pozniej trafia do przejazdu przy uzgadnianiu',
+        () {
+      // Odwzorowanie realnego przypadku: przejazd powstal, gdy raport nie mial
+      // jeszcze godziny powrotu; godzine dopisano w wersji bez synchronizacji.
+      final reportBez = buildReport(crews: [
+        CrewAssignment(vehicleId: 'v1', vehicleName: 'GBA', driverId: 'f1'),
+      ]);
+      reportBez.returnTime = null;
+
+      final trip = TripFromReport.build(
+        report: reportBez,
+        stationAddress: 'Kielno, Oliwska 12',
+        resolveDriverName: (_) => 'Jan Kowalski',
+        existingVehicleIdsForReport: const {},
+      ).single;
+      expect(trip.returnTime, isNull);
+
+      // Ktos dopisuje godzine powrotu w raporcie.
+      reportBez.returnTime = DateTime(2026, 8, 10, 16, 0);
+
+      final changed = TripFromReport.applyReportFields(
+        trip,
+        reportBez,
+        resolveDriverName: (_) => 'Jan Kowalski',
+      );
+
+      expect(changed, isTrue);
+      expect(trip.returnTime, DateTime(2026, 8, 10, 16, 0));
+    });
+
+    test('uzgadnianie nie rusza pola "skad"', () {
+      final report = buildReport(crews: [
+        CrewAssignment(vehicleId: 'v1', vehicleName: 'GBA', driverId: 'f1'),
+      ]);
+      final trip = TripFromReport.build(
+        report: report,
+        stationAddress: 'Kielno, Oliwska 12',
+        resolveDriverName: (_) => 'Jan Kowalski',
+        existingVehicleIdsForReport: const {},
+      ).single;
+
+      trip.routeFrom = 'Kielno, remiza boczna';
+      trip.returnTime = null;
+
+      TripFromReport.applyReportFields(trip, report,
+          resolveDriverName: (_) => 'Jan Kowalski');
+
+      expect(trip.routeFrom, 'Kielno, remiza boczna');
+    });
+
     test('zmiana kierowcy w raporcie aktualizuje przejazd', () {
       final report = buildReport(crews: [
         CrewAssignment(vehicleId: 'v1', vehicleName: 'GBA', driverId: 'f1'),

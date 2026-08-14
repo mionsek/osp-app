@@ -61,3 +61,6 @@ app.*.map.json
 # Pliki ze zmiennymi środowiskowymi
 .env
 .env.*
+
+# Lokalne ustawienia Claude Code (zawieraja sciezki tego komputera)
+.claude/settings.local.json

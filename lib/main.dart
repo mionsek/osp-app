@@ -18,6 +18,10 @@ void main() async {
   await db.backfillTripsFromReports(
     stationAddress: db.getConfig().stationAddress,
   );
+  // Naprawia dane, które rozjechały się zanim istniała synchronizacja
+  // raport → ewidencja (np. godzina powrotu dopisana w starszej wersji).
+  await db.reconcileTripsWithReports();
+  await db.fillMissingRouteFrom(db.getConfig().stationAddress);
   await MobileAds.instance.initialize();
   runApp(const ProviderScope(child: OspApp()));
 }

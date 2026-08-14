@@ -547,6 +547,10 @@ class SyncService {
     await _db.backfillTripsFromReports(
       stationAddress: _db.getConfig().stationAddress,
     );
+    // Raport mógł przyjechać z Dysku nowszy niż powiązany z nim przejazd —
+    // np. kolega dopisał godzinę powrotu u siebie.
+    await _db.reconcileTripsWithReports();
+    await _db.fillMissingRouteFrom(_db.getConfig().stationAddress);
   }
 
   // â”€â”€ Restore state on app start â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
