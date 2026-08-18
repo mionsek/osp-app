@@ -46,8 +46,8 @@
 - [x] **NIE** wyświetlać reklam w: kroku dodawania wyjazdu, ekranie szczegółów raportu
 - [x] Hardcoded wyłączenie reklam dla konta `ospkielno@gmail.com` — sprawdzanie `ownerEmail` zapisanego z Drive (`unit_config.json`)
 - [x] In-app purchase „Wyłącz reklamy" (`remove_ads`) — jednorazowy zakup, sekcja Premium w Ustawieniach, możliwość przywrócenia zakupów
-- [ ] **TODO przed publikacją**: zastąpić testowe ID AdMob prawdziwymi w `ad_service.dart` i `AndroidManifest.xml`
-- [ ] **TODO przed publikacją**: zarejestrować produkt `remove_ads` w Google Play Console
+- [x] ~~TODO przed publikacją: prawdziwe ID AdMob~~ — nieaktualne, reklamy usunięte w feature/030
+- [x] ~~TODO przed publikacją: produkt `remove_ads` w Play Console~~ — nieaktualne, płatności usunięte w feature/030
 
 ## Zrobione (feature/008-logo)
 - [x] Logo aplikacji — ikony launchera we wszystkich rozdzielczościach Android (mdpi/hdpi/xhdpi/xxhdpi/xI fouatnik+płomień)
@@ -121,7 +121,8 @@ Poprawki po testach Wojtka na telefonie.
 - [x] Przejechane na emulatorze w wersji release: aktualizacja przez `adb install -r` zachowuje dane (jednostka, pojazdy, przejazdy, łańcuch licznika); adres jednostki podpowiada się jako „Skąd" i jako miejscowość w nowym wyjeździe; **drugi pojazd ma puste pola kierowcy i dowódcy**; „Otwórz" w powiadomieniu przenosi do ewidencji; wyjazd alarmowy dopisuje się z trasą „Kielno, Oliwska 12 – Kielno"; nowe komunikaty rozróżniają „Brak godziny przyjazdu" od „Brak godziny przyjazdu i licznika"
 
 ## Do obserwacji
-- [ ] **`OutOfMemoryError` w wątku AdMob** (`com.google.android.gms.internal.ads`) po ~7 godzinach ciągłej pracy na emulatorze z reklamami testowymi — proces zabity, sterta 192 MB wyczerpana. Nie pochodzi z naszego kodu i nie da się tego przypisać konkretnemu błędowi na podstawie jednego zdarzenia. `BannerAdWidget` ładuje baner raz i zwalnia go w `dispose`, więc na oko jest poprawny. Warto sprawdzić, czy zgłosi to ktoś przy normalnym użyciu — jeśli tak, podejrzany numer jeden to tworzenie osobnego banera na każdym ekranie przy częstej nawigacji
+- [x] ~~`OutOfMemoryError` w wątku AdMob~~ — **hipoteza obalona**. Podejrzewałem reklamy, bo awaria wystąpiła w wątku `com.google.android.gms.internal.ads`. Po usunięciu reklam w feature/030 emulator **nadal pada** w podobnych odstępach, więc przyczyna leży po stronie samego emulatora na tej maszynie (pamięć zajmowana przez długie sesje i buildy Gradle), a nie aplikacji. Odnotowane, żeby nie szukać drugi raz w złym miejscu
+- [ ] **Emulator pada co kilkanaście–kilkadziesiąt minut** przy dłuższych sesjach testowych. Nie blokuje pracy, ale przerywa weryfikację w połowie przepływu. Obejście: sprawdzać ekrany przez `uiautomator dump` (tekst) zamiast zrzutów ekranu — szybciej, taniej i przeżywa restart
 
 ## Zrobione (feature/026-ewidencja-przejazdow)
 - [x] **Ewidencja przejazdów pojazdu** — odpowiednik miesięcznej karty drogowej. Karta nie jest osobnym bytem do zakładania, tylko widokiem: para *pojazd + miesiąc* nad zbiorem przejazdów. Nie trzeba niczego otwierać na początku miesiąca ani zamykać na końcu
@@ -156,22 +157,6 @@ Poprawki po testach Wojtka na telefonie.
 - [x] **Naprawiono: podwojony numer domu przy adresie z GPS** („Józefa Sikorskiego 12 12"). Przyczyna potwierdzona w źródłach biblioteki `geocoding`: pole `street` to **gotowa linia adresu, już zawierająca numer** (na Androidzie fragment sformatowanego adresu do pierwszego przecinka), a nie sama nazwa ulicy. Doklejanie do niej `subThoroughfare` dublowało numer. Teraz numer dokładamy wyłącznie do nazwy ulicy (`thoroughfare`), a gotową linię bierzemy bez zmian
 - [x] **Adresy wiejskie**: gdy geokoder podaje miejscowość jako ulicę („Kielno 85"), w polu ulicy zostaje sam numer — adres brzmi „Kielno, 85" zamiast „Kielno, Kielno 85"
 - [x] 8 testów jednostkowych `buildStreet`, w tym dokładny przypadek ze zgłoszenia i zabezpieczenie, by numer „12" nie był uznany za obecny w „112"
-
-## Do zrobienia — Wyjazdy gospodarcze / tankowanie
-Zgłoszenie od Sebastiana: osobna ewidencja wyjazdów niealarmowych
-(gospodarczy, tankowanie, przewóz sprzętu), oddzielona od wyjazdów
-alarmowych — inna lista, inne statystyki.
-
-**Proponowane pola:** data, godzina wyjazdu i powrotu, pojazd, kierowca,
-przebieg (licznik przed/po lub sam dystans), miejscowość/trasa, cel wyjazdu
-(np. „Gdynia SLRR — wyjazd po pompę na plażę"), uwagi.
-
-**Powiązanie:** ten temat pokrywa się z zapisanym wcześniej pomysłem
-„przebieg pojazdów (kilometry)" dla Gospodarza — obie rzeczy powinny
-powstać razem, bo to ten sam zestaw danych i ten sam odbiorca.
-
-**Do ustalenia z Deringiem przed implementacją:** dokładny zestaw pól i to,
-czy rozliczenie ma być miesięczne per pojazd, czy per wyjazd.
 
 ## Zrobione (feature/022-role-administratora)
 
@@ -210,7 +195,7 @@ czy rozliczenie ma być miesięczne per pojazd, czy per wyjazd.
 - [x] **Wielkie litery w polach tekstowych** — 8 miejsc: przekazanie mienia (miejsce zdarzenia, rodzaj podmiotu, adres, opis, uwagi), nazwa jednostki w Ustawieniach i onboardingu, pole wyszukiwania/tworzenia ratownika w zastępach. Celowo pominięte: wyszukiwarki, numer ewidencyjny i numer telefonu
 
 ### Do przetestowania z użytkownikami
-- Czy na liście podpowiedzi w zastępach brakuje informacji o uprawnieniach i badaniach? Usunięto je (wariant C), bo zlewały się z nazwiskiem. Alternatywy, gdyby okazały się potrzebne: **(A)** nazwisko pogrubione + uprawnienia mniejszym, szarym drukiem, **(B)** nazwisko pogrubione + uprawnienia kolorem (zielony ✓ / pomarańczowy ✗), spójnie z odznakami pokazywanymi po wyborze
+- [x] ~~Czy na liście podpowiedzi w zastępach brakuje informacji o uprawnieniach i badaniach?~~ — **rozstrzygnięte w feature/024**. Okazało się, że brakuje: wybrano wariant zbliżony do (A), czyli nazwisko pogrubione + wyłącznie to uprawnienie, które dotyczy wybieranego miejsca (kierowca / dowódca / KPP) i wyłącznie u osób, które je mają. Bez „✗ brak uprawnień" przy każdym nazwisku — dzięki temu na liście mieści się prawie dwa razy więcej osób
 
 ## Zrobione (feature/020-poprawki-raportu)
 
@@ -277,8 +262,8 @@ czy rozliczenie ma być miesięczne per pojazd, czy per wyjazd.
 - [x] Naprawiono: zapis Ustawień tworzył nową konfigurację od zera, kasując konto właściciela i zapamiętaną drukarkę
 
 ### Do rozważenia w kolejnym branchu
-- Podgląd wydruku przed wysłaniem na drukarkę Bluetooth (obecnie druk startuje od razu)
-- Powiększyć drobny tekst podstawy prawnej („zgodnie z § 21 ust. 2 pkt 2...") — przy 6 pkt i 203 DPI jest na granicy czytelności
+- Podgląd wydruku przed wysłaniem na drukarkę Bluetooth (obecnie druk startuje od razu) — **nadal otwarte**, powtórzone niżej w „Kolejne branche"
+- [x] ~~Powiększyć drobny tekst podstawy prawnej~~ — **zrobione w feature/017**: 6 → 7 pkt, tyle co reszta treści formularza
 
 ## Zrobione (feature/015-przekazanie-mienia)
 - [x] **Nowa funkcja „Przekazanie mienia"**: osobny dokument od wyjazdu — „Potwierdzenie przekazania terenu, obiektu lub mienia objętego działaniem ratowniczym" (§ 21 ust. 2 pkt 2 rozp. MSWiA z 17.09.2021 r.)
@@ -321,58 +306,16 @@ Do rozstrzygnięcia przed implementacją:
 
 Do potwierdzenia u Deringa. Do tego czasu jedna liczba zostaje i działa.
 
-### Usunięcie reklam + „postaw mi kawę”
-**Decyzja podjęta 12.08.2026: rezygnujemy z reklam.**
-
-Powód nie jest taki, że reklamy przeszkadzają — baner na dole nikomu nie wadził.
-Powód jest taki, że przy realnej skali tej aplikacji **nie zarabiają nic
-sensownego, a komplikują prostą sytuację prawną**.
-
-Arytmetyka na której oparta jest decyzja (przy założeniu 1000 użytkowników
-i ~3000 wypełnionych raportów rocznie):
-
-| Format | Stawka / 1000 wyśw. | Wyświetleń rocznie | Przychód rocznie |
-|---|---|---|---|
-| Baner na dole | 2–5 zł | 15–30 tys. | 30–150 zł |
-| Pełnoekranowa | 15–40 zł | ~3 tys. | 45–120 zł |
-| Filmik z nagrodą | 30–80 zł | 150–300 | 10–25 zł |
-
-Kluczowa obserwacja: pełnoekranowa płaci **ośmiokrotnie lepiej za wyświetlenie**,
-a daje mniej więcej tyle samo pieniędzy — bo wąskim gardłem jest liczba zdarzeń
-(3000 raportów), nie stawka. Zmiana formatu nie rusza rzędu wielkości, rusza
-tylko to, jak bardzo aplikacja przeszkadza przy zdarzeniu.
-
-Czego naprawdę kosztują reklamy (opłat **nie ma** — platforma zgód Google jest
-darmowa; kosztem jest praca i odpowiedzialność):
-- okno zgody RODO przy pierwszym uruchomieniu (wymagane dla użytkowników z UE
-  przy każdym formacie, także zwykłym banerze) — **nie jest wdrożone**,
-- polityka prywatności opisująca zbieranie identyfikatorów reklamowych,
-- deklaracja zbieranych danych w Google Play,
-- odpowiedzialność za to przetwarzanie po stronie autora aplikacji.
-
-Bez reklam aplikacja nie zbiera praktycznie nic — dane leżą na Dysku Google
-samego użytkownika. Polityka prywatności mieści się w akapicie.
-
-Do zrobienia:
-- [ ] Usunąć `google_mobile_ads`, `BannerAdWidget`, `AdService` i `showAdsProvider`
-- [ ] Usunąć sekcję „Premium / Wyłącz reklamy" z Ustawień wraz z `PurchaseService`
-- [ ] Usunąć `com.google.android.gms.ads.APPLICATION_ID` z `AndroidManifest.xml`
-- [ ] Dodać skromny przycisk **„Postaw mi kawę"** w „O aplikacji" (link zewnętrzny,
-      bez płatności w aplikacji — inaczej wchodzimy w regulamin płatności Google)
-- [ ] Sprawdzić, o ile schudnie APK (dziś 64 MB, spora część to biblioteka reklamowa)
-- [ ] Przy okazji odpada podejrzany o `OutOfMemoryError` z sekcji „Do obserwacji”
-
-Model płatny (roczna licencja na jednostkę) **odłożony do czasu, aż powstanie
-wydruk karty drogowej** — to jedyna funkcja, która realnie oszczędza komuś czas,
-więc dopiero po niej będzie wiadomo, czy ktokolwiek chce za to płacić. Uwaga na
-przyszłość: OSP finansuje gmina, a gmina kupuje na fakturę i przelew — subskrypcja
-w Google Play jest kupowana przez osobę prywatną kartą, bez faktury dla gminy.
-
 ### Funkcje ratownika — możliwe rozszerzenia
 Obecnie „Ratownik" jest **wyliczany**: brak kierowcy/dowódcy/KPP = ratownik.
+W feature/024 doszła stała, zaznaczona i nieaktywna pozycja „Ratownik" na górze
+listy funkcji — formularz nie wygląda już na niedokończony, ale mechanizm
+pod spodem został wyliczany.
+
 Rozważane alternatywy, gdyby to przestało wystarczać:
-- jawny checkbox „Ratownik" (wymaga pilnowania sprzeczności i uzupełnienia
-  istniejących wpisów),
+- jawny, odznaczalny checkbox „Ratownik" — **świadomie odrzucony w feature/024**:
+  byłby czwartym niezależnym przełącznikiem, możliwym do ustawienia sprzecznie
+  z pozostałymi i wymagającym migracji istniejących wpisów,
 - pełny słownik funkcji zamiast trzech flag (np. mechanik, operator sprzętu,
   ratownik wodny) — pozwoliłby też odróżnić uprawnienia od funkcji na wyjeździe.
 
@@ -386,11 +329,47 @@ Obecnie druk startuje od razu po kliknięciu.
 
 
 ### Przed publikacją w Play Store
-- [ ] Zastąpić testowe ID AdMob prawdziwymi w `ad_service.dart` i `AndroidManifest.xml` (patrz feature/007)
-- [ ] Zarejestrować produkt `remove_ads` w Google Play Console (patrz feature/007)
+- [ ] **Własny klucz podpisu** — dziś APK jest podpisany kluczem debug. Po zmianie klucza Android potraktuje aplikację jako inną i **każdy będzie musiał odinstalować przed aktualizacją, tracąc dane lokalne**. Im więcej osób dostanie wersję na kluczu debug, tym boleśniejsze. Wymaga dopisania nowego odcisku SHA-1 do klienta OAuth w Google Cloud, inaczej przestanie działać logowanie Google (błąd 10)
 - [ ] Grafiki do sklepu: ikona 512×512, feature graphic 1024×500, min. 2 screenshoty
-- [ ] Podbić wersję w `pubspec.yaml` (obecnie `1.0.0+1`)
+- [ ] Polityka prywatności — po usunięciu reklam aplikacja nie zbiera praktycznie nic (dane leżą na Dysku Google użytkownika), więc mieści się w akapicie
 - [ ] (opcjonalnie) Ikona monochromatyczna `<monochrome>` w adaptive icon — motywy Android 13+
+
+**Publikacja w Play daje też odpowiedź na pytanie o statystyki**: konsola pokazuje
+liczbę instalacji, odinstalowań, kraje i wersje Androida — bez dokładania
+czegokolwiek do aplikacji. Rozdawanie APK z Dysku nie daje żadnych liczb.
+Czego Play **nie** poda: nazw jednostek — te leżą na Dyskach użytkowników,
+a zbieranie ich wymagałoby zgód i polityki przetwarzania.
+
+### Adresy e-mail jednostek PSP — wysyłka raportu
+Raport da się dziś wysłać („Udostępnij / Wyślij"), ale adresata trzeba za każdym
+razem wpisać z ręki. Propozycja: **lista adresów do wyboru** przy wysyłce, plus
+możliwość wpisania własnego.
+
+Do przemyślenia przed implementacją:
+- gdzie trzymać adres domyślny — przy jednostce (jedna komenda powiatowa dla całej
+  OSP) czy jako lista wielu odbiorców (KP PSP, gmina, zarząd gminny),
+- czy lista ma być wspólna dla jednostki (synchronizowana przez Dysk, edytowalna
+  przez administratora), czy lokalna na telefonie,
+- czy podpowiadać ostatnio użyty adres — przy jednym stałym odbiorcy to wystarczy
+  zamiast całej listy,
+- czy dołączać PDF automatycznie, czy zostawić obecny mechanizm udostępniania.
+
+Najprostszy wariant, który pewnie załatwia 90% potrzeby: **jedno pole „domyślny
+adres e-mail" w danych jednostki**, podstawiane jako adresat, edytowalne przy
+każdej wysyłce. Rozbudowa do listy dopiero, gdy okaże się potrzebna.
 
 ### Pomysły do rozważenia
 - [ ] **e-Remiza integration**: Ręczne wpisywanie z przyciskami kopiowania do schowka. Na razie nierealne — do rozważenia w przyszłości.
+
+## Zrobione (feature/031-backlog-kawa-psp)
+- [x] **Przegląd i uporządkowanie backlogu** — sekcje „do zrobienia", które zostały już zrealizowane, przestały być listą zadań, a stały się mylącym śladem. Usunięte lub oznaczone jako nieaktualne:
+  - „Wyjazdy gospodarcze / tankowanie" (zgłoszenie Sebastiana) — zrealizowane w feature/026 jako ewidencja przejazdów; pytania do Deringa o zestaw pól rozstrzygnięte w rozmowie
+  - „Usunięcie reklam + postaw mi kawę" — zrealizowane w feature/030
+  - dwa `TODO przed publikacją` z feature/007 (prawdziwe ID AdMob, produkt `remove_ads`) — bezprzedmiotowe po usunięciu reklam i płatności
+  - „Podbić wersję (obecnie 1.0.0+1)" — wersja idzie już własnym torem, dziś 1.2.0+4
+  - „Powiększyć drobny tekst podstawy prawnej" — zrobione w feature/017 (6 → 7 pkt)
+  - „Czy na liście podpowiedzi brakuje uprawnień?" — rozstrzygnięte w feature/024 na korzyść wariantu (A)
+- [x] **Sprostowana obserwacja o `OutOfMemoryError`** — obwiniałem AdMob, bo awaria wystąpiła w jego wątku. Po usunięciu reklam emulator pada dalej, więc przyczyna jest po stronie maszyny, nie aplikacji. Zapisane wprost, żeby nikt nie szukał drugi raz w złym miejscu
+- [x] **Przycisk „Postaw mi kawę"** w „O aplikacji" — widoczny od razu, ale bez odnośnika. Do czasu ustawienia adresu kliknięcie mówi wprost, że zbiórki jeszcze nie ma, zamiast prowadzić donikąd. Uruchomienie sprowadza się do wpisania linku w `_coffeeUrl` w [info_screen.dart](lib/screens/info/info_screen.dart)
+- [x] **Nowy punkt w backlogu: adresy e-mail jednostek PSP** przy wysyłce raportu — lista do wyboru plus możliwość wpisania własnego adresu, z rozpisanymi pytaniami do rozstrzygnięcia i propozycją najprostszego wariantu na start
+- [x] Do „Przed publikacją w Play Store" dopisany **własny klucz podpisu** (dziś APK idzie na kluczu debug) i polityka prywatności, wraz z notatką, że publikacja w Play jest jedyną czystą drogą do statystyk pobrań

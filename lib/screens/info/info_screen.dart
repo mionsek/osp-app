@@ -20,7 +20,8 @@ class InfoScreen extends StatelessWidget {
     }
   }
 
-  /// Adres zbiórki „na kawę". Pusty = przycisk się nie pokazuje.
+  /// Adres zbiórki „na kawę" — wystarczy wpisać tu link i przycisk zaczyna
+  /// działać, bez zmian w pozostałym kodzie.
   ///
   /// Link zewnętrzny, **nie** płatność w aplikacji — płatność wewnątrz
   /// aplikacji wchodzi w regulamin rozliczeń Google, czyli dokładnie tę
@@ -28,6 +29,16 @@ class InfoScreen extends StatelessWidget {
   static const String _coffeeUrl = '';
 
   Future<void> _launchCoffee(BuildContext context) async {
+    // Dopóki adres nie jest ustawiony, przycisk jest widoczny, ale mówi wprost,
+    // że zbiórki jeszcze nie ma — zamiast prowadzić donikąd albo udawać błąd.
+    if (_coffeeUrl.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Zbiórka nie jest jeszcze uruchomiona — dzięki za chęci!'),
+        ),
+      );
+      return;
+    }
     if (!await launchUrl(
       Uri.parse(_coffeeUrl),
       mode: LaunchMode.externalApplication,
@@ -277,15 +288,13 @@ class InfoScreen extends StatelessWidget {
                   'Raporty OSP — Propozycja usprawnienia',
                 ),
               ),
-              if (_coffeeUrl.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                _ContactButton(
-                  icon: Icons.coffee,
-                  label: 'Postaw mi kawę',
-                  subtitle: 'Aplikacja jest darmowa i bez reklam',
-                  onTap: () => _launchCoffee(context),
-                ),
-              ],
+              const SizedBox(height: 8),
+              _ContactButton(
+                icon: Icons.coffee,
+                label: 'Postaw mi kawę',
+                subtitle: 'Aplikacja jest darmowa i bez reklam',
+                onTap: () => _launchCoffee(context),
+              ),
               const SizedBox(height: 32),
 
               // --- Autor ---
