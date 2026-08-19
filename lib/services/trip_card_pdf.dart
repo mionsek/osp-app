@@ -26,6 +26,10 @@ class TripCardPdf {
     await Printing.layoutPdf(
       onLayout: (_) => doc.save(),
       name: _fileName(vehicle, year, month),
+      // Bez tego okno druku startuje z domyślnym `PdfPageFormat.standard`
+      // (US Letter, pionowo) i wciska poziomą kartę na pionową kartkę —
+      // 12 kolumn robi się wtedy nieczytelne.
+      format: PdfPageFormat.a4.landscape,
     );
   }
 

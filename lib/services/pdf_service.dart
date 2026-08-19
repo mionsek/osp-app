@@ -16,8 +16,23 @@ class PdfService {
   // Wspólne metody druku / udostępniania
   // ---------------------------------------------------------------------------
 
-  static Future<void> _layoutPdf(pw.Document doc, String filename) async {
-    await Printing.layoutPdf(onLayout: (_) => doc.save(), name: filename);
+  /// Otwiera systemowe okno druku.
+  ///
+  /// [format] jest **obowiązkowy i musi odpowiadać stronie w dokumencie**.
+  /// Bez niego `Printing.layoutPdf` przyjmuje domyślne `PdfPageFormat.standard`
+  /// (US Letter, pionowo), więc okno druku startuje w pionie i wciska naszą
+  /// poziomą stronę na pionową kartkę — wydruk wychodzi zmniejszony
+  /// i nieczytelny, zamiast wypełnić arkusz.
+  static Future<void> _layoutPdf(
+    pw.Document doc,
+    String filename, {
+    required PdfPageFormat format,
+  }) async {
+    await Printing.layoutPdf(
+      onLayout: (_) => doc.save(),
+      name: filename,
+      format: format,
+    );
   }
 
   static Future<void> _sharePdf(pw.Document doc, String filename) async {
@@ -34,7 +49,7 @@ class PdfService {
     List<Firefighter> allFirefighters,
   ) async {
     final pdf = await _buildPdf(report, config, allFirefighters);
-    await _layoutPdf(pdf, _fileName(report));
+    await _layoutPdf(pdf, _fileName(report), format: PdfPageFormat.a4.landscape);
   }
 
   static Future<void> generateAndShare(
@@ -55,7 +70,7 @@ class PdfService {
     UnitConfig config,
   ) async {
     final pdf = await _buildStatsPdf(stats, config);
-    await _layoutPdf(pdf, _statsFileName(stats));
+    await _layoutPdf(pdf, _statsFileName(stats), format: PdfPageFormat.a4);
   }
 
   static Future<void> generateAndShareStats(
@@ -76,7 +91,7 @@ class PdfService {
     Firefighter? handoverFirefighter,
   ) async {
     final pdf = await _buildHandoverPdf(handover, config, handoverFirefighter);
-    await _layoutPdf(pdf, _handoverFileName(handover));
+    await _layoutPdf(pdf, _handoverFileName(handover), format: PdfPageFormat.a4.landscape);
   }
 
   static Future<void> generateAndShareHandover(
