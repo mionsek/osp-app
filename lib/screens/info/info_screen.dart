@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../core/constants/constants.dart';
 
 class InfoScreen extends StatelessWidget {
   const InfoScreen({super.key});
@@ -26,7 +27,7 @@ class InfoScreen extends StatelessWidget {
   /// Link zewnętrzny, **nie** płatność w aplikacji — płatność wewnątrz
   /// aplikacji wchodzi w regulamin rozliczeń Google, czyli dokładnie tę
   /// komplikację, dla której uniknięcia zrezygnowaliśmy z reklam.
-  static const String _coffeeUrl = '';
+  static const String _coffeeUrl = kCoffeeUrl;
 
   Future<void> _launchCoffee(BuildContext context) async {
     // Dopóki adres nie jest ustawiony, przycisk jest widoczny, ale mówi wprost,
@@ -34,7 +35,7 @@ class InfoScreen extends StatelessWidget {
     if (_coffeeUrl.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Zbiórka nie jest jeszcze uruchomiona — dzięki za chęci!'),
+          content: Text(kCoffeeNotReadyMessage),
         ),
       );
       return;
@@ -108,8 +109,9 @@ class InfoScreen extends StatelessWidget {
               const SizedBox(height: 8),
               const Text(
                 'Aplikacja dla Ochotniczych Straży Pożarnych — do wypełniania '
-                'na miejscu zdarzenia dwóch dokumentów wymaganych po '
-                'działaniach ratowniczych:',
+                'na miejscu zdarzenia dokumentów wymaganych po działaniach '
+                'ratowniczych oraz do prowadzenia ewidencji przejazdów '
+                'pojazdów:',
                 style: TextStyle(height: 1.5),
               ),
               const SizedBox(height: 12),
@@ -126,17 +128,28 @@ class InfoScreen extends StatelessWidget {
                     'zakończeniu działań (§ 21 ust. 2 pkt 2 rozporządzenia '
                     'MSWiA z 17 września 2021 r.).',
               ),
+              const _DocumentItem(
+                title: 'Miesięczna karta drogowa pojazdu',
+                description:
+                    'Ewidencja wszystkich przejazdów — alarmowych, '
+                    'gospodarczych i tankowania — z licznikiem, trasą '
+                    'i czasem pracy urządzeń specjalnych. Jedna karta '
+                    'na pojazd i miesiąc, do wydruku dla gminy.',
+              ),
               const SizedBox(height: 12),
               const Text(
-                'Oba dokumenty powstają w układzie zgodnym z papierowymi '
-                'formularzami — na kartce A4 drukują się dwa identyczne '
-                'egzemplarze A5 obok siebie, do rozcięcia wzdłuż '
+                'Dokumenty powstają w układzie zgodnym z papierowymi '
+                'formularzami. Potwierdzenia drukują się po dwa identyczne '
+                'egzemplarze A5 obok siebie na kartce A4, do rozcięcia wzdłuż '
                 'przerywanej linii: jeden zostaje w jednostce, drugi trafia '
-                'do drugiej strony.\n\n'
+                'do drugiej strony. Karta drogowa drukuje się na A4 poziomo.\n\n'
                 'Aplikacja prowadzi też ewidencję ratowników (z terminami '
                 'badań lekarskich) i pojazdów, liczy roczne statystyki '
                 'i potrafi synchronizować dane między telefonami całej '
-                'jednostki przez Dysk Google.',
+                'jednostki przez Dysk Google.\n\n'
+                'Jest darmowa, nie wyświetla reklam i nie zbiera danych — '
+                'wszystko, co wpiszesz, zostaje na Twoim telefonie i na '
+                'Dysku Google Twojej jednostki.',
                 style: TextStyle(height: 1.5),
               ),
               const SizedBox(height: 24),
@@ -191,6 +204,17 @@ class InfoScreen extends StatelessWidget {
                     'właścicielowi, policji czy innej służbie. Możesz '
                     'powiązać je z wyjazdem — dane zdarzenia uzupełnią się '
                     'same.',
+              ),
+              const _HowToItem(
+                icon: Icons.route,
+                title: 'Ewidencja przejazdów',
+                description:
+                    'Wyjazd alarmowy dopisuje się tu sam po zapisaniu '
+                    'raportu — zostaje uzupełnić stan licznika po powrocie. '
+                    'Gospodarcze i tankowanie dodajesz ręcznie. Stan licznika '
+                    'przed wyjazdem podstawia się z poprzedniego przejazdu, '
+                    'więc wpisujesz tylko jedną liczbę. Kartę za dany miesiąc '
+                    'wydrukujesz przyciskiem na górze ekranu.',
               ),
               const _HowToItem(
                 icon: Icons.print,

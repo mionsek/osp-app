@@ -120,9 +120,39 @@ Poprawki po testach Wojtka na telefonie.
 - [x] 8 nowych testów (łącznie 112): aktualizacja przejazdu z raportu, nienaruszalność danych z ewidencji, deterministyczne znaczniki przy uzupełnianiu historii, składanie adresu jednostki
 - [x] Przejechane na emulatorze w wersji release: aktualizacja przez `adb install -r` zachowuje dane (jednostka, pojazdy, przejazdy, łańcuch licznika); adres jednostki podpowiada się jako „Skąd" i jako miejscowość w nowym wyjeździe; **drugi pojazd ma puste pola kierowcy i dowódcy**; „Otwórz" w powiadomieniu przenosi do ewidencji; wyjazd alarmowy dopisuje się z trasą „Kielno, Oliwska 12 – Kielno"; nowe komunikaty rozróżniają „Brak godziny przyjazdu" od „Brak godziny przyjazdu i licznika"
 
-## Do obserwacji
-- [x] ~~`OutOfMemoryError` w wątku AdMob~~ — **hipoteza obalona**. Podejrzewałem reklamy, bo awaria wystąpiła w wątku `com.google.android.gms.internal.ads`. Po usunięciu reklam w feature/030 emulator **nadal pada** w podobnych odstępach, więc przyczyna leży po stronie samego emulatora na tej maszynie (pamięć zajmowana przez długie sesje i buildy Gradle), a nie aplikacji. Odnotowane, żeby nie szukać drugi raz w złym miejscu
-- [ ] **Emulator pada co kilkanaście–kilkadziesiąt minut** przy dłuższych sesjach testowych. Nie blokuje pracy, ale przerywa weryfikację w połowie przepływu. Obejście: sprawdzać ekrany przez `uiautomator dump` (tekst) zamiast zrzutów ekranu — szybciej, taniej i przeżywa restart
+## Zbadane — „memory error" (feature/032)
+Pod jedną nazwą kryły się **dwa niezależne zjawiska**. Zmierzone, nie zgadnięte.
+
+**1. `OutOfMemoryError` w aplikacji — dotyczył wersji z reklamami.**
+Sterta Javy procesu wyczerpała limit 192 MB (`growth limit 201326592`).
+Ślad stosu wskazywał wątek `com.google.android.gms.internal.ads`, przez co
+obwiniłem AdMob — **i to był błąd w rozumowaniu**: ślad OOM pokazuje tego, kto
+poprosił o ostatni bajt, a nie tego, kto zajął pamięć. Baner był renderowany
+w WebView na siedmiu ekranach, więc jako konsument jest wiarygodny, ale sam
+ślad tego nie dowodził.
+
+Pomiar aplikacji **po usunięciu reklam** (12 cykli nawigacji + wymuszony trim):
+- sterta Javy: 1,3 MB → 4,4 MB → 4,0 MB po odśmiecaniu (limit 192 MB),
+- `Views: 8 → 8`, `Activities: 1 → 1`, `AppContexts: 6 → 6` — **płasko**,
+- `WebViews: 0` (z reklamami był jeden na ekran).
+
+Niezmienne liczniki widoków i aktywności to sygnatura braku wycieku.
+**Aplikacja nie przecieka.**
+
+**2. Znikanie emulatora — to nie była awaria aplikacji ani emulatora.**
+- baza crashpad (`%TEMP%\AndroidEmulator\emu-crash-*.db\reports`) **pusta** —
+  gdyby emulator się wywalał, byłyby zrzuty,
+- host miał 16,6 GB wolnej pamięci z 32 GB — nie było ciśnienia na RAM,
+- `emulator.exe` okazał się procesem **osieroconym**: jego rodzic (powłoka,
+  w której go uruchamiałem w tle) już nie istniał.
+
+Czyli emulator był **kończony razem z powłoką**, z której go startowałem —
+czasem przeżywał jako sierota, czasem szedł z nią na dno. Stąd wrażenie
+losowych awarii i brak jakichkolwiek logów.
+
+**Wniosek praktyczny:** emulator trzeba uruchamiać odczepiony od procesu
+narzędzia, a nie jako zadanie w tle. Do odczytu ekranów i tak lepszy jest
+`uiautomator dump` (tekst) niż zrzuty — szybszy, tańszy i przeżywa restart.
 
 ## Zrobione (feature/026-ewidencja-przejazdow)
 - [x] **Ewidencja przejazdów pojazdu** — odpowiednik miesięcznej karty drogowej. Karta nie jest osobnym bytem do zakładania, tylko widokiem: para *pojazd + miesiąc* nad zbiorem przejazdów. Nie trzeba niczego otwierać na początku miesiąca ani zamykać na końcu
@@ -373,3 +403,16 @@ każdej wysyłce. Rozbudowa do listy dopiero, gdy okaże się potrzebna.
 - [x] **Przycisk „Postaw mi kawę"** w „O aplikacji" — widoczny od razu, ale bez odnośnika. Do czasu ustawienia adresu kliknięcie mówi wprost, że zbiórki jeszcze nie ma, zamiast prowadzić donikąd. Uruchomienie sprowadza się do wpisania linku w `_coffeeUrl` w [info_screen.dart](lib/screens/info/info_screen.dart)
 - [x] **Nowy punkt w backlogu: adresy e-mail jednostek PSP** przy wysyłce raportu — lista do wyboru plus możliwość wpisania własnego adresu, z rozpisanymi pytaniami do rozstrzygnięcia i propozycją najprostszego wariantu na start
 - [x] Do „Przed publikacją w Play Store" dopisany **własny klucz podpisu** (dziś APK idzie na kluczu debug) i polityka prywatności, wraz z notatką, że publikacja w Play jest jedyną czystą drogą do statystyk pobrań
+
+## Zrobione (feature/032-kawa-druk-ewidencji)
+- [x] **Odnośnik do zbiórki „na kawę"** — `https://buycoffee.to/mionsek`, wyciągnięty do wspólnej stałej `kCoffeeUrl`, żeby nie żył w dwóch miejscach. Widżety HTML z buycoffee są do stron WWW — w aplikacji otwieramy sam adres w przeglądarce
+- [x] **Kawa w stopce ekranu głównego** — dyskretny odnośnik tekstowy pod linijką o autorze, a nie kafelek w menu. Kafelki to czynności (dodaj wyjazd, ewidencja, ustawienia); prośba o wsparcie nie należy do tej samej kategorii i nie powinna stać w jednym rzędzie z „Dodaj wyjazd". Stopka „o autorze" to naturalne miejsce na „możesz mu podziękować"
+- [x] **Wydruk miesięcznej karty drogowej** ([trip_card_pdf.dart](lib/services/trip_card_pdf.dart)) — A4 poziomo, 12 kolumn odtworzonych z druku gminnego: Lp., data, dysponent, trasa, cel, kierowca, odjazd (godzina i licznik), przyjazd (godzina i licznik), minuty pracy urządzeń specjalnych, podpis. Przyciski „Drukuj" i „Udostępnij" na ekranie ewidencji — drukują to, co widać, czyli wybraną parę pojazd + miesiąc, bez osobnego okna wyboru zakresu
+- [x] Tabela dopełniana do 16 wierszy — karta z trzema przejazdami ma wyglądać jak formularz, a nie jak urwana kartka; reszta zostaje do dopisania długopisem, jak w papierowym druku
+- [x] **Rozliczenie zużycia paliwa zostaje puste** — normy i liczba linii różnią się między gminami (porównane Kielno, Osielsko, Świętajno), a aplikacja ich nie zna. Wydrukowanie zmyślonych wartości byłoby gorsze niż zostawienie miejsca na długopis. Ta sama zasada, co przy przekazaniu mienia
+- [x] Osobny plik zamiast kolejnych 250 linii w `PdfService` (już 1177 linii) — karta drogowa nie dzieli z formularzami KP PSP niczego poza biblioteką `pdf`
+- [x] **„O aplikacji" zaktualizowane** — dopisana karta drogowa jako trzeci dokument, krok „Ewidencja przejazdów" w instrukcji (z wyjaśnieniem łańcucha licznika i automatycznego dopisywania wyjazdów alarmowych) oraz zdanie, że aplikacja jest darmowa, bez reklam i nie zbiera danych
+- [x] Zweryfikowane na emulatorze: okno druku otwiera się bez błędów, karta renderuje się w całości, a łańcuch licznika widać na wydruku (przejazd 1 kończy na 1042, przejazd 2 od 1042 startuje)
+
+### Do sprawdzenia na prawdziwej drukarce
+- [ ] Karta jest w formacie **A4 poziomo**, a systemowe okno druku Androida domyślnie proponuje orientację pionową i skaluje stronę na mniejszą. W oknie druku trzeba przestawić orientację na poziomą. Do sprawdzenia, czy na fizycznej drukarce dzieje się to samo — jeśli tak, warto dopisać podpowiedź przy przycisku

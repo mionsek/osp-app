@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../../core/constants/constants.dart';
 import '../../models/sync_state.dart';
 import '../../providers/providers.dart';
 
@@ -21,6 +23,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     super.initState();
     _gettingStartedDismissed =
         ref.read(databaseServiceProvider).isGettingStartedDismissed;
+  }
+
+  Future<void> _openCoffee() async {
+    if (kCoffeeUrl.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text(kCoffeeNotReadyMessage)),
+        );
+      }
+      return;
+    }
+    final ok = await launchUrl(
+      Uri.parse(kCoffeeUrl),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Nie udało się otworzyć strony')),
+      );
+    }
   }
 
   Future<void> _dismissGettingStarted() async {
@@ -182,6 +204,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 'Aplikację stworzył Dawid Mionskowski',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              ),
+              // Podziękowanie, nie funkcja aplikacji — dlatego zwykły odnośnik
+              // w stopce „o autorze", a nie kafelek w menu obok „Dodaj wyjazd".
+              const SizedBox(height: 4),
+              TextButton.icon(
+                onPressed: _openCoffee,
+                icon: const Icon(Icons.coffee, size: 15),
+                label: const Text('Postaw mi kawę'),
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.grey[600],
+                  textStyle: const TextStyle(fontSize: 12),
+                  minimumSize: Size.zero,
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
               ),
               // Zapas na systemowy pasek nawigacji — bez tego ostatnie
               // elementy listy chowają się za przyciskami telefonu.

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../models/models.dart';
 import '../../providers/providers.dart';
 import '../../services/trip_odometer.dart';
+import '../../services/trip_card_pdf.dart';
 
 /// Ewidencja przejazdów pojazdu — odpowiednik miesięcznej karty drogowej.
 ///
@@ -45,7 +46,23 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Ewidencja przejazdów')),
+      appBar: AppBar(
+        title: const Text('Ewidencja przejazdów'),
+        actions: [
+          if (vehicles.isNotEmpty) ...[
+            IconButton(
+              icon: const Icon(Icons.print),
+              tooltip: 'Drukuj kartę drogową',
+              onPressed: () => _printCard(vehicles, share: false),
+            ),
+            IconButton(
+              icon: const Icon(Icons.share),
+              tooltip: 'Udostępnij / wyślij kartę',
+              onPressed: () => _printCard(vehicles, share: true),
+            ),
+          ],
+        ],
+      ),
       floatingActionButton: vehicles.isEmpty
           ? null
           : FloatingActionButton.extended(
@@ -55,6 +72,55 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
             ),
       body: vehicles.isEmpty ? _noVehicles(context) : _card(context, vehicles),
     );
+  }
+
+  /// Drukuje lub udostępnia kartę drogową wybranego pojazdu za wybrany miesiąc.
+  ///
+  /// Karta powstaje z tego, co widać na ekranie — ta sama para pojazd + miesiąc,
+  /// więc nie ma osobnego okna wyboru zakresu.
+  Future<void> _printCard(List<Vehicle> vehicles, {required bool share}) async {
+    final vehicle = vehicles.where((v) => v.id == _vehicleId).firstOrNull;
+    if (vehicle == null) return;
+
+    final trips = ref.read(tripsForCardProvider(
+      (vehicleId: _vehicleId!, year: _year, month: _month),
+    ));
+
+    if (trips.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Brak przejazdów w tym miesiącu — nie ma czego drukować'),
+        ),
+      );
+      return;
+    }
+
+    final config = ref.read(unitConfigProvider);
+    try {
+      if (share) {
+        await TripCardPdf.shareCard(
+          trips: trips,
+          vehicle: vehicle,
+          config: config,
+          year: _year,
+          month: _month,
+        );
+      } else {
+        await TripCardPdf.printCard(
+          trips: trips,
+          vehicle: vehicle,
+          config: config,
+          year: _year,
+          month: _month,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Nie udało się przygotować wydruku: $e')),
+        );
+      }
+    }
   }
 
   Widget _noVehicles(BuildContext context) {
