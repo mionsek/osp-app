@@ -199,26 +199,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 icon: const Icon(Icons.exit_to_app),
                 label: const Text('Wyjście'),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 24),
+              _CoffeeCard(onTap: _openCoffee),
+              const SizedBox(height: 16),
+              // Podpis autora zostaje ostatni — najdrobniejszy element strony,
+              // pod wszystkim innym.
               Text(
                 'Aplikację stworzył Dawid Mionskowski',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-              ),
-              // Podziękowanie, nie funkcja aplikacji — dlatego zwykły odnośnik
-              // w stopce „o autorze", a nie kafelek w menu obok „Dodaj wyjazd".
-              const SizedBox(height: 4),
-              TextButton.icon(
-                onPressed: _openCoffee,
-                icon: const Icon(Icons.coffee, size: 15),
-                label: const Text('Postaw mi kawę'),
-                style: TextButton.styleFrom(
-                  foregroundColor: Colors.grey[600],
-                  textStyle: const TextStyle(fontSize: 12),
-                  minimumSize: Size.zero,
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
               ),
               // Zapas na systemowy pasek nawigacji — bez tego ostatnie
               // elementy listy chowają się za przyciskami telefonu.
@@ -275,6 +264,84 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 /// Krótka podpowiedź dla nowej jednostki: co trzeba uzupełnić, zanim da
 /// się dodać pierwszy wyjazd. Znika automatycznie, gdy komplet jest już
 /// wprowadzony.
+/// Karta „postaw mi kawę" w stopce ekranu głównego.
+///
+/// Świadomie **nie** jest kafelkiem menu: kafelki to czynności (dodaj wyjazd,
+/// ewidencja, ustawienia), a prośba o wsparcie nie należy do tej samej
+/// kategorii i nie powinna stać w jednym rzędzie z „Dodaj wyjazd".
+/// Stąd miejsce na samym dole, pod przyciskiem wyjścia.
+///
+/// Klikalna jest cała karta, nie osobny przycisk w środku — większy cel
+/// i mniej elementów na ekranie, który i tak jest długi.
+class _CoffeeCard extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _CoffeeCard({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    // Brąz jest już w palecie aplikacji (przekazania mienia) i pasuje
+    // tematycznie — nie wprowadzamy nowego koloru dla jednej karty.
+    const brown = Color(0xFF6D4C41);
+
+    return Material(
+      color: const Color(0xFFF5EFEB),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: brown.withValues(alpha: 0.25)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: brown.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.coffee, size: 20, color: brown),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Aplikacja jest w pełni darmowa i bez reklam.',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        height: 1.35,
+                        color: Colors.grey[800],
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    const Text(
+                      'Podoba Ci się? Postaw mi kawę!',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: brown,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 4),
+              const Icon(Icons.open_in_new, size: 16, color: brown),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _GettingStartedCard extends StatelessWidget {
   final bool hasVehicles;
   final bool hasFirefighters;
