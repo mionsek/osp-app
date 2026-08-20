@@ -1,3 +1,4 @@
+import '../../../core/utils/bottom_inset.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -58,7 +59,7 @@ class StepSummary extends ConsumerWidget {
       // Zapas na systemowy pasek nawigacji telefonu — pod spodem jest
       // przycisk zapisu raportu.
       padding: EdgeInsets.fromLTRB(
-          20, 20, 20, 20 + MediaQuery.viewPaddingOf(context).bottom),
+          20, 20, 20, 20 + context.bottomInset()),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -223,7 +224,7 @@ class _CrewMemberRow extends StatelessWidget {
           SizedBox(width: 120, child: Text(role)),
           Expanded(
             child: Text(
-              firefighter?.fullName ?? '—',
+              firefighter?.lastNameFirst ?? '—',
               style: const TextStyle(fontWeight: FontWeight.w500),
             ),
           ),

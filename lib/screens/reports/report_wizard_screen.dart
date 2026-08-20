@@ -285,7 +285,7 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
   Future<int> _addToVehicleLog(Report report) async {
     final db = ref.read(databaseServiceProvider);
     final notifier = ref.read(vehicleTripsProvider.notifier);
-    String driverName(String id) => db.getFirefighter(id)?.fullName ?? '';
+    String driverName(String id) => db.getFirefighter(id)?.lastNameFirst ?? '';
 
     // Najpierw odśwież przejazdy już powiązane z tym raportem — dopisana
     // godzina powrotu albo zmieniony kierowca muszą trafić do ewidencji.

@@ -1,3 +1,4 @@
+import '../../core/utils/bottom_inset.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -313,7 +314,7 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
         ),
       ),
       body: SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + MediaQuery.viewPaddingOf(context).bottom),
+        padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + context.bottomInset()),
         child: Form(
           key: _formKey,
           child: Column(

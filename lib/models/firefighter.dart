@@ -39,13 +39,24 @@ class Firefighter extends HiveObject {
     this.medicalExamExpiry,
   });
 
+  /// „Imię Nazwisko" — kolejność naturalna w mowie.
+  ///
+  /// **Nie używać do wyświetlania ani na wydrukach** — tam obowiązuje
+  /// [lastNameFirst]. Zostaje do dopasowywania wpisanego tekstu, bo ktoś
+  /// przyzwyczajony może wpisać nazwisko w tej kolejności.
   String get fullName => '$firstName $lastName';
-  String get fullNameWithRank =>
-      rank.trim().isEmpty ? fullName : '$fullName, $rank';
 
-  /// „Nazwisko Imię" — tak zgłaszamy skład telefonicznie do PSP, więc w tej
-  /// kolejności listujemy i wyszukujemy ratowników w aplikacji.
+  /// „Nazwisko Imię" — **jedyna poprawna kolejność do pokazania i wydruku**.
+  ///
+  /// Tak zgłaszamy skład telefonicznie do PSP i tak wygląda papierowa
+  /// dokumentacja, więc aplikacja musi być z tym spójna. Rozjazd między
+  /// wyborem (nazwisko pierwsze) a wydrukiem (imię pierwsze) był realnym
+  /// zgłoszeniem z testów.
   String get lastNameFirst => '$lastName $firstName'.trim();
+
+  /// „Nazwisko Imię, stopień" — do podpisów na drukach.
+  String get fullNameWithRank =>
+      rank.trim().isEmpty ? lastNameFirst : '$lastNameFirst, $rank';
 
   /// Funkcje pełnione w jednostce. Kierowca, dowódca i KPP to dodatkowe
   /// uprawnienia — kto nie ma żadnego, jest po prostu ratownikiem, więc

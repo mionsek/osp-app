@@ -1,3 +1,4 @@
+import '../../../core/utils/bottom_inset.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
@@ -57,7 +58,7 @@ class _StepCrewState extends ConsumerState<StepCrew>
     return SingleChildScrollView(
       // Zapas na systemowy pasek nawigacji telefonu.
       padding: EdgeInsets.fromLTRB(
-          20, 20, 20, 20 + MediaQuery.viewPaddingOf(context).bottom),
+          20, 20, 20, 20 + context.bottomInset()),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

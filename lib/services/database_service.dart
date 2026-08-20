@@ -25,6 +25,7 @@ class DatabaseService {
     Hive.registerAdapter(UnitConfigAdapter());
     Hive.registerAdapter(PropertyHandoverAdapter());
     Hive.registerAdapter(VehicleTripAdapter());
+    Hive.registerAdapter(TripEquipmentUseAdapter());
 
     await Future.wait([
       Hive.openBox<Vehicle>(_vehiclesBox),
@@ -130,7 +131,9 @@ class DatabaseService {
     if (query.isEmpty) return getAllFirefighters();
     final lower = query.toLowerCase();
     return getAllFirefighters()
-        .where((f) => f.fullName.toLowerCase().contains(lower))
+        .where((f) =>
+            f.lastNameFirst.toLowerCase().contains(lower) ||
+            f.fullName.toLowerCase().contains(lower))
         .toList();
   }
 
@@ -325,7 +328,7 @@ class DatabaseService {
       final trips = TripFromReport.build(
         report: report,
         stationAddress: stationAddress,
-        resolveDriverName: (id) => getFirefighter(id)?.fullName ?? '',
+        resolveDriverName: (id) => getFirefighter(id)?.lastNameFirst ?? '',
         existingVehicleIdsForReport: const {},
         createdBy: report.createdBy,
         // Znacznik z raportu, nie „teraz" — patrz komentarz w TripFromReport.
@@ -377,7 +380,7 @@ class DatabaseService {
       final updated = TripFromReport.applyReportFields(
         trip,
         report,
-        resolveDriverName: (id) => getFirefighter(id)?.fullName ?? '',
+        resolveDriverName: (id) => getFirefighter(id)?.lastNameFirst ?? '',
       );
       if (!updated) continue;
 

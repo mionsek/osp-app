@@ -18,7 +18,8 @@ void main() {
         rank: 'Strażak',
       );
       expect(f.fullName, 'Dawid Kowalski');
-      expect(f.fullNameWithRank, 'Dawid Kowalski, Strażak');
+      expect(f.fullNameWithRank, 'Kowalski Dawid, Strażak',
+          reason: 'na drukach obowiązuje kolejność Nazwisko Imię');
     });
 
     test('lastNameFirst puts the surname first for phone reporting', () {
@@ -58,7 +59,7 @@ void main() {
         lastName: 'Kowalski',
         rank: '',
       );
-      expect(f.fullNameWithRank, 'Jan Kowalski');
+      expect(f.fullNameWithRank, 'Kowalski Jan');
     });
   });
 

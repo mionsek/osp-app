@@ -1,3 +1,4 @@
+import '../../../core/utils/bottom_inset.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -187,7 +188,7 @@ class _StepBasicInfoState extends ConsumerState<StepBasicInfo>
       // Zapas na systemowy pasek nawigacji — inaczej przycisk „Dalej"
       // na dole kroku chowa się za przyciskami telefonu.
       padding: EdgeInsets.fromLTRB(
-          20, 20, 20, 20 + MediaQuery.viewPaddingOf(context).bottom),
+          20, 20, 20, 20 + context.bottomInset()),
       child: Form(
         key: _formKey,
         child: Column(

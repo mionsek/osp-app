@@ -176,6 +176,7 @@ void main() {
           'odometerStart', 'odometerEnd', 'odometerStartManual',
           'specialEquipmentMinutes', 'idleMinutes', 'extras', 'notes',
           'reportId', 'createdAt', 'updatedAt', 'createdBy', 'syncStatus',
+          'equipmentUse',
         },
       );
     });

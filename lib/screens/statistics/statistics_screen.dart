@@ -1,3 +1,4 @@
+import '../../core/utils/bottom_inset.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/providers.dart';
@@ -19,7 +20,7 @@ class StatisticsScreen extends ConsumerWidget {
         title: const Text('Statystyki'),
       ),
       body: SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.viewPaddingOf(context).bottom),
+        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + context.bottomInset()),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -369,7 +370,7 @@ class _FirefighterStatsList extends StatelessWidget {
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: Text(item.firefighter.fullName),
+                child: Text(item.firefighter.lastNameFirst),
               ),
               Chip(
                 label: Text(

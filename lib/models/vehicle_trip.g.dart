@@ -40,13 +40,16 @@ class VehicleTripAdapter extends TypeAdapter<VehicleTrip> {
       syncStatus: fields[20] as String,
       extras: fields[21] == null ? '' : fields[21] as String,
       idleMinutes: fields[22] as int?,
+      equipmentUse: fields[23] == null
+          ? []
+          : (fields[23] as List?)?.cast<TripEquipmentUse>(),
     );
   }
 
   @override
   void write(BinaryWriter writer, VehicleTrip obj) {
     writer
-      ..writeByte(23)
+      ..writeByte(24)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -92,7 +95,9 @@ class VehicleTripAdapter extends TypeAdapter<VehicleTrip> {
       ..writeByte(21)
       ..write(obj.extras)
       ..writeByte(22)
-      ..write(obj.idleMinutes);
+      ..write(obj.idleMinutes)
+      ..writeByte(23)
+      ..write(obj.equipmentUse);
   }
 
   @override

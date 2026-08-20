@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/utils/bottom_inset.dart';
 import '../../models/models.dart';
 import '../../providers/providers.dart';
 
@@ -38,10 +39,13 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
   final _driverCtrl = TextEditingController();
   final _odometerEndCtrl = TextEditingController();
   final _odometerStartCtrl = TextEditingController();
-  final _equipmentCtrl = TextEditingController();
   final _idleCtrl = TextEditingController();
   final _extrasCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
+
+  /// Rozbicie pracy urządzeń specjalnych — edytowane w miejscu, więc
+  /// trzymane jako lista modeli, a nie kontrolery tekstowe.
+  final List<TripEquipmentUse> _equipment = [];
 
   String? _driverId;
 
@@ -62,7 +66,6 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
     _driverCtrl.dispose();
     _odometerEndCtrl.dispose();
     _odometerStartCtrl.dispose();
-    _equipmentCtrl.dispose();
     _idleCtrl.dispose();
     _extrasCtrl.dispose();
     _notesCtrl.dispose();
@@ -95,7 +98,17 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
         _manualStart = trip.odometerStartManual;
         _odometerStartCtrl.text = trip.odometerStart?.toString() ?? '';
         _odometerEndCtrl.text = trip.odometerEnd?.toString() ?? '';
-        _equipmentCtrl.text = trip.specialEquipmentMinutes?.toString() ?? '';
+        _equipment
+          ..clear()
+          ..addAll(trip.equipmentUse.map(
+              (e) => TripEquipmentUse(name: e.name, minutes: e.minutes)));
+        // Przejazd sprzed listy urzadzen ma tylko liczbe minut — pokazujemy
+        // ja jako jedna pozycje bez nazwy, zeby dalo sie ja uzupelnic zamiast
+        // tracic.
+        if (_equipment.isEmpty && (trip.specialEquipmentMinutes ?? 0) > 0) {
+          _equipment.add(TripEquipmentUse(
+              name: '', minutes: trip.specialEquipmentMinutes!));
+        }
         _idleCtrl.text = trip.idleMinutes?.toString() ?? '';
         _extrasCtrl.text = trip.extras;
         _notesCtrl.text = trip.notes ?? '';
@@ -106,7 +119,7 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
         // tego zastępu, bo to on w praktyce dysponuje pojazdem.
         if (_dispatcherCtrl.text.trim().isEmpty) {
           final commander = _crewOfLinkedReport.firstOrNull;
-          if (commander != null) _dispatcherCtrl.text = commander.fullName;
+          if (commander != null) _dispatcherCtrl.text = commander.lastNameFirst;
         }
         return;
       }
@@ -213,8 +226,7 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
       body: Form(
         key: _formKey,
         child: ListView(
-          padding: EdgeInsets.fromLTRB(
-              16, 16, 16, 24 + MediaQuery.viewInsetsOf(context).bottom),
+          padding: context.scrollPadding(),
           children: [
             if (!canEdit) _readOnlyNotice(syncState.founderEmail),
             AbsorbPointer(
@@ -558,14 +570,16 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
 
     return Autocomplete<Firefighter>(
       initialValue: TextEditingValue(text: _driverCtrl.text),
-      displayStringForOption: (f) => f.fullName,
+      displayStringForOption: (f) => f.lastNameFirst,
       optionsBuilder: (value) {
         final q = value.text.trim().toLowerCase();
         if (q.isEmpty) return drivers;
-        return drivers.where((f) => f.fullName.toLowerCase().contains(q));
+        return drivers.where((f) =>
+            f.lastNameFirst.toLowerCase().contains(q) ||
+            f.fullName.toLowerCase().contains(q));
       },
       onSelected: (f) {
-        _driverCtrl.text = f.fullName;
+        _driverCtrl.text = f.lastNameFirst;
         _driverId = f.id;
       },
       fieldViewBuilder: (context, controller, focusNode, onSubmit) {
@@ -584,7 +598,7 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
           onChanged: (value) {
             _driverCtrl.text = value;
             if (_driverId != null &&
-                !drivers.any((f) => f.fullName == value)) {
+                !drivers.any((f) => f.lastNameFirst == value || f.fullName == value)) {
               _driverId = null;
             }
           },
@@ -623,7 +637,7 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
                   tooltip: 'Wróć do listy zastępu',
                   onPressed: () => setState(() {
                     _dispatcherManual = false;
-                    _dispatcherCtrl.text = crew.first.fullName;
+                    _dispatcherCtrl.text = crew.first.lastNameFirst;
                   }),
                 ),
         ),
@@ -631,7 +645,7 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
     }
 
     final current = crew
-        .where((f) => f.fullName == _dispatcherCtrl.text.trim())
+        .where((f) => f.lastNameFirst == _dispatcherCtrl.text.trim())
         .firstOrNull;
 
     return DropdownButtonFormField<String>(
@@ -649,7 +663,7 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
           DropdownMenuItem(
             value: f.id,
             child: Text(
-              crew.first.id == f.id ? '${f.fullName} (dowódca)' : f.fullName,
+              crew.first.id == f.id ? '${f.lastNameFirst} (dowódca)' : f.lastNameFirst,
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -666,7 +680,7 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
             return;
           }
           final picked = crew.where((f) => f.id == value).firstOrNull;
-          if (picked != null) _dispatcherCtrl.text = picked.fullName;
+          if (picked != null) _dispatcherCtrl.text = picked.lastNameFirst;
         });
       },
     );
@@ -674,20 +688,150 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
 
   static const String _otherDispatcher = '__other__';
 
+  /// Praca urządzeń specjalnych — lista „urządzenie + minuty".
+  ///
+  /// Wcześniej było tu jedno pole na minuty, bez wskazania **czego** dotyczą.
+  /// Zgłoszenie z testów: „nie ma możliwości wyboru urządzenia, co powoduje,
+  /// że to trzeba pominąć i najlepiej wpisać w komentarzu autopompa 2h,
+  /// agregat 1h". Rubryka była więc w praktyce nie do użycia.
+  ///
+  /// Na wydruk (kolumna 10) idzie suma minut, bo druk ma tam jedną liczbę.
   Widget _equipmentField() {
-    return TextFormField(
-      controller: _equipmentCtrl,
-      keyboardType: TextInputType.number,
-      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-      decoration: const InputDecoration(
-        labelText: 'Praca urządzeń specjalnych (minuty)',
-        border: OutlineInputBorder(),
-        prefixIcon: Icon(Icons.settings_input_component),
-        helperText: 'Autopompa, agregat — kolumna 10 karty drogowej',
-        helperMaxLines: 2,
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey.shade400),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.settings_input_component,
+                  size: 20, color: Colors.grey[700]),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Praca urządzeń specjalnych',
+                  style: TextStyle(fontSize: 15, color: Colors.grey[800]),
+                ),
+              ),
+              if (_equipment.isNotEmpty)
+                Text('${_totalEquipmentMinutes()} min',
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
+            ],
+          ),
+          if (_equipment.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                'Kolumna 10 karty drogowej. Dodaj urządzenie i czas jego pracy.',
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              ),
+            ),
+          for (var i = 0; i < _equipment.length; i++) _equipmentRow(i),
+          const SizedBox(height: 4),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () => setState(() => _equipment.add(
+                  TripEquipmentUse(name: SpecialEquipment.pump, minutes: 0))),
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Dodaj urządzenie'),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
+
+  int _totalEquipmentMinutes() =>
+      _equipment.fold(0, (sum, e) => sum + e.minutes);
+
+  Widget _equipmentRow(int index) {
+    final item = _equipment[index];
+    final isCustom = !SpecialEquipment.all.contains(item.name);
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Column(
+        children: [
+          Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 3,
+            child: DropdownButtonFormField<String>(
+              initialValue: isCustom ? SpecialEquipment.other : item.name,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                isDense: true,
+                labelText: 'Urządzenie',
+              ),
+              items: SpecialEquipment.all
+                  .map((n) => DropdownMenuItem(
+                        value: n,
+                        child: Text(n, overflow: TextOverflow.ellipsis),
+                      ))
+                  .toList(),
+              onChanged: (v) => setState(() {
+                // Wybór „Inne" zostawia puste pole na wpisanie własnej nazwy.
+                item.name = v == SpecialEquipment.other ? '' : (v ?? '');
+              }),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            flex: 2,
+            child: TextFormField(
+              initialValue: item.minutes == 0 ? '' : item.minutes.toString(),
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                isDense: true,
+                labelText: 'Minuty',
+              ),
+              onChanged: (v) =>
+                  setState(() => item.minutes = int.tryParse(v.trim()) ?? 0),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close, size: 20),
+            tooltip: 'Usuń',
+            visualDensity: VisualDensity.compact,
+            onPressed: () => setState(() => _equipment.removeAt(index)),
+          ),
+        ],
+          ),
+          // Własna nazwa pojawia się dopiero po wybraniu „Inne" — reszta
+          // wyborów jej nie potrzebuje i zajmowałaby tylko miejsce.
+          if (isCustom || item.name.isEmpty) ...[
+            const SizedBox(height: 8),
+            _customEquipmentName(item),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// Pole na własną nazwę, gdy wybrano „Inne".
+  Widget _customEquipmentName(TripEquipmentUse item) => TextFormField(
+        initialValue: item.name,
+        decoration: const InputDecoration(
+          border: OutlineInputBorder(),
+          isDense: true,
+          labelText: 'Nazwa urządzenia',
+        ),
+        onChanged: (v) => item.name = v.trim(),
+      );
 
   /// Praca silnika na postoju — osobna kolumna druku i osobna pozycja
   /// rozliczenia, z własną normą (litry na minutę), więc nie da się jej
@@ -829,7 +973,11 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
       odometerStart: odometerStart,
       odometerEnd: odometerEnd,
       odometerStartManual: manual,
-      specialEquipmentMinutes: int.tryParse(_equipmentCtrl.text.trim()),
+      // Zapisujemy rozbicie ORAZ sume w starym polu: karta drukuje sume,
+      // a starsze wersje aplikacji u kolegow czytaja tylko stare pole.
+      equipmentUse: _equipment.where((e) => e.minutes > 0).toList(),
+      specialEquipmentMinutes:
+          _totalEquipmentMinutes() == 0 ? null : _totalEquipmentMinutes(),
       idleMinutes: int.tryParse(_idleCtrl.text.trim()),
       extras: _extrasCtrl.text.trim(),
       notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),

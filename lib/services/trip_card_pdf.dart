@@ -99,7 +99,7 @@ class TripCardPdf {
     for (final t in trips) {
       final d = t.distance;
       if (d != null && d > 0) totalKm += d;
-      equipmentMinutes += t.specialEquipmentMinutes ?? 0;
+      equipmentMinutes += t.totalEquipmentMinutes;
       idleMinutes += t.idleMinutes ?? 0;
     }
     final equipmentHours = equipmentMinutes / 60.0;
@@ -454,7 +454,7 @@ class TripCardPdf {
             align: pw.Alignment.centerRight),
         cell(_hhmm(t.returnTime), align: pw.Alignment.center),
         cell(t.odometerEnd?.toString() ?? '', align: pw.Alignment.centerRight),
-        cell(t.specialEquipmentMinutes?.toString() ?? '',
+        cell(t.totalEquipmentMinutes == 0 ? '' : '${t.totalEquipmentMinutes}',
             align: pw.Alignment.center),
         cell(t.extras),
         cell(t.idleMinutes?.toString() ?? '', align: pw.Alignment.center),

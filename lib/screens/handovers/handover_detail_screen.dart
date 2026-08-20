@@ -1,3 +1,4 @@
+import '../../core/utils/bottom_inset.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -117,7 +118,7 @@ class HandoverDetailScreen extends ConsumerWidget {
         ],
       ),
       body: SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.viewPaddingOf(context).bottom),
+        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + context.bottomInset()),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [

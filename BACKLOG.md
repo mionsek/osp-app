@@ -468,3 +468,19 @@ Było 104 testy, wszystkie **czysto jednostkowe na modelach i logice bez wejści
 - [ ] **`pdf_service.dart` ma 1192 linie** — trzy niezależne dokumenty w jednym pliku. Karta drogowa dostała już własny plik; raport, statystyki i przekazanie mienia mogłyby pójść tą samą drogą
 - [ ] **Mapowania JSON raportu i przekazania mienia** zostały prywatne i nietestowane — ta sama krucha konstrukcja co przy pojeździe i przejeździe
 - [ ] Stałe układu wydruków (rozmiary czcionek, szerokości kolumn) zostają przy swoich wydrukach — to parametry layoutu, nie konfiguracja aplikacji, i wyniesienie ich do wspólnego pliku pogorszyłoby czytelność
+
+## Zrobione (fix/035-nazwiska-urzadzenia-paski)
+Trzy zgłoszenia: dwa od Wojtka, jedno od Dawida.
+
+- [x] **Kolejność „Nazwisko Imię" nie obowiązywała na wydrukach i w podglądach** — wybór ratownika działał po nazwisku, ale `Firefighter.fullName` zwraca „Imię Nazwisko" i to jego używały: tabela uczestników w PDF raportu, statystyki, szczegóły wyjazdu, podsumowanie kreatora, kierowca i dysponent w ewidencji. Ujednolicone: `lastNameFirst` to **jedyna** kolejność do pokazania i wydruku, `fullNameWithRank` też z niej korzysta, a `fullName` zostaje wyłącznie do dopasowywania wpisanego tekstu (bo ktoś może wpisać w tej kolejności). Wyszukiwanie akceptuje obie
+- [x] **Praca urządzeń specjalnych bez wyboru urządzenia** — było jedno pole na minuty, bez wskazania **czego** dotyczą. Zgłoszenie: „nie ma możliwości wyboru urządzenia, co powoduje że to trzeba pominąć i najlepiej wpisać w komentarzu np. autopompa 2h, agregat 1h". Rubryka była więc w praktyce nie do użycia. Nowy model `TripEquipmentUse` (Hive typeId 8) i lista „urządzenie + minuty" w formularzu, ze stałą listą (autopompa, agregat, piła, wyciągarka, wentylator, inne) i sumą na bieżąco. Na wydruk (kolumna 10) idzie suma, bo druk ma tam jedną liczbę
+- [x] Przejazdy zapisane przed tą zmianą mają tylko liczbę minut — pokazują się jako jedna pozycja bez nazwy, do uzupełnienia, zamiast zniknąć. Suma zapisuje się **także** do starego pola, żeby kolega na starszej wersji aplikacji nadal widział poprawną liczbę
+- [x] **Przycisk zasłonięty przez pasek nawigacji telefonu** — formularz przejazdu używał `viewInsetsOf` (klawiatura), ale nie `viewPaddingOf` (pasek). Przy schowanej klawiaturze zapas wynosił zero i „Zapisz zmiany" chowało się za przyciskami telefonu. Naprawione **jednolicie**: wspólne `context.bottomInset()` / `context.scrollPadding()` ([bottom_inset.dart](lib/core/utils/bottom_inset.dart)) bierze większą z dwóch wartości i zastąpiło wszystkie 15 miejsc liczących to na własną rękę
+- [x] Zweryfikowane na emulatorze: dysponent „Nowak Adam (dowódca)", lista urządzeń z sumą, przycisk zapisu w całości widoczny
+
+### Uwaga do zgłoszenia o dysponencie
+Wojtek pytał, czy dysponent nie mógłby zaciągać się z powiązanego wyjazdu tak jak kierowca. **To już działa** od fix/029 — lista rozwijana bierze załogę tego zastępu, a dowódca jest podpowiadany domyślnie. Na zrzucie widać wypełnione oba pola. Prawdopodobnie testował wersję sprzed tej zmiany.
+
+### Nadal otwarte
+- [ ] **Lista urządzeń per pojazd** — dziś jest wspólna dla wszystkich, więc przy GLM pokazuje autopompę, której ten wóz nie ma. Wymaga ustaleń z Deringiem (czy definiować urządzenia przy pojeździe, czy zostawić stałą listę)
+- [ ] Rozliczenie paliwa liczy wszystkie urządzenia jedną normą autopompy — przy realnym rozbiciu na autopompę i agregat trzeba by norm per urządzenie

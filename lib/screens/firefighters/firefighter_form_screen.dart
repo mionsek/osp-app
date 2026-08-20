@@ -1,3 +1,4 @@
+import '../../core/utils/bottom_inset.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -163,7 +164,7 @@ class _FirefighterFormScreenState extends ConsumerState<FirefighterFormScreen> {
         title: Text(_isEditing ? 'Edytuj ratownika' : 'Nowy ratownik'),
       ),
       body: SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + MediaQuery.viewPaddingOf(context).bottom),
+        padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + context.bottomInset()),
         child: Form(
           key: _formKey,
           child: Column(

@@ -1,3 +1,4 @@
+import '../../core/utils/bottom_inset.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -211,7 +212,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
               // Zapas na systemowy pasek nawigacji — bez tego ostatnie
               // elementy listy chowają się za przyciskami telefonu.
-              SizedBox(height: 12 + MediaQuery.viewPaddingOf(context).bottom),
+              SizedBox(height: 12 + context.bottomInset()),
             ],
           ),
         ),

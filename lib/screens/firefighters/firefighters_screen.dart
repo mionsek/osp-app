@@ -1,3 +1,4 @@
+import '../../core/utils/bottom_inset.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -100,7 +101,7 @@ class _FirefightersScreenState extends ConsumerState<FirefightersScreen> {
                     ),
                   )
                 : ListView.builder(
-                    padding: EdgeInsets.only(bottom: 80 + MediaQuery.viewPaddingOf(context).bottom),
+                    padding: EdgeInsets.only(bottom: 80 + context.bottomInset()),
                     itemCount: filtered.length,
                     itemBuilder: (context, index) {
                       final ff = filtered[index];

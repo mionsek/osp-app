@@ -207,7 +207,7 @@ class PdfService {
         tableRows.add([
           '$lp',
           crew.vehicleName,
-          '${ff.fullName}${role.isNotEmpty ? " ($role)" : ""}',
+          '${ff.lastNameFirst}${role.isNotEmpty ? " ($role)" : ""}',
           '$depTime – $retTime',
           '',
         ]);
@@ -716,7 +716,7 @@ class PdfService {
               data: stats.firefighterStats.asMap().entries.map((e) {
                 final i = e.key + 1;
                 final item = e.value;
-                return ['$i', item.firefighter.fullName, '${item.tripCount}'];
+                return ['$i', item.firefighter.lastNameFirst, '${item.tripCount}'];
               }).toList(),
             ),
         ],

@@ -1,3 +1,4 @@
+import '../../core/utils/bottom_inset.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -171,7 +172,7 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
               : ListView.builder(
                   padding: EdgeInsets.only(
                     top: 8,
-                    bottom: 88 + MediaQuery.viewPaddingOf(context).bottom,
+                    bottom: 88 + context.bottomInset(),
                   ),
                   itemCount: trips.length,
                   itemBuilder: (context, i) => _tripTile(context, trips[i], i + 1),

@@ -787,6 +787,9 @@ class SyncService {
     'odometerEnd': t.odometerEnd,
     'odometerStartManual': t.odometerStartManual,
     'specialEquipmentMinutes': t.specialEquipmentMinutes,
+    'equipmentUse': [
+      for (final e in t.equipmentUse) {'name': e.name, 'minutes': e.minutes},
+    ],
     'idleMinutes': t.idleMinutes,
     'extras': t.extras,
     'notes': t.notes,
@@ -817,6 +820,13 @@ class SyncService {
     odometerStartManual: j['odometerStartManual'] as bool? ?? false,
     specialEquipmentMinutes: (j['specialEquipmentMinutes'] as num?)?.toInt(),
     idleMinutes: (j['idleMinutes'] as num?)?.toInt(),
+    equipmentUse: [
+      for (final e in (j['equipmentUse'] as List? ?? const []))
+        TripEquipmentUse(
+          name: (e as Map)['name'] as String? ?? '',
+          minutes: (e['minutes'] as num?)?.toInt() ?? 0,
+        ),
+    ],
     extras: j['extras'] as String? ?? '',
     notes: j['notes'] as String?,
     reportId: j['reportId'] as String?,

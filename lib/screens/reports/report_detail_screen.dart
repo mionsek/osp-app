@@ -1,3 +1,4 @@
+import '../../core/utils/bottom_inset.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -112,7 +113,7 @@ class ReportDetailScreen extends ConsumerWidget {
         ],
       ),
       body: SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.viewPaddingOf(context).bottom),
+        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + context.bottomInset()),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -220,14 +221,14 @@ class ReportDetailScreen extends ConsumerWidget {
                         const Divider(),
                         if (crew.driverId != null)
                           _Row('🚗 Kierowca',
-                              findFF(crew.driverId)?.fullName ?? '—'),
+                              findFF(crew.driverId)?.lastNameFirst ?? '—'),
                         if (crew.commanderId != null)
                           _Row('🎖️ Dowódca',
-                              findFF(crew.commanderId)?.fullName ?? '—'),
+                              findFF(crew.commanderId)?.lastNameFirst ?? '—'),
                         ...crew.crewMemberIds
                             .where((id) => id.isNotEmpty)
                             .map((id) => _Row(
-                                '   Ratownik', findFF(id)?.fullName ?? '—')),
+                                '   Ratownik', findFF(id)?.lastNameFirst ?? '—')),
                       ],
                     ),
                   ),

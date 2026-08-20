@@ -1,3 +1,4 @@
+import '../../core/utils/bottom_inset.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -50,7 +51,7 @@ class ReportsListScreen extends ConsumerWidget {
               ),
             )
           : ListView.builder(
-              padding: EdgeInsets.only(top: 8, bottom: 80 + MediaQuery.viewPaddingOf(context).bottom),
+              padding: EdgeInsets.only(top: 8, bottom: 80 + context.bottomInset()),
               itemCount: reports.length,
               itemBuilder: (context, index) {
                 final report = reports[index];

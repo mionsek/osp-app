@@ -1,4 +1,5 @@
 import 'package:hive/hive.dart';
+import 'trip_equipment_use.dart';
 
 part 'vehicle_trip.g.dart';
 
@@ -146,6 +147,14 @@ class VehicleTrip extends HiveObject {
   @HiveField(22)
   int? idleMinutes;
 
+  /// Rozbicie pracy urządzeń specjalnych na poszczególne urządzenia.
+  ///
+  /// Zastępuje samo [specialEquipmentMinutes], które pozwalało wpisać liczbę
+  /// minut, ale nie **czego** dotyczy — przez co rubryka była w praktyce
+  /// nie do użycia i ludzie wpisywali „autopompa 2h" w uwagach.
+  @HiveField(23, defaultValue: <TripEquipmentUse>[])
+  List<TripEquipmentUse> equipmentUse;
+
   VehicleTrip({
     required this.id,
     required this.vehicleId,
@@ -170,7 +179,8 @@ class VehicleTrip extends HiveObject {
     this.syncStatus = 'local',
     this.extras = '',
     this.idleMinutes,
-  });
+    List<TripEquipmentUse>? equipmentUse,
+  }) : equipmentUse = equipmentUse ?? <TripEquipmentUse>[];
 
   /// Rok i miesiąc, do którego przejazd należy — klucz karty.
   int get year => date.year;
@@ -199,6 +209,21 @@ class VehicleTrip extends HiveObject {
     final d = distance;
     return d != null && d < 0;
   }
+
+  /// Łączny czas pracy urządzeń specjalnych — kolumna 10 karty drogowej.
+  ///
+  /// Na druku jest jedna liczba, więc sumujemy rozbicie. Gdy rozbicia nie ma,
+  /// bierzemy starą wartość [specialEquipmentMinutes] — przejazdy zapisane
+  /// przed wprowadzeniem listy urządzeń mają tylko ją i nie mogą przez to
+  /// zniknąć z wydruku.
+  int get totalEquipmentMinutes {
+    if (equipmentUse.isEmpty) return specialEquipmentMinutes ?? 0;
+    return equipmentUse.fold(0, (sum, e) => sum + e.minutes);
+  }
+
+  /// Opis pracy urządzeń do pokazania na liście: „Autopompa 120 min".
+  String get equipmentLabel =>
+      equipmentUse.map((e) => '${e.name} ${e.minutes} min').join(', ');
 
   /// Trasa w formacie z druku: „skąd – dokąd".
   String get routeLabel {

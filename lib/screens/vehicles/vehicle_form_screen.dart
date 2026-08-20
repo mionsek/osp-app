@@ -1,3 +1,4 @@
+import '../../core/utils/bottom_inset.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -138,7 +139,7 @@ class _VehicleFormScreenState extends ConsumerState<VehicleFormScreen> {
         title: Text(_isEditing ? 'Edytuj pojazd' : 'Nowy pojazd'),
       ),
       body: SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + MediaQuery.viewPaddingOf(context).bottom),
+        padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + context.bottomInset()),
         child: Form(
           key: _formKey,
           child: Column(
