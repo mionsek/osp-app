@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/utils/polish_text.dart';
 import '../../models/models.dart';
 import '../../providers/providers.dart';
 import '../../widgets/admin_only_notice.dart';
@@ -83,7 +84,7 @@ class VehiclesScreen extends ConsumerWidget {
                       style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
                     subtitle: Text(
-                        '${vehicle.seats} ${_seatsLabel(vehicle.seats)}'),
+                        '${vehicle.seats} ${PolishText.seats(vehicle.seats)}'),
                     trailing: !isAdmin
                         ? null
                         : Row(
@@ -111,11 +112,6 @@ class VehiclesScreen extends ConsumerWidget {
             );
   }
 
-  String _seatsLabel(int count) {
-    if (count == 1) return 'miejsce';
-    if (count >= 2 && count <= 4) return 'miejsca';
-    return 'miejsc';
-  }
 
   void _confirmDelete(
       BuildContext context, WidgetRef ref, String id, String name) {

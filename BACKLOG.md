@@ -437,3 +437,34 @@ Wydruk karty z feature/032 odtwarzał tylko środkową część druku. Dawid zap
 - [ ] **Reguła dodatku zimowego** — których miesięcy dotyczy i jaki jest narzut. Po ustaleniu doliczy się automatycznie (poz. 6 rozliczenia)
 - [ ] **Ilości pobranego paliwa** — dziś tabela „Pobrano" drukuje się pusta. Do rozważenia osobny ekran wpisywania kwitów (data, stan licznika, ON, ET), który wypełniłby też pozycje 1–3 i 10–12 rozliczenia
 - [ ] **Stan autopompy na początek i koniec miesiąca** — pole jest na wydruku, ale aplikacja go nie zbiera
+
+## Zrobione (refactor/034-przeglad-kodu)
+Przegląd kodu na prośbę Dawida: wydajność, jakość, magic numbers, komentarze, testy.
+
+### Naprawione błędy
+- [x] **Wyciek nasłuchów w polu kierowcy** ([trip_form_screen.dart](lib/screens/trips/trip_form_screen.dart)) — `fieldViewBuilder` w `Autocomplete` uruchamia się przy **każdym** przebudowaniu formularza, a ja dodawałem tam `controller.addListener` bez usuwania poprzedniego. Po kilkunastu `setState` (a formularz przebudowuje się przy każdej zmianie licznika i dysponenta) jedno naciśnięcie klawisza odpalało kilkanaście reakcji, każda z zapisem do kontrolera. Zamienione na `onChanged`, które działa raz na zmianę niezależnie od liczby przebudowań
+- [x] **Niezwalniane kontrolery okna „Dodaj ratownika"** ([step_crew.dart](lib/screens/reports/steps/step_crew.dart)) — dwa `TextEditingController` tworzone przy każdym otwarciu okna i nigdy nie zwalniane, bo `showDialog` nie ma własnego `dispose`. Dodane `whenComplete`
+- [x] **Trzy różne reguły sanityzacji nazw plików** w czterech miejscach: jedna usuwała tylko znaki zabronione w Windows (zostawiając spacje i polskie znaki), druga wszystko poza znakami słowa, trzecia jeszcze inaczej. Ta sama miejscowość dawała **różne nazwy plików** w PDF-ie i na Dysku. Ujednolicone w `FileNames.sanitize`
+- [x] Usunięta pozostałość debugowa `debugPrint('SettingsScreen.build() called')` — logowała przy każdym przebudowaniu ekranu
+
+### Wydajność
+- [x] **Trzy migracje danych blokowały pierwszą klatkę** — `backfillTripsFromReports`, `reconcileTripsWithReports` i `fillMissingRouteFrom` szły w `main()` **przed** `runApp`, przy każdym uruchomieniu. To pełne przebiegi po raportach i przejazdach z zapisem do Hive; opóźnienie rosło wraz z ilością danych, czyli najmocniej dotykało tych, którzy używają aplikacji najdłużej. Przeniesione do `addPostFrameCallback` — ekran główny rysuje się od razu, a providery odświeżają się, gdy migracja coś zmieni
+- [x] Zmierzone po zmianach: sterta Javy 1,3 MB, `Views: 8`, `Activities: 1`, `AppContexts: 6` — płasko, bez wycieków
+
+### Jakość i duplikaty
+- [x] **`PolishText`** ([polish_text.dart](lib/core/utils/polish_text.dart)) — odmiana liczebników i nazwy miesięcy. Odmiana była powielona w trzech ekranach, nazwy miesięcy w dwóch miejscach. Przy okazji obie kopie odmiany „miejsc" używały uproszczonej reguły `2–4`, **błędnej dla 12–14** — nieszkodliwej tylko dlatego, że pojazd ma maksymalnie 6 miejsc. Wspólna wersja obsługuje nastki poprawnie
+- [x] **`FileNames`** ([file_names.dart](lib/core/utils/file_names.dart)) — sanityzacja, data i para rok-miesiąc do nazw plików
+
+### Testy — największa luka
+Było 104 testy, wszystkie **czysto jednostkowe na modelach i logice bez wejścia-wyjścia**. Warstwa bazy i synchronizacji nie miała ani jednego.
+- [x] **`database_service_test.dart`** (14 testów) — Hive na katalogu tymczasowym. Sprawdza to, co dotąd weryfikowałem wyłącznie ręcznie na emulatorze: czy `addTrip` faktycznie przelicza łańcuch licznika, czy wpis dodany wstecz przesuwa późniejsze, czy usunięcie środkowego przejazdu przelicza resztę, czy uzupełnianie historii nie dubluje i **nie wskrzesza przejazdu skasowanego ręcznie**, czy uzgadnianie z raportem nie nadpisuje licznika wpisanego w ewidencji
+- [x] **`sync_json_test.dart`** (6 testów) — serializacja na Dysk, przez prawdziwy `jsonEncode`/`jsonDecode`. To najbardziej krucha część synchronizacji: przy każdym dodaniu pola do modelu trzeba pamiętać o dopisaniu go **i** do zapisu, **i** do odczytu, a nic tego nie wymusza. Pominięcie objawia się dopiero u kolegi, któremu dane wrócą niekompletne. Testy obejmują też odczyt plików zapisanych przez **starsze wersje** aplikacji (bez nowych pól) i strażnika listy kluczy JSON
+- [x] Mapowania `vehicleToJson` / `tripToJson` i odwrotne zrobione statycznymi i publicznymi (`@visibleForTesting`), żeby dało się je testować bez budowania całego `SyncService`
+- [x] Łącznie **124 testy**
+
+### Znalezione, świadomie odłożone
+- [ ] **Paleta kolorów istnieje, ale jest omijana** — `OspTheme.primaryRed` jest zdefiniowany, a kod używa surowego `0xFFB71C1C` **31 razy**; podobnie zieleń (20×), pomarańcz (9×), błękit (7×), brąz (4×). Zmiana mechaniczna, ale dotyka ~20 plików — osobna gałąź, żeby nie mieszać z naprawami
+- [ ] **Brak testów widoków i integracyjnych** — zero `testWidgets`, brak katalogu `integration_test`. Najbardziej przydałyby się dla kreatora wyjazdu (trzy kroki, walidacje, ostrzeżenia) i formularza przejazdu (łańcuch licznika w interfejsie)
+- [ ] **`pdf_service.dart` ma 1192 linie** — trzy niezależne dokumenty w jednym pliku. Karta drogowa dostała już własny plik; raport, statystyki i przekazanie mienia mogłyby pójść tą samą drogą
+- [ ] **Mapowania JSON raportu i przekazania mienia** zostały prywatne i nietestowane — ta sama krucha konstrukcja co przy pojeździe i przejeździe
+- [ ] Stałe układu wydruków (rozmiary czcionek, szerokości kolumn) zostają przy swoich wydrukach — to parametry layoutu, nie konfiguracja aplikacji, i wyniesienie ich do wspólnego pliku pogorszyłoby czytelność

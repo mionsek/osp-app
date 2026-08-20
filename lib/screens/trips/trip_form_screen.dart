@@ -571,17 +571,23 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
       fieldViewBuilder: (context, controller, focusNode, onSubmit) {
         // Autocomplete trzyma własny kontroler; utrzymujemy go w zgodzie
         // z naszym, żeby wpisanie nazwiska z ręki też się zapisało.
-        controller.addListener(() {
-          _driverCtrl.text = controller.text;
-          if (_driverId != null) {
-            final match = drivers.where((f) => f.fullName == controller.text);
-            if (match.isEmpty) _driverId = null;
-          }
-        });
+        //
+        // Świadomie przez `onChanged`, a **nie** `controller.addListener`:
+        // ten builder uruchamia się przy każdym przebudowaniu formularza,
+        // więc dodawanie nasłuchu dokładałoby kolejny przy każdym `setState`,
+        // bez usuwania poprzednich. Po kilkunastu przebudowaniach jedno
+        // naciśnięcie klawisza odpalałoby kilkanaście reakcji.
         return TextFormField(
           controller: controller,
           focusNode: focusNode,
           textCapitalization: TextCapitalization.words,
+          onChanged: (value) {
+            _driverCtrl.text = value;
+            if (_driverId != null &&
+                !drivers.any((f) => f.fullName == value)) {
+              _driverId = null;
+            }
+          },
           decoration: const InputDecoration(
             labelText: 'Kierowca',
             border: OutlineInputBorder(),

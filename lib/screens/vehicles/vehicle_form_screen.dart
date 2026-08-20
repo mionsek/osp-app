@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
+import '../../core/utils/polish_text.dart';
 import '../../models/models.dart';
 import '../../providers/providers.dart';
 
@@ -176,7 +177,7 @@ class _VehicleFormScreenState extends ConsumerState<VehicleFormScreen> {
                 items: List.generate(6, (i) => i + 1)
                     .map((n) => DropdownMenuItem(
                           value: n,
-                          child: Text('$n ${_seatsLabel(n)}'),
+                          child: Text('$n ${PolishText.seats(n)}'),
                         ))
                     .toList(),
                 onChanged: (value) {
@@ -294,9 +295,4 @@ class _VehicleFormScreenState extends ConsumerState<VehicleFormScreen> {
     );
   }
 
-  String _seatsLabel(int count) {
-    if (count == 1) return 'miejsce';
-    if (count >= 2 && count <= 4) return 'miejsca';
-    return 'miejsc';
-  }
 }

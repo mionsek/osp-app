@@ -5,6 +5,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:intl/intl.dart';
 import '../core/constants/handover_property_kinds.dart';
+import '../core/utils/file_names.dart';
 import '../core/constants/handover_recipient_types.dart';
 import '../models/models.dart';
 import '../providers/statistics_provider.dart';
@@ -126,8 +127,12 @@ class PdfService {
     return Uint8List.fromList(await pdf.save());
   }
 
-  static String _sanitizeFilename(String s) =>
-      s.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+  /// Alias na wspólną sanityzację — trzymany, żeby nie przepisywać wszystkich
+  /// wywołań w tym pliku. Wcześniej była tu **inna** reguła niż w pozostałych
+  /// trzech miejscach w projekcie: usuwała tylko znaki zabronione w Windows,
+  /// zostawiając spacje i polskie znaki, przez co ta sama miejscowość dawała
+  /// różne nazwy plików w PDF-ie i na Dysku.
+  static String _sanitizeFilename(String s) => FileNames.sanitize(s);
 
   static String _fileName(Report report) {
     final dateStr = DateFormat('yyyy-MM-dd').format(report.date);

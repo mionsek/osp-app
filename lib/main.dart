@@ -9,19 +9,43 @@ import 'providers/providers.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await DatabaseService.initialize();
-  final db = DatabaseService();
-  // Migracja słownika zagrożeń do aktualnych stałych list
-  await db.ensureDefaultThreats();
-  // Wyjazdy zapisane zanim istniała ewidencja przejazdów nie mają swojego
-  // wiersza w karcie drogowej — dopisujemy je raz, przy starcie.
-  await db.backfillTripsFromReports(
-    stationAddress: db.getConfig().stationAddress,
-  );
-  // Naprawia dane, które rozjechały się zanim istniała synchronizacja
-  // raport → ewidencja (np. godzina powrotu dopisana w starszej wersji).
-  await db.reconcileTripsWithReports();
-  await db.fillMissingRouteFrom(db.getConfig().stationAddress);
   runApp(const ProviderScope(child: OspApp()));
+}
+
+/// Migracje danych, których wynik nie jest potrzebny do narysowania
+/// pierwszego ekranu.
+///
+/// Świadomie **po** `runApp`, a nie przed: to trzy pełne przebiegi po
+/// raportach i przejazdach z zapisem do Hive, wykonywane przy każdym
+/// uruchomieniu. Wykonane przed `runApp` opóźniały pierwszą klatkę tym
+/// bardziej, im więcej jednostka ma danych — czyli najmocniej u tych,
+/// którzy używają aplikacji najdłużej.
+///
+/// Ekran główny czyta dane przez providery, więc gdy migracja coś zmieni,
+/// odświeżamy je i widok sam się przerysuje.
+Future<void> _runMigrations(WidgetRef ref) async {
+  final db = ref.read(databaseServiceProvider);
+
+  // Słownik zagrożeń do aktualnych stałych list.
+  await db.ensureDefaultThreats();
+  ref.read(threatsProvider.notifier).refresh();
+
+  final stationAddress = db.getConfig().stationAddress;
+
+  // Wyjazdy zapisane, zanim istniała ewidencja przejazdów, nie mają swojego
+  // wiersza w karcie drogowej.
+  final added = await db.backfillTripsFromReports(
+    stationAddress: stationAddress,
+  );
+  // Dane rozjechane, zanim istniała synchronizacja raport → ewidencja
+  // (np. godzina powrotu dopisana w starszej wersji aplikacji).
+  final reconciled = await db.reconcileTripsWithReports();
+  // „Skąd" w przejazdach sprzed wpisania adresu remizy.
+  final filled = await db.fillMissingRouteFrom(stationAddress);
+
+  if (added + reconciled + filled > 0) {
+    ref.read(vehicleTripsProvider.notifier).refresh();
+  }
 }
 
 class OspApp extends ConsumerStatefulWidget {
@@ -35,12 +59,17 @@ class _OspAppState extends ConsumerState<OspApp> {
   @override
   void initState() {
     super.initState();
-    // Try silent sign-in and restore sync state
-    Future.microtask(() async {
+    // Migracje i logowanie po pierwszej klatce — ekran główny nie potrzebuje
+    // ich wyniku, żeby się narysować.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await _runMigrations(ref);
+
+      if (!mounted) return;
       final authService = ref.read(googleAuthServiceProvider);
       await authService.trySilentSignIn();
-      final syncNotifier = ref.read(syncStateProvider.notifier);
-      await syncNotifier.initialize();
+      if (!mounted) return;
+      await ref.read(syncStateProvider.notifier).initialize();
     });
   }
 

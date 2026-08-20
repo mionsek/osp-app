@@ -7,6 +7,7 @@ import '../models/sync_state.dart';
 import 'database_service.dart';
 import 'google_auth_service.dart';
 import 'google_drive_service.dart';
+import '../core/utils/file_names.dart';
 
 /// Orchestrates bidirectional sync between local Hive and Google Drive.
 class SyncService {
@@ -302,7 +303,7 @@ class SyncService {
     final vehicles = _db.getAllVehicles();
     await _driveService.writeJsonFile(configFolderId, 'vehicles.json', {
       'updatedAt': DateTime.now().toIso8601String(),
-      'data': vehicles.map(_vehicleToJson).toList(),
+      'data': vehicles.map(vehicleToJson).toList(),
     });
 
     // Push threat types to config/
@@ -367,7 +368,7 @@ class SyncService {
       await _driveService.writeJsonFile(
         tripsFolderId,
         _buildTripFileName(trip),
-        _tripToJson(trip),
+        tripToJson(trip),
       );
     }
   }
@@ -409,7 +410,7 @@ class SyncService {
     );
     if (vData != null && vData['data'] is List) {
       for (final item in vData['data'] as List) {
-        final v = _vehicleFromJson(item as Map<String, dynamic>);
+        final v = vehicleFromJson(item as Map<String, dynamic>);
         await _db.addVehicle(v);
       }
     }
@@ -492,7 +493,7 @@ class SyncService {
       for (final file in tripFiles) {
         final data = await _driveService.readJsonFile(file.id!);
         if (data == null) continue;
-        final trip = _tripFromJson(data);
+        final trip = tripFromJson(data);
         final local = _db.getTrip(trip.id);
         if (local == null || trip.updatedAt.isAfter(local.updatedAt)) {
           await _db.addTrip(trip);
@@ -618,21 +619,14 @@ class SyncService {
   /// Build descriptive report file name: 0001_2026_Pozar.json
   String _buildReportFileName(Report report) {
     final number = report.reportNumber.replaceAll('/', '_');
-    final threat = report.threatCategory
-        .replaceAll(' ', '_')
-        .replaceAll(RegExp(r'[^\w_]'), '');
+    final threat = FileNames.sanitize(report.threatCategory);
     return '${number}_$threat.json';
   }
 
   /// Build descriptive handover file name: 2026-07-20_Kielno_`id-prefix`.json
   String _buildHandoverFileName(PropertyHandover handover) {
-    final dateStr =
-        '${handover.eventDate.year.toString().padLeft(4, '0')}-'
-        '${handover.eventDate.month.toString().padLeft(2, '0')}-'
-        '${handover.eventDate.day.toString().padLeft(2, '0')}';
-    final locality = handover.eventLocation
-        .replaceAll(' ', '_')
-        .replaceAll(RegExp(r'[^\w_]'), '');
+    final dateStr = FileNames.date(handover.eventDate);
+    final locality = FileNames.sanitize(handover.eventLocation);
     final idPrefix = handover.id.length >= 8
         ? handover.id.substring(0, 8)
         : handover.id;
@@ -661,7 +655,14 @@ class SyncService {
     isKPP: j['isKPP'] as bool? ?? false,
   );
 
-  Map<String, dynamic> _vehicleToJson(Vehicle v) => {
+  /// Serializacja pojazdu na Dysk.
+  ///
+  /// Publiczna i statyczna, żeby dało się ją przetestować bez budowania
+  /// całego `SyncService`. To najbardziej krucha część synchronizacji:
+  /// przy każdym dodaniu pola do modelu trzeba pamiętać o dopisaniu go tutaj
+  /// **i** w mapowaniu odwrotnym, a nic tego nie wymusza.
+  @visibleForTesting
+  static Map<String, dynamic> vehicleToJson(Vehicle v) => {
     'id': v.id,
     'name': v.name,
     'seats': v.seats,
@@ -679,7 +680,8 @@ class SyncService {
     'startupFuelPerMonth': v.startupFuelPerMonth,
   };
 
-  Vehicle _vehicleFromJson(Map<String, dynamic> j) => Vehicle(
+  @visibleForTesting
+  static Vehicle vehicleFromJson(Map<String, dynamic> j) => Vehicle(
     id: j['id'] as String,
     name: j['name'] as String,
     seats: j['seats'] as int,
@@ -760,17 +762,16 @@ class SyncService {
   /// Data i pojazd w nazwie, żeby zawartość folderu dała się przejrzeć na
   /// Dysku bez otwierania każdego pliku — kartę czyta się po miesiącach.
   String _buildTripFileName(VehicleTrip t) {
-    final date =
-        '${t.date.year.toString().padLeft(4, '0')}-'
-        '${t.date.month.toString().padLeft(2, '0')}-'
-        '${t.date.day.toString().padLeft(2, '0')}';
-    final vehicle = (_db.getVehicle(t.vehicleId)?.name ?? t.vehicleId)
-        .replaceAll(RegExp(r'[^\w\-]+'), '_');
+    final date = FileNames.date(t.date);
+    final vehicle =
+        FileNames.sanitize(_db.getVehicle(t.vehicleId)?.name ?? t.vehicleId);
     final idPrefix = t.id.length >= 8 ? t.id.substring(0, 8) : t.id;
     return '${date}_${vehicle}_$idPrefix.json';
   }
 
-  Map<String, dynamic> _tripToJson(VehicleTrip t) => {
+  /// Serializacja przejazdu na Dysk — patrz uwaga przy [vehicleToJson].
+  @visibleForTesting
+  static Map<String, dynamic> tripToJson(VehicleTrip t) => {
     'id': t.id,
     'vehicleId': t.vehicleId,
     'date': t.date.toIso8601String(),
@@ -796,7 +797,8 @@ class SyncService {
     'syncStatus': 'synced',
   };
 
-  VehicleTrip _tripFromJson(Map<String, dynamic> j) => VehicleTrip(
+  @visibleForTesting
+  static VehicleTrip tripFromJson(Map<String, dynamic> j) => VehicleTrip(
     id: j['id'] as String,
     vehicleId: j['vehicleId'] as String? ?? '',
     date: DateTime.parse(j['date'] as String),

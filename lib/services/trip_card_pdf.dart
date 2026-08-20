@@ -2,6 +2,8 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:intl/intl.dart';
+import '../core/utils/file_names.dart';
+import '../core/utils/polish_text.dart';
 import '../models/models.dart';
 
 /// Miesięczna karta drogowa pożarniczego pojazdu samochodowego.
@@ -49,21 +51,15 @@ class TripCardPdf {
     );
   }
 
-  static const List<String> monthNames = [
-    'styczeń', 'luty', 'marzec', 'kwiecień', 'maj', 'czerwiec',
-    'lipiec', 'sierpień', 'wrzesień', 'październik', 'listopad', 'grudzień',
-  ];
-
   /// Minimalna liczba wierszy tabeli przejazdów.
   static const int minRows = 16;
 
   /// Liczba pustych wierszy w tabeli „Pobrano (w litrach)".
   static const int fuelIntakeRows = 6;
 
-  static String _sanitize(String s) => s.replaceAll(RegExp(r'[^\w\-]+'), '_');
-
   static String _fileName(Vehicle v, int year, int month) =>
-      'karta_drogowa_${_sanitize(v.name)}_$year-${month.toString().padLeft(2, '0')}.pdf';
+      'karta_drogowa_${FileNames.sanitize(v.name)}_'
+      '${FileNames.yearMonth(year, month)}.pdf';
 
   static String _hhmm(DateTime? t) =>
       t == null ? '' : DateFormat('HH:mm').format(t);
@@ -90,7 +86,7 @@ class TripCardPdf {
     final italic = await PdfGoogleFonts.openSansItalic();
     final theme = pw.ThemeData.withFont(base: base, bold: bold, italic: italic);
 
-    final monthLabel = '${monthNames[month - 1]} $year';
+    final monthLabel = PolishText.monthLabel(month, year);
     final pdf = pw.Document(
       title: 'Karta drogowa ${vehicle.name} - $monthLabel',
       author: config.fullName,

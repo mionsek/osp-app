@@ -83,7 +83,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    debugPrint('SettingsScreen.build() called');
     final config = ref.watch(unitConfigProvider);
     final isAdmin = ref.watch(isAdminProvider);
 

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/models.dart';
 import '../../providers/providers.dart';
+import '../../core/utils/polish_text.dart';
 import '../../services/trip_odometer.dart';
 import '../../services/trip_card_pdf.dart';
 
@@ -29,11 +30,6 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
     _year = now.year;
     _month = now.month;
   }
-
-  static const List<String> _monthNames = [
-    'styczeń', 'luty', 'marzec', 'kwiecień', 'maj', 'czerwiec',
-    'lipiec', 'sierpień', 'wrzesień', 'październik', 'listopad', 'grudzień',
-  ];
 
   @override
   Widget build(BuildContext context) {
@@ -221,7 +217,7 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
                   isDense: true,
                 ),
                 child: Text(
-                  '${_monthNames[_month - 1]} $_year',
+                  PolishText.monthLabel(_month, _year),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -239,7 +235,7 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
       child: Row(
         children: [
-          _chip(Icons.route, '${trips.length} ${_tripsLabel(trips.length)}'),
+          _chip(Icons.route, '${trips.length} ${PolishText.trips(trips.length)}'),
           const SizedBox(width: 8),
           _chip(Icons.speed, '$km km'),
           if (open > 0) ...[
@@ -271,15 +267,6 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
         ],
       ),
     );
-  }
-
-  String _tripsLabel(int n) {
-    if (n == 1) return 'przejazd';
-    final lastTwo = n % 100;
-    if (lastTwo >= 12 && lastTwo <= 14) return 'przejazdów';
-    final last = n % 10;
-    if (last >= 2 && last <= 4) return 'przejazdy';
-    return 'przejazdów';
   }
 
   Widget _emptyMonth(BuildContext context) {
@@ -437,7 +424,7 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
             ),
             for (final m in options)
               ListTile(
-                title: Text('${_monthNames[m.month - 1]} ${m.year}'),
+                title: Text(PolishText.monthLabel(m.month, m.year)),
                 selected: m.year == _year && m.month == _month,
                 onTap: () => Navigator.pop(ctx, m),
               ),

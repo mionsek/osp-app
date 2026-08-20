@@ -407,7 +407,13 @@ class _StepCrewState extends ConsumerState<StepCrew>
           ],
         ),
       ),
-    );
+    ).whenComplete(() {
+      // Kontrolery żyją tak długo jak okno, ale okno nie ma własnego
+      // `dispose` — bez tego każde otwarcie „Dodaj ratownika" zostawiało
+      // dwa niezwolnione kontrolery.
+      firstNameController.dispose();
+      lastNameController.dispose();
+    });
   }
 }
 
