@@ -132,6 +132,20 @@ class VehicleTrip extends HiveObject {
   @HiveField(20)
   String syncStatus;
 
+  /// Kolumna „Dodatki*" z druku karty drogowej.
+  ///
+  /// Na papierze to wolna rubryka na dopiski wpływające na rozliczenie
+  /// (np. dodatek zimowy). Trzymamy ją jako tekst, bo druk nie narzuca
+  /// formatu, a zgadywanie reguły naliczania byłoby wróżeniem.
+  @HiveField(21, defaultValue: '')
+  String extras;
+
+  /// Kolumna „Praca silnika na postoju min." — osobna od minut pracy
+  /// urządzeń specjalistycznych, bo w rozliczeniu ma własną normę
+  /// (litry na minutę) i własną pozycję.
+  @HiveField(22)
+  int? idleMinutes;
+
   VehicleTrip({
     required this.id,
     required this.vehicleId,
@@ -154,6 +168,8 @@ class VehicleTrip extends HiveObject {
     required this.updatedAt,
     this.createdBy = '',
     this.syncStatus = 'local',
+    this.extras = '',
+    this.idleMinutes,
   });
 
   /// Rok i miesiąc, do którego przejazd należy — klucz karty.

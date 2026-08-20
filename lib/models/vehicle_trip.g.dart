@@ -38,13 +38,15 @@ class VehicleTripAdapter extends TypeAdapter<VehicleTrip> {
       updatedAt: fields[18] as DateTime,
       createdBy: fields[19] as String,
       syncStatus: fields[20] as String,
+      extras: fields[21] == null ? '' : fields[21] as String,
+      idleMinutes: fields[22] as int?,
     );
   }
 
   @override
   void write(BinaryWriter writer, VehicleTrip obj) {
     writer
-      ..writeByte(21)
+      ..writeByte(23)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -86,7 +88,11 @@ class VehicleTripAdapter extends TypeAdapter<VehicleTrip> {
       ..writeByte(19)
       ..write(obj.createdBy)
       ..writeByte(20)
-      ..write(obj.syncStatus);
+      ..write(obj.syncStatus)
+      ..writeByte(21)
+      ..write(obj.extras)
+      ..writeByte(22)
+      ..write(obj.idleMinutes);
   }
 
   @override

@@ -39,6 +39,8 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
   final _odometerEndCtrl = TextEditingController();
   final _odometerStartCtrl = TextEditingController();
   final _equipmentCtrl = TextEditingController();
+  final _idleCtrl = TextEditingController();
+  final _extrasCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
 
   String? _driverId;
@@ -61,6 +63,8 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
     _odometerEndCtrl.dispose();
     _odometerStartCtrl.dispose();
     _equipmentCtrl.dispose();
+    _idleCtrl.dispose();
+    _extrasCtrl.dispose();
     _notesCtrl.dispose();
     super.dispose();
   }
@@ -92,6 +96,8 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
         _odometerStartCtrl.text = trip.odometerStart?.toString() ?? '';
         _odometerEndCtrl.text = trip.odometerEnd?.toString() ?? '';
         _equipmentCtrl.text = trip.specialEquipmentMinutes?.toString() ?? '';
+        _idleCtrl.text = trip.idleMinutes?.toString() ?? '';
+        _extrasCtrl.text = trip.extras;
         _notesCtrl.text = trip.notes ?? '';
 
         _loadCrewOfLinkedReport();
@@ -232,6 +238,10 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
                     _dispatcherField(),
                     const SizedBox(height: 14),
                     _equipmentField(),
+                    const SizedBox(height: 14),
+                    _idleField(),
+                    const SizedBox(height: 14),
+                    _extrasField(),
                     const SizedBox(height: 14),
                     _notesField(),
                   ],
@@ -673,6 +683,40 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
     );
   }
 
+  /// Praca silnika na postoju — osobna kolumna druku i osobna pozycja
+  /// rozliczenia, z własną normą (litry na minutę), więc nie da się jej
+  /// wliczyć do minut pracy urządzeń.
+  Widget _idleField() {
+    return TextFormField(
+      controller: _idleCtrl,
+      keyboardType: TextInputType.number,
+      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+      decoration: const InputDecoration(
+        labelText: 'Praca silnika na postoju (minuty)',
+        border: OutlineInputBorder(),
+        prefixIcon: Icon(Icons.timer_outlined),
+        helperText: 'Kolumna 12 karty drogowej — rozliczana osobną normą',
+        helperMaxLines: 2,
+      ),
+    );
+  }
+
+  /// Kolumna „Dodatki*" — wolna rubryka druku na dopiski wpływające
+  /// na rozliczenie, np. dodatek zimowy.
+  Widget _extrasField() {
+    return TextFormField(
+      controller: _extrasCtrl,
+      textCapitalization: TextCapitalization.sentences,
+      decoration: const InputDecoration(
+        labelText: 'Dodatki (opcjonalne)',
+        border: OutlineInputBorder(),
+        prefixIcon: Icon(Icons.add_circle_outline),
+        helperText: 'Kolumna 11 karty drogowej, np. dodatek zimowy',
+        helperMaxLines: 2,
+      ),
+    );
+  }
+
   Widget _notesField() {
     return TextFormField(
       controller: _notesCtrl,
@@ -780,6 +824,8 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
       odometerEnd: odometerEnd,
       odometerStartManual: manual,
       specialEquipmentMinutes: int.tryParse(_equipmentCtrl.text.trim()),
+      idleMinutes: int.tryParse(_idleCtrl.text.trim()),
+      extras: _extrasCtrl.text.trim(),
       notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
       reportId: _existing?.reportId,
       createdAt: _existing?.createdAt ?? now,

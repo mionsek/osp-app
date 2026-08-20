@@ -665,12 +665,34 @@ class SyncService {
     'id': v.id,
     'name': v.name,
     'seats': v.seats,
+    // Dane z nagłówka karty drogowej — wspólne dla całej jednostki,
+    // więc kolega, który dołączy kodem, dostaje je bez przepisywania.
+    'make': v.make,
+    'model': v.model,
+    'kind': v.kind,
+    'plate': v.plate,
+    'operationalNumber': v.operationalNumber,
+    'fuelType': v.fuelType,
+    'fuelPer100Km': v.fuelPer100Km,
+    'pumpFuelPerHour': v.pumpFuelPerHour,
+    'idleFuelPerMinute': v.idleFuelPerMinute,
+    'startupFuelPerMonth': v.startupFuelPerMonth,
   };
 
   Vehicle _vehicleFromJson(Map<String, dynamic> j) => Vehicle(
     id: j['id'] as String,
     name: j['name'] as String,
     seats: j['seats'] as int,
+    make: j['make'] as String? ?? '',
+    model: j['model'] as String? ?? '',
+    kind: j['kind'] as String? ?? '',
+    plate: j['plate'] as String? ?? '',
+    operationalNumber: j['operationalNumber'] as String? ?? '',
+    fuelType: j['fuelType'] as String? ?? '',
+    fuelPer100Km: (j['fuelPer100Km'] as num?)?.toDouble(),
+    pumpFuelPerHour: (j['pumpFuelPerHour'] as num?)?.toDouble(),
+    idleFuelPerMinute: (j['idleFuelPerMinute'] as num?)?.toDouble(),
+    startupFuelPerMonth: (j['startupFuelPerMonth'] as num?)?.toDouble(),
   );
 
   Map<String, dynamic> _threatToJson(ThreatEntry t) => {
@@ -764,6 +786,8 @@ class SyncService {
     'odometerEnd': t.odometerEnd,
     'odometerStartManual': t.odometerStartManual,
     'specialEquipmentMinutes': t.specialEquipmentMinutes,
+    'idleMinutes': t.idleMinutes,
+    'extras': t.extras,
     'notes': t.notes,
     'reportId': t.reportId,
     'createdAt': t.createdAt.toIso8601String(),
@@ -790,6 +814,8 @@ class SyncService {
     odometerEnd: (j['odometerEnd'] as num?)?.toInt(),
     odometerStartManual: j['odometerStartManual'] as bool? ?? false,
     specialEquipmentMinutes: (j['specialEquipmentMinutes'] as num?)?.toInt(),
+    idleMinutes: (j['idleMinutes'] as num?)?.toInt(),
+    extras: j['extras'] as String? ?? '',
     notes: j['notes'] as String?,
     reportId: j['reportId'] as String?,
     createdAt: DateTime.parse(j['createdAt'] as String),

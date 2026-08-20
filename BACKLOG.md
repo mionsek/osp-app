@@ -417,3 +417,23 @@ każdej wysyłce. Rozbudowa do listy dopiero, gdy okaże się potrzebna.
 - [x] **Naprawiona orientacja wszystkich wydruków poziomych** — `Printing.layoutPdf` ma parametr `format`, którego **nigdy nie podawaliśmy**. Domyślny `PdfPageFormat.standard` to US Letter **pionowo**, więc okno druku startowało w pionie i wciskało poziomą stronę na pionową kartkę: wydruk wychodził zmniejszony i nieczytelny zamiast wypełnić arkusz. Dotyczyło to nie tylko nowej karty drogowej, ale **także raportu wyjazdu i przekazania mienia** — obu dokumentów w układzie 2× A5 na A4 poziomo, używanych od feature/013. `_layoutPdf` wymaga teraz formatu jako parametru obowiązkowego, żeby nie dało się tego znów pominąć
 - [x] Pierwotnie opisałem to jako „okno druku domyślnie proponuje pion, trzeba przestawić" i zostawiłem jako rzecz do sprawdzenia. To było zrzucanie własnego błędu na użytkownika — zgłoszenie od Dawida („musi być poziomo, bo inaczej jest nieczytelne") słusznie to zakwestionowało
 - [x] **Karta „postaw mi kawę" zamiast samego odnośnika** — w stopce ekranu głównego, pod przyciskiem wyjścia: ikona kawy, tekst „Aplikacja jest w pełni darmowa i bez reklam. Podoba Ci się? Postaw mi kawę!" i znak otwarcia w przeglądarce. Klikalna jest cała karta, nie osobny przycisk w środku — większy cel i mniej elementów. Brąz wzięty z istniejącej palety (przekazania mienia), żeby nie wprowadzać nowego koloru dla jednej karty. Tło odróżnia ją od kafelków menu, więc nie czyta się jako kolejna pozycja do kliknięcia. Podpis autora zostaje ostatni, pod kartą
+
+## Zrobione (feature/033-pelna-karta-drogowa)
+Wydruk karty z feature/032 odtwarzał tylko środkową część druku. Dawid zapytał, czy nie przysłał więcej zdjęć — przysłał, a ja ich nie otworzyłem.
+
+- [x] **Odczytany druk obowiązujący w OSP Kielno** ze zdjęć (`rozliczenie-materialow-pednych-osp-kielno.jpeg`, `wyjazdy-tabela-osp-kielno.jpeg`). Wcześniej odkodowałem PDF `miesieczna-karta-drogowa.pdf`, ale to załącznik gminy **Osielsko** — inny druk, inna gmina. Struktura obu zapisana w `scratchpad/druk-kielno.txt` i `druk-osielsko.txt`
+- [x] **Tabela przejazdów ma 13 kolumn, nie 11** — brakowało „Dodatki*" i „Praca silnika na postoju min.". Obie mają odpowiedniki w rozliczeniu (poz. 6 i 7), więc bez nich rozliczenia nie da się wypełnić. Dodane jako pola `VehicleTrip.extras` i `idleMinutes`
+- [x] **Dane pojazdu do nagłówka karty** — `Vehicle` dostał marka, typ, rodzaj, nr rej., numer operacyjny, rodzaj paliwa oraz cztery normy zużycia: na 100 km, autopompy na godzinę, pracy na postoju na minutę i rozruchu na miesiąc. Wszystkie opcjonalne, wszystkie synchronizowane przez Dysk. W formularzu pojazdu zwijana sekcja „Dane do karty drogowej" — domyślnie zamknięta, bo przy zwykłym dodawaniu pojazdu nikt jej nie potrzebuje
+- [x] **Wydruk przebudowany na pełny druk Kielna**: nagłówek z danymi pojazdu i normami, ramka „Zapisy dotyczące obsług technicznych", tabela przejazdów, a na drugiej stronie „Pobrano (w litrach)" i 12-pozycyjne rozliczenie materiałów pędnych ze stopką Obliczył/Sprawdził
+- [x] **Rozliczenie liczone z norm pojazdu**: przebyte kilometry × norma na 100 km, godziny pracy urządzeń × norma autopompy, minuty postoju × norma na minutę, rozruch raz na miesiąc, plus suma. Zweryfikowane na emulatorze: 42 km × 9,5/100 = 3,99 l, + 1 l rozruchu = 4,99 l razem
+- [x] **Pozycje, których aplikacja nie zna, zostają puste** — ilości pobranego paliwa (z kwitów) i dodatek zimowy. Nie znam reguły naliczania dodatku i **nie zgadywałem jej**; puste pole jest uczciwsze niż zmyślona liczba w dokumencie idącym do gminy
+- [x] Rozliczenie zawsze od nowej strony — na papierowym druku jest po drugiej stronie kartki, a wcześniej sam nagłówek zostawał na dole poprzedniej
+
+### Poprzednia wersja wydruku — co było źle
+- [x] ~~Tabela „Rozliczenie zużycia paliwa" (Wyszczególnienie / Norma / Ilość / Zużycie)~~ — **wymyślona przeze mnie**, nie odpowiadała niczemu w druku. Napisałem wtedy, że „zostawiam miejsce na długopis, bo nie znam norm", ale w praktyce wydrukowałem zmyśloną tabelę wyglądającą na urzędową — gorzej, niż gdybym nie drukował nic
+- [x] ~~Podpisy „Sporządził / Sprawdził / Zatwierdził"~~ — w druku są dwa: „Obliczył" i „Sprawdził"
+
+### Do rozstrzygnięcia
+- [ ] **Reguła dodatku zimowego** — których miesięcy dotyczy i jaki jest narzut. Po ustaleniu doliczy się automatycznie (poz. 6 rozliczenia)
+- [ ] **Ilości pobranego paliwa** — dziś tabela „Pobrano" drukuje się pusta. Do rozważenia osobny ekran wpisywania kwitów (data, stan licznika, ON, ET), który wypełniłby też pozycje 1–3 i 10–12 rozliczenia
+- [ ] **Stan autopompy na początek i koniec miesiąca** — pole jest na wydruku, ale aplikacja go nie zbiera
