@@ -359,7 +359,8 @@ Obecnie druk startuje od razu po kliknięciu.
 
 
 ### Przed publikacją w Play Store
-- [ ] **Własny klucz podpisu** — dziś APK jest podpisany kluczem debug. Po zmianie klucza Android potraktuje aplikację jako inną i **każdy będzie musiał odinstalować przed aktualizacją, tracąc dane lokalne**. Im więcej osób dostanie wersję na kluczu debug, tym boleśniejsze. Wymaga dopisania nowego odcisku SHA-1 do klienta OAuth w Google Cloud, inaczej przestanie działać logowanie Google (błąd 10)
+- [x] **Własny klucz podpisu** — dziś APK jest podpisany kluczem debug. Po zmianie klucza Android potraktuje aplikację jako inną i **każdy będzie musiał odinstalować przed aktualizacją, tracąc dane lokalne**. Im więcej osób dostanie wersję na kluczu debug, tym boleśniejsze. Wymaga dopisania nowego odcisku SHA-1 do klienta OAuth w Google Cloud, inaczej przestanie działać logowanie Google (błąd 10). **Zrobione w chore/039** — patrz sekcja niżej
+- [ ] **Dopisać SHA-1 klucza wydań do klienta OAuth** w Google Cloud: `B4:8D:C9:C8:B7:FB:93:69:FB:86:27:1A:60:73:89:1F:7E:94:92:C2` (pakiet `pl.osp.osp_app`). **Do czasu dopisania logowanie Google zwraca błąd 10** i działa tylko tryb offline
 - [ ] Grafiki do sklepu: ikona 512×512, feature graphic 1024×500, min. 2 screenshoty
 - [ ] Polityka prywatności — po usunięciu reklam aplikacja nie zbiera praktycznie nic (dane leżą na Dysku Google użytkownika), więc mieści się w akapicie
 - [ ] (opcjonalnie) Ikona monochromatyczna `<monochrome>` w adaptive icon — motywy Android 13+
@@ -590,3 +591,24 @@ w pasku ekranu. Wyszły natomiast cztery braki, których backlog nie znał.
 
 ### Świadomie nie zrobione
 - **Ewidencja nadal nie ma widoku rocznego ani zbiorczego dla wszystkich pojazdów.** Wynika to wprost z zasady „karta = pojazd + miesiąc" (feature/026) i przy rozliczeniu rocznym oznacza wydrukowanie dwunastu kart osobno. Do zmiany dopiero, gdyby ktoś to zgłosił jako realną uciążliwość — na razie to domysł, a nie potrzeba
+
+## Zrobione (chore/039-klucz-podpisu)
+Wydania idą wreszcie na **własnym kluczu**, a nie na debugowym. Sprawa wyszła
+przy przygotowywaniu APK do rozdania kolegom.
+
+### Dlaczego akurat teraz
+- [x] **Klucz debug na tym komputerze jest nowy** — powstał przy stawianiu Android SDK (ważny od 2 września 2026). APK zbudowany tutaj i tak **nie był zgodny** z wcześniejszymi: aktualizacja odmawiałaby instalacji, a logowanie Google zwracałoby błąd 10, bo Google Cloud zna odcisk starego keystore'a
+- [x] Czyli koszt „odinstaluj i strać dane lokalne" **został już poniesiony** przez zmianę komputera — niezależnie od tego, co zrobimy. To czyni ten moment najtańszym możliwym na przejście na własny klucz: ból raz, przy najmniejszej liczbie użytkowników, zamiast drugi raz przed publikacją w Play Store
+- [x] Backlog trzymał to jako blokera nr 1 przed publikacją od feature/031
+
+### Co zostało zrobione
+- [x] **Keystore `osp-app-upload.jks`** — RSA 4096, ważny do stycznia 2054, alias `upload`. Leży **poza repozytorium**, w `C:/Users/Lenovo/.keys/`, żeby nie dało się go wciągnąć do archiwum projektu ani przypadkiem zacommitować
+- [x] **`android/key.properties`** z hasłami i ścieżką — plik jest w `android/.gitignore` (od `chore: zabezpieczenie .gitignore przed commitem sekretów`), sprawdzone przez `git check-ignore`
+- [x] **`signingConfigs` w [build.gradle.kts](android/app/build.gradle.kts)** czyta te dane, a `buildTypes.release` z nich korzysta. Zniknął TODO „Add your own signing config", który wisiał od pierwszej gałęzi
+- [x] **Zapasowe zachowanie, gdy `key.properties` nie ma** — na świeżym klonie, u innej osoby albo w CI build release nadal działa, tylko na kluczu debug. Inaczej `git clone` + `flutter build apk --release` przestałby przechodzić u kogokolwiek poza jednym komputerem
+- [x] Podpis zweryfikowany na gotowym pliku: `apksigner verify --print-certs` pokazuje `CN=Dawid Mionskowski, O=Raporty OSP` i odcisk `b48dc9c8…`, zgodny z keystore'em
+- [x] Wersja release **uruchomiona na emulatorze** — fix/025 dotyczył zawieszania się właśnie release'u na ekranie startowym, więc sam fakt zbudowania nie wystarcza za sprawdzenie
+
+### Czego pilnować
+- **Utrata keystore'a oznacza koniec aktualizacji.** Po publikacji w Play Store aplikacji podpisanej innym kluczem nie da się zaktualizować — trzeba by wydać ją pod nowym identyfikatorem i stracić wszystkich użytkowników. Plik i hasło muszą mieć kopię poza tym komputerem
+- **SHA-1 do dopisania w Google Cloud** przed testami z logowaniem — bez tego działa wyłącznie tryb offline. Odcisk jest w sekcji „Przed publikacją" wyżej

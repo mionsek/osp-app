@@ -1,3 +1,22 @@
+import java.io.FileInputStream
+import java.util.Properties
+
+// Dane klucza podpisu wydań. Plik `android/key.properties` **nie jest
+// w repozytorium** (pilnuje tego `android/.gitignore`) i trzyma hasła oraz
+// ścieżkę do keystore'a leżącego poza projektem.
+//
+// Gdy pliku nie ma — na świeżym klonie, u innej osoby, w CI — build release
+// nie wywala się, tylko podpisuje kluczem debug jak wcześniej. Taki APK nadaje
+// się do sprawdzenia, że aplikacja działa, ale **nie** do rozdania ani do Play
+// Store: instalacje podpisane różnymi kluczami nie aktualizują się nawzajem.
+val keystorePropertiesFile = rootProject.file("key.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.exists()) {
+        FileInputStream(keystorePropertiesFile).use { load(it) }
+    }
+}
+val hasReleaseKey = keystorePropertiesFile.exists()
+
 plugins {
     id("com.android.application")
     // Wtyczki Kotlina celowo tu nie ma: od AGP 9 dostarcza ją sam AGP
@@ -28,11 +47,29 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        create("release") {
+            if (hasReleaseKey) {
+                keyAlias = keystoreProperties["keyAlias"] as String
+                keyPassword = keystoreProperties["keyPassword"] as String
+                storeFile = file(keystoreProperties["storeFile"] as String)
+                storePassword = keystoreProperties["storePassword"] as String
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // Własny klucz wydań, gdy `key.properties` jest na miejscu.
+            // Wcześniej wydania szły na kluczu debug, co znaczyło, że każdy
+            // build z innego komputera dawał APK niezgodny z poprzednim:
+            // aktualizacja odmawiała instalacji, a logowanie Google zwracało
+            // błąd 10, bo odcisk SHA-1 nie zgadzał się z klientem OAuth.
+            signingConfig = if (hasReleaseKey) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
 
             // Bez własnych reguł R8 usuwa io.flutter.util.PathUtils i aplikacja
             // wysypuje się przy starcie. Szczegóły w proguard-rules.pro.
