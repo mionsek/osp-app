@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../../core/constants/threat_types.dart';
 import '../../../providers/providers.dart';
 import '../../../services/location_service.dart';
+import '../../../core/theme/osp_theme.dart';
 
 class StepBasicInfo extends ConsumerStatefulWidget {
   final String reportNumber;
@@ -130,7 +131,7 @@ class _StepBasicInfoState extends ConsumerState<StepBasicInfo>
   void _showSnack(String text, {bool ok = false}) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(text),
-      backgroundColor: ok ? const Color(0xFF2E7D32) : Colors.orange[800],
+      backgroundColor: ok ? OspTheme.success : Colors.orange[800],
     ));
   }
 
@@ -140,7 +141,7 @@ class _StepBasicInfoState extends ConsumerState<StepBasicInfo>
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Wybierz przynajmniej jeden pojazd'),
-          backgroundColor: Color(0xFFB71C1C),
+          backgroundColor: OspTheme.danger,
         ),
       );
       return;
@@ -149,7 +150,7 @@ class _StepBasicInfoState extends ConsumerState<StepBasicInfo>
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Wybierz rodzaj zagrożenia'),
-          backgroundColor: Color(0xFFB71C1C),
+          backgroundColor: OspTheme.danger,
         ),
       );
       return;
@@ -423,7 +424,7 @@ class _StepBasicInfoState extends ConsumerState<StepBasicInfo>
                   },
                   secondary: const Icon(
                     Icons.fire_truck,
-                    color: Color(0xFFE65100),
+                    color: OspTheme.sectionVehicles,
                   ),
                 ),
               ),

@@ -268,7 +268,7 @@ class SyncService {
         for (final file in reportFiles) {
           final data = await _driveService.readJsonFile(file.id!);
           if (data != null) {
-            final report = _reportFromJson(data);
+            final report = reportFromJson(data);
             final local = _db.getReport(report.id);
             if (local == null || report.updatedAt.isAfter(local.updatedAt)) {
               await _db.addReport(report);
@@ -341,7 +341,7 @@ class SyncService {
         await _driveService.writeJsonFile(
           yearFolderId,
           fileName,
-          _reportToJson(report),
+          reportToJson(report),
         );
       }
     }
@@ -357,7 +357,7 @@ class SyncService {
       await _driveService.writeJsonFile(
         handoversFolderId,
         _buildHandoverFileName(handover),
-        _handoverToJson(handover),
+        handoverToJson(handover),
       );
     }
 
@@ -444,7 +444,7 @@ class SyncService {
         for (final file in reportFiles) {
           final data = await _driveService.readJsonFile(file.id!);
           if (data != null) {
-            final report = _reportFromJson(data);
+            final report = reportFromJson(data);
             final local = _db.getReport(report.id);
             if (local == null || report.updatedAt.isAfter(local.updatedAt)) {
               await _db.addReport(report);
@@ -457,7 +457,7 @@ class SyncService {
       for (final file in legacyFiles) {
         final data = await _driveService.readJsonFile(file.id!);
         if (data != null) {
-          final report = _reportFromJson(data);
+          final report = reportFromJson(data);
           final local = _db.getReport(report.id);
           if (local == null || report.updatedAt.isAfter(local.updatedAt)) {
             await _db.addReport(report);
@@ -477,7 +477,7 @@ class SyncService {
       for (final file in handoverFiles) {
         final data = await _driveService.readJsonFile(file.id!);
         if (data != null) {
-          final handover = _handoverFromJson(data);
+          final handover = handoverFromJson(data);
           final local = _db.getHandover(handover.id);
           if (local == null || handover.updatedAt.isAfter(local.updatedAt)) {
             await _db.addHandover(handover);
@@ -709,7 +709,9 @@ class SyncService {
     isCustom: j['isCustom'] as bool? ?? false,
   );
 
-  Map<String, dynamic> _reportToJson(Report r) => {
+  /// Serializacja raportu na Dysk — patrz uwaga przy [vehicleToJson].
+  @visibleForTesting
+  static Map<String, dynamic> reportToJson(Report r) => {
     'id': r.id,
     'reportNumber': r.reportNumber,
     'year': r.year,
@@ -721,7 +723,7 @@ class SyncService {
     'addressDescription': r.addressDescription,
     'threatCategory': r.threatCategory,
     'threatSubtype': r.threatSubtype,
-    'crewAssignments': r.crewAssignments.map(_crewToJson).toList(),
+    'crewAssignments': r.crewAssignments.map(crewToJson).toList(),
     'operationCommanderId': r.operationCommanderId,
     'notes': r.notes,
     'createdAt': r.createdAt.toIso8601String(),
@@ -730,7 +732,8 @@ class SyncService {
     'syncStatus': 'synced',
   };
 
-  Report _reportFromJson(Map<String, dynamic> j) => Report(
+  @visibleForTesting
+  static Report reportFromJson(Map<String, dynamic> j) => Report(
     id: j['id'] as String,
     reportNumber: j['reportNumber'] as String,
     year: j['year'] as int,
@@ -746,7 +749,7 @@ class SyncService {
     threatSubtype: j['threatSubtype'] as String?,
     crewAssignments:
         (j['crewAssignments'] as List?)
-            ?.map((c) => _crewFromJson(c as Map<String, dynamic>))
+            ?.map((c) => crewFromJson(c as Map<String, dynamic>))
             .toList() ??
         [],
     operationCommanderId: j['operationCommanderId'] as String?,
@@ -836,7 +839,9 @@ class SyncService {
     syncStatus: 'synced',
   );
 
-  Map<String, dynamic> _handoverToJson(PropertyHandover h) => {
+  /// Serializacja przekazania mienia na Dysk — patrz uwaga przy [vehicleToJson].
+  @visibleForTesting
+  static Map<String, dynamic> handoverToJson(PropertyHandover h) => {
     'id': h.id,
     'reportId': h.reportId,
     'eventLocation': h.eventLocation,
@@ -859,7 +864,8 @@ class SyncService {
     'syncStatus': 'synced',
   };
 
-  PropertyHandover _handoverFromJson(Map<String, dynamic> j) =>
+  @visibleForTesting
+  static PropertyHandover handoverFromJson(Map<String, dynamic> j) =>
       PropertyHandover(
         id: j['id'] as String,
         reportId: j['reportId'] as String?,
@@ -883,7 +889,9 @@ class SyncService {
         syncStatus: 'synced',
       );
 
-  Map<String, dynamic> _crewToJson(CrewAssignment c) => {
+  /// Skład zastępu — część raportu, więc musi być testowalny razem z nim.
+  @visibleForTesting
+  static Map<String, dynamic> crewToJson(CrewAssignment c) => {
     'vehicleId': c.vehicleId,
     'vehicleName': c.vehicleName,
     'driverId': c.driverId,
@@ -891,7 +899,8 @@ class SyncService {
     'crewMemberIds': c.crewMemberIds,
   };
 
-  CrewAssignment _crewFromJson(Map<String, dynamic> j) => CrewAssignment(
+  @visibleForTesting
+  static CrewAssignment crewFromJson(Map<String, dynamic> j) => CrewAssignment(
     vehicleId: j['vehicleId'] as String,
     vehicleName: j['vehicleName'] as String,
     driverId: j['driverId'] as String?,

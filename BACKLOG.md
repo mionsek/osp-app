@@ -168,7 +168,7 @@ narzędzia, a nie jako zadanie w tle. Do odczytu ekranów i tak lepszy jest
 - [x] **22 nowe testy jednostkowe** łańcucha licznika i generowania przejazdów z raportu (łącznie 104). Jeden z nich złapał realny błąd: `rechain` kasował ręcznie wpisany stan początkowy pierwszego przejazdu pojazdu, bo nie miał poprzednika — czyli ginęła jedyna liczba, od której zaczyna się cały łańcuch
 - [x] **Dwa błędy znalezione dopiero na emulatorze**, nie do złapania testami jednostkowymi: (1) przy pierwszym przejeździe pojazdu podgląd „Przejechano X km" i ostrzeżenie o sprzecznym liczniku nie działały, bo liczyły stan początkowy z łańcucha (`null`) zamiast z liczby wpisanej ręcznie — flaga „ręcznie" jest wtedy jeszcze `false`; naprawione jednym wspólnym źródłem prawdy dla podglądu i zapisu, (2) wpis z wpisanym licznikiem, ale bez godziny przyjazdu, był opisany „Brak stanu licznika po powrocie" — czyli wysyłał szukać liczby, która już tam była; komunikat nazywa teraz dokładnie to, czego brakuje
 - [x] Przepływ przejechany na emulatorze w wersji release: utworzenie jednostki → pojazd → pierwszy przejazd (pyta o obie liczby) → drugi przejazd (podstawia 1042 z poprzedniego, zablokowane kłódką, pyta tylko o stan po powrocie)
-- [ ] **Wydruk karty drogowej** — świadomie poza zakresem tej gałęzi. Dane zbierają się od teraz, wydruk powstanie na realnych wpisach. Wymaga norm i linii rozliczeniowych **per pojazd**, bo druk jest załącznikiem do zarządzenia wójta i różni się między gminami (porównane Kielno, Osielsko, Świętajno)
+- [x] **Wydruk karty drogowej** — świadomie poza zakresem tej gałęzi. Dane zbierają się od teraz, wydruk powstanie na realnych wpisach. Wymaga norm i linii rozliczeniowych **per pojazd**, bo druk jest załącznikiem do zarządzenia wójta i różni się między gminami (porównane Kielno, Osielsko, Świętajno). **Zrobione w feature/032**, przebudowane na pełny druk Kielna w feature/033 — checkbox został niezaznaczony przez przeoczenie i przez trzy gałęzie wyglądał na otwarte zadanie
 
 ## Zrobione (fix/025-crash-release-r8)
 - [x] **Aplikacja w wersji release zawieszała się na ekranie startowym** — dotyczyło każdego builda release, czyli także APK do rozdania; w debug wszystko działało, więc problem był niewidoczny przy codziennym testowaniu
@@ -463,11 +463,17 @@ Było 104 testy, wszystkie **czysto jednostkowe na modelach i logice bez wejści
 - [x] Łącznie **124 testy**
 
 ### Znalezione, świadomie odłożone
-- [ ] **Paleta kolorów istnieje, ale jest omijana** — `OspTheme.primaryRed` jest zdefiniowany, a kod używa surowego `0xFFB71C1C` **31 razy**; podobnie zieleń (20×), pomarańcz (9×), błękit (7×), brąz (4×). Zmiana mechaniczna, ale dotyka ~20 plików — osobna gałąź, żeby nie mieszać z naprawami
-- [ ] **Brak testów widoków i integracyjnych** — zero `testWidgets`, brak katalogu `integration_test`. Najbardziej przydałyby się dla kreatora wyjazdu (trzy kroki, walidacje, ostrzeżenia) i formularza przejazdu (łańcuch licznika w interfejsie)
-- [ ] **`pdf_service.dart` ma 1192 linie** — trzy niezależne dokumenty w jednym pliku. Karta drogowa dostała już własny plik; raport, statystyki i przekazanie mienia mogłyby pójść tą samą drogą
-- [ ] **Mapowania JSON raportu i przekazania mienia** zostały prywatne i nietestowane — ta sama krucha konstrukcja co przy pojeździe i przejeździe
-- [ ] Stałe układu wydruków (rozmiary czcionek, szerokości kolumn) zostają przy swoich wydrukach — to parametry layoutu, nie konfiguracja aplikacji, i wyniesienie ich do wspólnego pliku pogorszyłoby czytelność
+Wszystkie cztery **zrobione w refactor/036** — opis niżej.
+- [x] **Paleta kolorów istnieje, ale jest omijana** — `OspTheme.primaryRed` jest zdefiniowany, a kod używa surowego `0xFFB71C1C` **31 razy**; podobnie zieleń (20×), pomarańcz (9×), błękit (7×), brąz (4×). Zmiana mechaniczna, ale dotyka ~20 plików — osobna gałąź, żeby nie mieszać z naprawami
+- [x] **Brak testów widoków i integracyjnych** — zero `testWidgets`, brak katalogu `integration_test`. Najbardziej przydałyby się dla kreatora wyjazdu (trzy kroki, walidacje, ostrzeżenia) i formularza przejazdu (łańcuch licznika w interfejsie)
+- [x] **`pdf_service.dart` ma 1192 linie** — trzy niezależne dokumenty w jednym pliku. Karta drogowa dostała już własny plik; raport, statystyki i przekazanie mienia mogłyby pójść tą samą drogą
+- [x] **Mapowania JSON raportu i przekazania mienia** zostały prywatne i nietestowane — ta sama krucha konstrukcja co przy pojeździe i przejeździe
+
+### Rozstrzygnięte — nie do zrobienia
+Nie są to zadania, tylko decyzje. Trzymane osobno, bo jako pozycje `- [ ]` na
+liście otwartych wyglądały na zaległość i przy każdym przeglądzie ktoś proponował
+je „dokończyć".
+- **Stałe układu wydruków** (rozmiary czcionek, szerokości kolumn) **zostają przy swoich wydrukach** — to parametry layoutu, nie konfiguracja aplikacji, i wyniesienie ich do wspólnego pliku pogorszyłoby czytelność: liczba przestałaby sąsiadować z tabelą, na którą wpływa. Potwierdzone ponownie przy refactor/036
 
 ## Zrobione (fix/035-nazwiska-urzadzenia-paski)
 Trzy zgłoszenia: dwa od Wojtka, jedno od Dawida.
@@ -484,3 +490,53 @@ Wojtek pytał, czy dysponent nie mógłby zaciągać się z powiązanego wyjazdu
 ### Nadal otwarte
 - [ ] **Lista urządzeń per pojazd** — dziś jest wspólna dla wszystkich, więc przy GLM pokazuje autopompę, której ten wóz nie ma. Wymaga ustaleń z Deringiem (czy definiować urządzenia przy pojeździe, czy zostawić stałą listę)
 - [ ] Rozliczenie paliwa liczy wszystkie urządzenia jedną normą autopompy — przy realnym rozbiciu na autopompę i agregat trzeba by norm per urządzenie
+
+## Zrobione (refactor/036-paleta-testy-pdf-wersje)
+Cztery pozycje z „Znalezione, świadomie odłożone" (refactor/034) plus podbicie
+wersji Androida, które wyszło dopiero przy stawianiu środowiska od zera.
+
+### Wersje Androida — pilniejsze, niż wyglądało
+- [x] **Projekt stał dokładnie na progu błędu Fluttera** — narzędzia trzymają dla AGP, Kotlina i Gradle dwa progi, `warn` i `error`. Wszystkie trzy nasze wersje były **równe wartościom `error`**: AGP `8.11.1`, KGP `2.2.20`, Gradle `8.14`. To nie było ostrzeżenie na przyszłość — najbliższe wydanie Fluttera podnoszące progi **wywaliłoby build twardo**, a nie wypisało uwagę. Przechodziło o zero
+- [x] Podbite do progów `warn`: **AGP 9.0.1, Kotlin 2.3.20, Gradle 9.1.0**. Wariant minimalny, nie równanie do szablonu Fluttera (9.1 / 2.4 / 9.3.1) — dwie wtyczki z pub.dev (`package_info_plus`, `print_bluetooth_thermal`) używają wycofywanego `kotlinOptions`, a nad ich kodem nie mamy kontroli
+- [x] **`kotlinOptions` zastąpione blokiem `kotlin { compilerOptions }`** ([android/app/build.gradle.kts](android/app/build.gradle.kts)) — wycofane w Kotlinie 2.3, zgodnie z aktualnym szablonem Fluttera
+- [x] `android.newDsl=false` i `android.builtInKotlin=false` **zostają** — trzymają stare DSL i wyłączają z równania największą zmianę AGP 9. Nowe DSL to osobna gałąź
+- [x] Uwaga na przyszłość: dystrybucje Gradle 9 mają **trzyczłonowe** numery. `gradle-9.1-all.zip` nie istnieje (wersja nazywa się `9.1.0`), a wrapper zgłasza to jako „błąd pobierania artefaktów", nie jako złą nazwę pliku
+
+### Paleta kolorów — jedno źródło prawdy
+- [x] **`OspTheme` rozszerzony o pełną paletę** ([osp_theme.dart](lib/core/theme/osp_theme.dart)), a wszystkie **86 surowych literałów** `0xFF……` z 21 plików zastąpione nazwami. Sama czerwień wiodąca była wpisana z ręki 31 razy
+- [x] Nazwy **od znaczenia, nie od barwy**: `sectionVehicles`, a nie `orange`. Kolory mają w tej aplikacji role — każda sekcja ma swoją, osobno od `danger` / `success` / `info` / `warning` / `neutral` / `attention`
+- [x] Cztery pary nazw dzielą wartość (`danger` = `primaryRed`, `success` = `sectionFirefighters`, `info` = `sectionReportsList`, `attention` = `sectionVehicles`) — **celowo**. Czerwień wyjazdu jest od początku czerwienią błędu; osobne nazwy pozwalają je kiedyś rozdzielić przez zmianę jednej linijki zamiast przeglądania całego kodu
+- [x] **Strażnik w teście** ([theme_palette_test.dart](test/theme_palette_test.dart)) — przechodzi po plikach w `lib/` i przewraca się na surowym kolorze poza `osp_theme.dart`. Bez tego następna gałąź dopisałaby kolejny literał dokładnie tak, jak dopisały poprzednie: paleta istniała od pierwszej gałęzi i to jej nie powstrzymało
+- [x] Zero zmian wizualnych — podmiana wartości na nazwę, piksel w piksel
+
+### Podział pdf_service.dart (1197 linii)
+- [x] **Cztery pliki zamiast jednego**: [pdf_output.dart](lib/services/pdf_output.dart) (wspólny druk, udostępnianie i zawijanie tekstu), [report_pdf.dart](lib/services/report_pdf.dart), [stats_pdf.dart](lib/services/stats_pdf.dart), [handover_pdf.dart](lib/services/handover_pdf.dart). Każdy dokument wołany jest przez **inny ekran** i żaden ekran nie sięga po dwa naraz, więc fasada nie miałaby czego skrywać — `PdfService` zniknął
+- [x] **Karta drogowa podpięta pod wspólne wyjście** — miała własną kopię obsługi druku razem z powielonym ostrzeżeniem w komentarzu. Dokładnie ta duplikacja, przed którą ma chronić wydzielenie
+- [x] Ostrzeżenie o obowiązkowym `format` (feature/032: brak parametru wysyłał **wszystkie trzy** poziome wydruki na pionową kartkę) przeniesione do `pdf_output.dart` i nadal wymuszone sygnaturą
+- [x] Usunięty alias `_sanitizeFilename`, którego własny komentarz tłumaczył się z istnienia — wywołania idą wprost do `FileNames.sanitize`
+- [x] Publiczne nazwy bez zbędnych sufiksów: `StatsPdf.generateAndPrint` zamiast `PdfService.generateAndPrintStats` — klasa niesie już typ dokumentu
+
+### Mapowania JSON raportu i przekazania mienia
+- [x] **`reportToJson`/`reportFromJson`, `handoverToJson`/`handoverFromJson`, `crewToJson`/`crewFromJson`** zrobione statycznymi i `@visibleForTesting`, jak wcześniej pojazd i przejazd. Wszystkie są czystymi funkcjami, więc zmiana nie ruszyła zachowania
+- [x] **13 nowych testów serializacji**: komplet danych przez prawdziwy `jsonEncode`/`jsonDecode`, puste pola opcjonalne, **pliki zapisane starszą wersją aplikacji** (realny przypadek — na Dysku jednostki leżą pliki sprzed każdej zmiany modelu) i strażnicy list kluczy
+- [x] Osobny test na to, że zapis na Dysk oznacza raport jako `synced` niezależnie od stanu lokalnego — dotąd nieopisane założenie
+- [ ] **Mapowania ratownika i słownika zagrożeń** (`_firefighterToJson`, `_threatToJson`) zostają prywatne i nietestowane — poza zakresem tej pozycji, ta sama krucha konstrukcja
+
+### Testy widoków i integracyjne — największa luka zamknięta
+Było **124 testy, wszystkie bez dotykania interfejsu**. Jest **158** plus test integracyjny.
+- [x] **Wspólny fundament** ([test/helpers/test_app.dart](test/helpers/test_app.dart)) — Hive na katalogu tymczasowym i `ProviderScope` z podmienionym `SyncService`. Ekrany pracują na **prawdziwym** `DatabaseService`, więc testujemy to, co pojedzie na telefon; podmieniona jest tylko synchronizacja, bo kreator pobiera raporty z Dysku przy starcie
+- [x] **Kreator wyjazdu, 8 testów** ([report_wizard_test.dart](test/widgets/report_wizard_test.dart)) — blokada „Dalej" przy braku pojazdu i zagrożenia, oba ostrzeżenia o niepełnym składzie (to z kroku zastępów i to z kreatora), „Popraw" zatrzymujące w miejscu, podpowiedź miejscowości z danych jednostki i kolejność „Nazwisko Imię" w podsumowaniu (regresja z fix/035)
+- [x] **Formularz przejazdu, 11 testów** ([trip_form_test.dart](test/widgets/trip_form_test.dart)) — łańcuch licznika w interfejsie: podstawienie z poprzedniego przejazdu, kłódka, powrót do wartości z łańcucha, podgląd kilometrów (także przy pierwszym przejeździe pojazdu — to był realny błąd z feature/026), ostrzeżenie o cofniętym liczniku, lista urządzeń z sumą minut
+- [x] **Test integracyjny** ([integration_test/app_test.dart](integration_test/app_test.dart)) — pełne przejście na urządzeniu: onboarding offline → jednostka → pojazd → trzej ratownicy → wyjazd → sprawdzenie, że przejazd **dopisał się sam** do ewidencji. Ta ścieżka była dotąd przechodzona ręcznie po każdej zmianie. Wymaga czystych danych (`adb shell pm clear pl.osp.osp_app`) i mówi to wprost, zamiast wywalić się później na „nie znaleziono przycisku"
+
+### Dwie pułapki testów widoków, warte zapamiętania
+- [x] **Zapis do Hive w ciele `testWidgets` zawiesza test na głucho** — ciało biegnie w sztucznej pętli zdarzeń, a zapis kolejkuje tam timery, których `pumpAndSettle` nigdy nie wyczerpie. Bez komunikatu, bez stosu: test po prostu wisi do timeoutu. Dane przygotowujemy **wyłącznie w `setUp`**
+- [x] **Domyślne okno testowe to 800×600** — dla formularza przejazdu za mało: `ensureVisible` przewijało cel pod pasek tytułu i kliknięcia trafiały w `AppBar`. Testy ustawiają wymiary telefonu (1080×2400), na którym aplikacja realnie chodzi
+
+### Nowe ostrzeżenie, które ujawnił dopiero AGP 9 — Built-in Kotlin
+Po podbiciu wersji zniknęły ostrzeżenia o AGP i Kotlinie, ale wyszło następne
+w kolejce. Flutter przechodzi na **Built-in Kotlin**: wtyczka Kotlina ma być
+stosowana przez AGP, a nie przez projekt. Nas dotyczy podwójnie.
+- [ ] **Aplikacja sama stosuje KGP** (`id("kotlin-android")` w [android/app/build.gradle.kts](android/app/build.gradle.kts)) — do zdjęcia razem z `android.builtInKotlin=true`
+- [ ] **Dwie wtyczki z pub.dev stosują KGP u siebie**: `package_info_plus` i `print_bluetooth_thermal`. **To one blokują migrację** — nad ich kodem nie mamy kontroli, a Flutter zapowiada, że przyszłe wersje odmówią budowania. Do sprawdzenia w ich changelogach, zanim zacznie boleć; `print_bluetooth_thermal` jest najmniej aktywnie rozwijaną zależnością w projekcie i to najbardziej prawdopodobny kandydat do wymiany
+- Póki co trzyma nas `android.builtInKotlin=false` — flaga, nie rozwiązanie

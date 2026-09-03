@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../providers/providers.dart';
+import '../../core/theme/osp_theme.dart';
 
 class HandoversListScreen extends ConsumerWidget {
   const HandoversListScreen({super.key});
@@ -54,7 +55,7 @@ class HandoversListScreen extends ConsumerWidget {
                 return Card(
                   child: ListTile(
                     leading: const CircleAvatar(
-                      backgroundColor: Color(0xFF6D4C41),
+                      backgroundColor: OspTheme.sectionHandovers,
                       child: Icon(Icons.inventory_2, color: Colors.white),
                     ),
                     title: Text(

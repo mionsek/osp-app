@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/utils/firefighter_search.dart';
 import '../models/firefighter.dart';
+import '../core/theme/osp_theme.dart';
 
 /// Wynik wyboru ratownika z panelu.
 class FirefighterPickResult {
@@ -116,7 +117,7 @@ class _FirefighterPickerSheetState extends State<_FirefighterPickerSheet> {
                     for (final ff in results)
                       ListTile(
                         leading: CircleAvatar(
-                          backgroundColor: const Color(0xFF2E7D32),
+                          backgroundColor: OspTheme.sectionFirefighters,
                           child: Text(
                             ff.lastName.isNotEmpty
                                 ? ff.lastName[0].toUpperCase()

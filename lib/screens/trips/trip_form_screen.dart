@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/utils/bottom_inset.dart';
 import '../../models/models.dart';
 import '../../providers/providers.dart';
+import '../../core/theme/osp_theme.dart';
 
 /// Dodawanie i edycja jednego przejazdu — jednego wiersza karty drogowej.
 ///
@@ -385,16 +386,16 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF3E0).withValues(alpha: 0.55),
+        color: OspTheme.vehiclesSurface.withValues(alpha: 0.55),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFFFCC80)),
+        border: Border.all(color: OspTheme.vehiclesBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.speed, size: 19, color: Color(0xFFE65100)),
+              const Icon(Icons.speed, size: 19, color: OspTheme.sectionVehicles),
               const SizedBox(width: 8),
               Text('Stan licznika',
                   style: Theme.of(context)
@@ -462,7 +463,7 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
               style: TextStyle(
                 fontWeight: FontWeight.w600,
                 color: _distancePreview! < 0
-                    ? const Color(0xFFB71C1C)
+                    ? OspTheme.danger
                     : Colors.grey[800],
               ),
             ),
@@ -920,7 +921,7 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
               child: const Text('Anuluj')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFB71C1C)),
+                backgroundColor: OspTheme.danger),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Usuń'),
           ),
@@ -1025,7 +1026,7 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(text),
-        backgroundColor: isError ? const Color(0xFFB71C1C) : null,
+        backgroundColor: isError ? OspTheme.danger : null,
       ),
     );
   }

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../models/models.dart';
 import '../../../providers/providers.dart';
+import '../../../core/theme/osp_theme.dart';
 
 class StepSummary extends ConsumerWidget {
   final String reportNumber;
@@ -119,7 +120,7 @@ class StepSummary extends ConsumerWidget {
                       Row(
                         children: [
                           const Icon(Icons.fire_truck,
-                              color: Color(0xFFE65100)),
+                              color: OspTheme.sectionVehicles),
                           const SizedBox(width: 8),
                           Text(
                             crew.vehicleName,
@@ -164,7 +165,7 @@ class StepSummary extends ConsumerWidget {
             icon: const Icon(Icons.save),
             label: const Text('Zapisz raport'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2E7D32),
+              backgroundColor: OspTheme.success,
               minimumSize: const Size(double.infinity, 56),
             ),
           ),

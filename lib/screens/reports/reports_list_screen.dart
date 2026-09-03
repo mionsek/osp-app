@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../providers/providers.dart';
+import '../../core/theme/osp_theme.dart';
 
 class ReportsListScreen extends ConsumerWidget {
   const ReportsListScreen({super.key});
@@ -23,7 +24,7 @@ class ReportsListScreen extends ConsumerWidget {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('Dodaj przynajmniej jeden pojazd bojowy'),
-                backgroundColor: Color(0xFFB71C1C),
+                backgroundColor: OspTheme.danger,
               ),
             );
             return;
@@ -81,12 +82,12 @@ class ReportsListScreen extends ConsumerWidget {
     final lower = category.toLowerCase();
     if (lower == 'pożar') {
       return const CircleAvatar(
-        backgroundColor: Color(0xFFB71C1C),
+        backgroundColor: OspTheme.danger,
         child: Icon(Icons.local_fire_department, color: Colors.white),
       );
     } else if (lower == 'miejscowe zagrożenie') {
       return const CircleAvatar(
-        backgroundColor: Color(0xFFF9A825),
+        backgroundColor: OspTheme.warning,
         child: Icon(Icons.warning, color: Colors.white),
       );
     } else if (lower == 'fałszywy alarm') {
@@ -96,7 +97,7 @@ class ReportsListScreen extends ConsumerWidget {
       );
     } else {
       return const CircleAvatar(
-        backgroundColor: Color(0xFF1565C0),
+        backgroundColor: OspTheme.info,
         child: Icon(Icons.help_outline, color: Colors.white),
       );
     }

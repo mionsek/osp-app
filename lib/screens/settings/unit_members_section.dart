@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../providers/providers.dart';
 import '../../services/google_drive_service.dart';
+import '../../core/theme/osp_theme.dart';
 
 /// Zarządzanie dostępem do jednostki: kto może z niej korzystać i kto ma
 /// uprawnienia administratora.
@@ -137,7 +138,7 @@ class _UnitMembersSectionState extends ConsumerState<UnitMembersSection> {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFB71C1C)),
+                backgroundColor: OspTheme.danger),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Odbierz'),
           ),
@@ -273,7 +274,7 @@ class _MemberTile extends StatelessWidget {
               ),
               IconButton(
                 icon: const Icon(Icons.person_remove_outlined,
-                    color: Color(0xFFB71C1C)),
+                    color: OspTheme.danger),
                 tooltip: 'Odbierz dostęp',
                 onPressed: onRevoke,
               ),

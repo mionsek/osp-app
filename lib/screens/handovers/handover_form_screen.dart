@@ -10,6 +10,7 @@ import '../../models/models.dart';
 import '../../providers/providers.dart';
 import '../../services/location_service.dart';
 import '../../widgets/firefighter_picker.dart';
+import '../../core/theme/osp_theme.dart';
 
 /// Formularz „Potwierdzenie przekazania terenu, obiektu lub mienia".
 /// Jeden ekran (nie kreator) — pola są prostsze niż w wyjeździe.
@@ -90,7 +91,7 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
   void _showSnack(String text, {bool ok = false}) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(text),
-      backgroundColor: ok ? const Color(0xFF2E7D32) : Colors.orange[800],
+      backgroundColor: ok ? OspTheme.success : Colors.orange[800],
     ));
   }
 
@@ -266,7 +267,7 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
             ? 'Przekazanie mienia zapisane. Synchronizacja z Google Drive '
                 'w toku...'
             : 'Przekazanie mienia zapisane lokalnie.'),
-        backgroundColor: const Color(0xFF2E7D32),
+        backgroundColor: OspTheme.success,
         duration: const Duration(seconds: 3),
       ),
     );
@@ -648,7 +649,7 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
                   _isEditing ? 'Zapisz zmiany' : 'Zapisz przekazanie mienia',
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2E7D32),
+                  backgroundColor: OspTheme.success,
                   minimumSize: const Size(double.infinity, 56),
                 ),
               ),

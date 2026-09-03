@@ -9,7 +9,7 @@ import 'package:printing/printing.dart';
 /// XL-P801) po protokole ESC/POS — z pominięciem systemowego okna
 /// drukowania Androida, które tych drukarek nie widzi (brak usługi druku).
 ///
-/// To jest ścieżka poboczna względem [PdfService] — nie zastępuje zwykłego
+/// To jest ścieżka poboczna względem wydruków z [PdfOutput] — nie zastępuje zwykłego
 /// drukowania, tylko daje dodatkową opcję dla urządzeń bez usługi druku.
 ///
 /// UWAGA: pakiet `print_bluetooth_thermal` na Androidzie 12+ sam nigdy nie

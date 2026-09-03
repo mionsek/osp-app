@@ -5,6 +5,7 @@ import 'package:uuid/uuid.dart';
 import '../../../core/utils/firefighter_search.dart';
 import '../../../models/models.dart';
 import '../../../providers/providers.dart';
+import '../../../core/theme/osp_theme.dart';
 
 class StepCrew extends ConsumerStatefulWidget {
   final Map<String, CrewAssignment> crewAssignments;
@@ -79,13 +80,13 @@ class _StepCrewState extends ConsumerState<StepCrew>
 
           // Vehicle header
           Card(
-            color: const Color(0xFFFFF3E0),
+            color: OspTheme.vehiclesSurface,
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Row(
                 children: [
                   const Icon(Icons.fire_truck,
-                      color: Color(0xFFE65100), size: 32),
+                      color: OspTheme.sectionVehicles, size: 32),
                   const SizedBox(width: 12),
                   Text(
                     vehicle.name,
@@ -527,7 +528,7 @@ class _SeatSelectorState extends State<_SeatSelector> {
                 CircleAvatar(
                   radius: 16,
                   backgroundColor: selectedFF != null
-                      ? const Color(0xFF2E7D32)
+                      ? OspTheme.sectionFirefighters
                       : Colors.grey[300],
                   child: Text(
                     '${widget.seatNumber}',
@@ -722,7 +723,7 @@ class _SeatSelectorState extends State<_SeatSelector> {
     }
 
     if (ff.isMedicalExamExpired) {
-      badges.add(_qualificationChip('[X] Brak ważnych badań lekarskich', const Color(0xFFB71C1C)));
+      badges.add(_qualificationChip('[X] Brak ważnych badań lekarskich', OspTheme.danger));
     } else if (!ff.hasMedicalExam) {
       badges.add(_qualificationChip('[X] Brak daty badań lekarskich', Colors.grey));
     } else if (ff.isMedicalExamExpiringSoon) {

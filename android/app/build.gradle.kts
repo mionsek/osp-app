@@ -15,10 +15,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
-    }
-
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "pl.osp.osp_app"
@@ -43,6 +39,15 @@ android {
                 "proguard-rules.pro",
             )
         }
+    }
+}
+
+// Wersja języka bajtowego Kotlina. Wcześniej ustawiana przez `kotlinOptions`
+// wewnątrz bloku `android` — wycofane w Kotlinie 2.3, zastąpione blokiem
+// `kotlin { compilerOptions }` z aktualnego szablonu Fluttera.
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
     }
 }
 

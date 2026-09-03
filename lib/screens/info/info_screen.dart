@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/constants/constants.dart';
+import '../../core/theme/osp_theme.dart';
 
 class InfoScreen extends StatelessWidget {
   const InfoScreen({super.key});
@@ -72,7 +73,7 @@ class InfoScreen extends StatelessWidget {
               const Icon(
                 Icons.local_fire_department,
                 size: 64,
-                color: Color(0xFFB71C1C),
+                color: OspTheme.primaryRed,
               ),
               const SizedBox(height: 12),
               Text(
@@ -375,7 +376,7 @@ class _DocumentItem extends StatelessWidget {
         children: [
           const Padding(
             padding: EdgeInsets.only(top: 2),
-            child: Icon(Icons.description, size: 18, color: Color(0xFFB71C1C)),
+            child: Icon(Icons.description, size: 18, color: OspTheme.primaryRed),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -417,7 +418,7 @@ class _HowToItem extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 28, color: const Color(0xFFB71C1C)),
+          Icon(icon, size: 28, color: OspTheme.primaryRed),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -469,7 +470,7 @@ class _ContactButton extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              Icon(icon, size: 28, color: const Color(0xFFB71C1C)),
+              Icon(icon, size: 28, color: OspTheme.primaryRed),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(

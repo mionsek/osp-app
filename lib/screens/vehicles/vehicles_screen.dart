@@ -6,6 +6,7 @@ import '../../core/utils/polish_text.dart';
 import '../../models/models.dart';
 import '../../providers/providers.dart';
 import '../../widgets/admin_only_notice.dart';
+import '../../core/theme/osp_theme.dart';
 
 class VehiclesScreen extends ConsumerWidget {
   const VehiclesScreen({super.key});
@@ -79,7 +80,7 @@ class VehiclesScreen extends ConsumerWidget {
                 return Card(
                   child: ListTile(
                     leading: const Icon(Icons.fire_truck,
-                        color: Color(0xFFE65100), size: 32),
+                        color: OspTheme.sectionVehicles, size: 32),
                     title: Text(
                       vehicle.name,
                       style: const TextStyle(fontWeight: FontWeight.w600),
@@ -93,14 +94,14 @@ class VehiclesScreen extends ConsumerWidget {
                             children: [
                               IconButton(
                                 icon: const Icon(Icons.edit,
-                                    color: Color(0xFF1565C0)),
+                                    color: OspTheme.info),
                                 onPressed: () => context
                                     .push('/vehicles/edit/${vehicle.id}'),
                                 tooltip: 'Edytuj',
                               ),
                               IconButton(
                                 icon: const Icon(Icons.delete,
-                                    color: Color(0xFFB71C1C)),
+                                    color: OspTheme.danger),
                                 onPressed: () => _confirmDelete(
                                     context, ref, vehicle.id, vehicle.name),
                                 tooltip: 'Usuń',
@@ -128,7 +129,7 @@ class VehiclesScreen extends ConsumerWidget {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFB71C1C),
+              backgroundColor: OspTheme.danger,
             ),
             onPressed: () {
               ref.read(vehiclesProvider.notifier).delete(id);

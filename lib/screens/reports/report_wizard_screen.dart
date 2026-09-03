@@ -8,6 +8,7 @@ import '../../services/trip_from_report.dart';
 import 'steps/step_basic_info.dart';
 import 'steps/step_crew.dart';
 import 'steps/step_summary.dart';
+import '../../core/theme/osp_theme.dart';
 
 class ReportWizardScreen extends ConsumerStatefulWidget {
   final String? reportId;
@@ -204,7 +205,7 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Błąd: ten sam ratownik przypisany do wielu pojazdów'),
-            backgroundColor: Color(0xFFB71C1C),
+            backgroundColor: OspTheme.danger,
           ),
         );
       }
@@ -265,7 +266,7 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
           content: Text(syncState.isConnected
               ? 'Raport zapisany. Synchronizacja z Google Drive w toku...'
               : 'Raport zapisany lokalnie.'),
-          backgroundColor: const Color(0xFF2E7D32),
+          backgroundColor: OspTheme.success,
           duration: const Duration(seconds: 3),
         ),
       );

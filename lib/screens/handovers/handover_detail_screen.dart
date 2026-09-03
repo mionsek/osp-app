@@ -6,8 +6,9 @@ import 'package:intl/intl.dart';
 import '../../models/models.dart';
 import '../../providers/providers.dart';
 import '../../services/bluetooth_print_service.dart';
-import '../../services/pdf_service.dart';
+import '../../services/handover_pdf.dart';
 import '../../widgets/bluetooth_printer_picker.dart';
+import '../../core/theme/osp_theme.dart';
 
 class HandoverDetailScreen extends ConsumerWidget {
   final String handoverId;
@@ -26,7 +27,7 @@ class HandoverDetailScreen extends ConsumerWidget {
     void show(String text, {bool ok = false}) {
       messenger.showSnackBar(SnackBar(
         content: Text(text),
-        backgroundColor: ok ? const Color(0xFF2E7D32) : Colors.red,
+        backgroundColor: ok ? OspTheme.success : Colors.red,
       ));
     }
 
@@ -57,7 +58,7 @@ class HandoverDetailScreen extends ConsumerWidget {
         duration: Duration(seconds: 2),
       ));
       final bytes =
-          await PdfService.handoverPdfBytes(handover, config, handoverFF);
+          await HandoverPdf.bytes(handover, config, handoverFF);
       final ok = await BluetoothPrintService.printPdf(bytes);
       show(
         ok ? 'Wysłano do drukarki.' : 'Drukarka odrzuciła zadanie.',
@@ -204,7 +205,7 @@ class HandoverDetailScreen extends ConsumerWidget {
 
             const SizedBox(height: 24),
             ElevatedButton.icon(
-              onPressed: () => PdfService.generateAndPrintHandover(
+              onPressed: () => HandoverPdf.generateAndPrint(
                   handover, config, handoverFF),
               icon: const Icon(Icons.print),
               label: const Text('Drukuj'),
@@ -227,7 +228,7 @@ class HandoverDetailScreen extends ConsumerWidget {
             }),
             const SizedBox(height: 8),
             OutlinedButton.icon(
-              onPressed: () => PdfService.generateAndShareHandover(
+              onPressed: () => HandoverPdf.generateAndShare(
                   handover, config, handoverFF),
               icon: const Icon(Icons.share),
               label: const Text('Udostępnij / Wyślij'),
@@ -265,7 +266,7 @@ class HandoverDetailScreen extends ConsumerWidget {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFB71C1C)),
+                backgroundColor: OspTheme.danger),
             onPressed: () {
               ref.read(handoversProvider.notifier).delete(handover.id);
               Navigator.pop(ctx);

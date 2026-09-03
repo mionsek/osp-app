@@ -7,8 +7,9 @@ import '../../models/models.dart';
 import '../../models/sync_state.dart';
 import '../../providers/providers.dart';
 import '../../services/bluetooth_print_service.dart';
-import '../../services/pdf_service.dart';
+import '../../services/report_pdf.dart';
 import '../../widgets/bluetooth_printer_picker.dart';
+import '../../core/theme/osp_theme.dart';
 
 class ReportDetailScreen extends ConsumerWidget {
   final String reportId;
@@ -27,7 +28,7 @@ class ReportDetailScreen extends ConsumerWidget {
     void show(String text, {bool ok = false}) {
       messenger.showSnackBar(SnackBar(
         content: Text(text),
-        backgroundColor: ok ? const Color(0xFF2E7D32) : Colors.red,
+        backgroundColor: ok ? OspTheme.success : Colors.red,
       ));
     }
 
@@ -56,7 +57,7 @@ class ReportDetailScreen extends ConsumerWidget {
         duration: Duration(seconds: 2),
       ));
       final bytes =
-          await PdfService.reportPdfBytes(report, config, firefighters);
+          await ReportPdf.bytes(report, config, firefighters);
       final ok = await BluetoothPrintService.printPdf(bytes);
       show(ok ? 'Wysłano do drukarki.' : 'Drukarka odrzuciła zadanie.', ok: ok);
     } catch (e) {
@@ -210,7 +211,7 @@ class ReportDetailScreen extends ConsumerWidget {
                         Row(
                           children: [
                             const Icon(Icons.fire_truck,
-                                color: Color(0xFFE65100)),
+                                color: OspTheme.sectionVehicles),
                             const SizedBox(width: 8),
                             Text(crew.vehicleName,
                                 style: const TextStyle(
@@ -238,7 +239,7 @@ class ReportDetailScreen extends ConsumerWidget {
 
             ElevatedButton.icon(
               onPressed: () =>
-                  PdfService.generateAndPrint(report, config, firefighters),
+                  ReportPdf.generateAndPrint(report, config, firefighters),
               icon: const Icon(Icons.print),
               label: const Text('Drukuj (2 egzemplarze)'),
             ),
@@ -258,7 +259,7 @@ class ReportDetailScreen extends ConsumerWidget {
             const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: () =>
-                  PdfService.generateAndShare(report, config, firefighters),
+                  ReportPdf.generateAndShare(report, config, firefighters),
               icon: const Icon(Icons.share),
               label: const Text('Udostępnij / Wyślij'),
             ),
@@ -295,7 +296,7 @@ class ReportDetailScreen extends ConsumerWidget {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFB71C1C)),
+                backgroundColor: OspTheme.danger),
             onPressed: () {
               ref.read(reportsProvider.notifier).delete(report.id);
               Navigator.pop(ctx);

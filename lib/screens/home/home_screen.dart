@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/constants/constants.dart';
 import '../../models/sync_state.dart';
 import '../../providers/providers.dart';
+import '../../core/theme/osp_theme.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -118,7 +119,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               _MenuButton(
                 icon: Icons.add_circle,
                 label: 'Dodaj wyjazd',
-                color: const Color(0xFFB71C1C),
+                color: OspTheme.sectionReports,
                 onTap: () {
                   if (vehicles.isEmpty) {
                     _showNoVehiclesDialog(context);
@@ -131,7 +132,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               _MenuButton(
                 icon: Icons.add_box,
                 label: 'Dodaj przekazanie mienia',
-                color: const Color(0xFF6D4C41),
+                color: OspTheme.sectionHandovers,
                 onTap: () => context.push('/handovers/new'),
               ),
               const SizedBox(height: 16),
@@ -140,42 +141,42 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               _MenuButton(
                 icon: Icons.list_alt,
                 label: 'Lista wyjazdów (${reports.length})',
-                color: const Color(0xFF1565C0),
+                color: OspTheme.sectionReportsList,
                 onTap: () => context.push('/reports'),
               ),
               const SizedBox(height: 12),
               _MenuButton(
                 icon: Icons.inventory_2,
                 label: 'Przekazania mienia (${handovers.length})',
-                color: const Color(0xFF6D4C41),
+                color: OspTheme.sectionHandovers,
                 onTap: () => context.push('/handovers'),
               ),
               const SizedBox(height: 12),
               _MenuButton(
                 icon: Icons.route,
                 label: 'Ewidencja przejazdów',
-                color: const Color(0xFF00695C),
+                color: OspTheme.sectionTrips,
                 onTap: () => context.push('/trips'),
               ),
               const SizedBox(height: 12),
               _MenuButton(
                 icon: Icons.fire_truck,
                 label: 'Pojazdy (${vehicles.length})',
-                color: const Color(0xFFE65100),
+                color: OspTheme.sectionVehicles,
                 onTap: () => context.push('/vehicles'),
               ),
               const SizedBox(height: 12),
               _MenuButton(
                 icon: Icons.people,
                 label: 'Ratownicy (${firefighters.length})',
-                color: const Color(0xFF2E7D32),
+                color: OspTheme.sectionFirefighters,
                 onTap: () => context.push('/firefighters'),
               ),
               const SizedBox(height: 12),
               _MenuButton(
                 icon: Icons.bar_chart,
                 label: 'Statystyki',
-                color: const Color(0xFF6A1B9A),
+                color: OspTheme.sectionStatistics,
                 onTap: () => context.push('/statistics'),
               ),
               const SizedBox(height: 12),
@@ -281,12 +282,11 @@ class _CoffeeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Brąz jest już w palecie aplikacji (przekazania mienia) i pasuje
-    // tematycznie — nie wprowadzamy nowego koloru dla jednej karty.
-    const brown = Color(0xFF6D4C41);
+    // Brąz karty „postaw mi kawę" to ten sam brąz, co sekcja przekazań mienia
+    // — pasuje tematycznie i nie wprowadza nowego koloru dla jednej karty.
 
     return Material(
-      color: const Color(0xFFF5EFEB),
+      color: OspTheme.handoversSurface,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: onTap,
@@ -295,7 +295,7 @@ class _CoffeeCard extends StatelessWidget {
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: brown.withValues(alpha: 0.25)),
+            border: Border.all(color: OspTheme.sectionHandovers.withValues(alpha: 0.25)),
           ),
           child: Row(
             children: [
@@ -303,10 +303,10 @@ class _CoffeeCard extends StatelessWidget {
                 width: 38,
                 height: 38,
                 decoration: BoxDecoration(
-                  color: brown.withValues(alpha: 0.12),
+                  color: OspTheme.sectionHandovers.withValues(alpha: 0.12),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.coffee, size: 20, color: brown),
+                child: const Icon(Icons.coffee, size: 20, color: OspTheme.sectionHandovers),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -327,14 +327,14 @@ class _CoffeeCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.bold,
-                        color: brown,
+                        color: OspTheme.sectionHandovers,
                       ),
                     ),
                   ],
                 ),
               ),
               const SizedBox(width: 4),
-              const Icon(Icons.open_in_new, size: 16, color: brown),
+              const Icon(Icons.open_in_new, size: 16, color: OspTheme.sectionHandovers),
             ],
           ),
         ),

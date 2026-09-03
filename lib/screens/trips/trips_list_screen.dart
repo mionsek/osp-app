@@ -7,6 +7,7 @@ import '../../providers/providers.dart';
 import '../../core/utils/polish_text.dart';
 import '../../services/trip_odometer.dart';
 import '../../services/trip_card_pdf.dart';
+import '../../core/theme/osp_theme.dart';
 
 /// Ewidencja przejazdów pojazdu — odpowiednik miesięcznej karty drogowej.
 ///
@@ -95,7 +96,7 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
     final config = ref.read(unitConfigProvider);
     try {
       if (share) {
-        await TripCardPdf.shareCard(
+        await TripCardPdf.generateAndShare(
           trips: trips,
           vehicle: vehicle,
           config: config,
@@ -103,7 +104,7 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
           month: _month,
         );
       } else {
-        await TripCardPdf.printCard(
+        await TripCardPdf.generateAndPrint(
           trips: trips,
           vehicle: vehicle,
           config: config,
@@ -242,7 +243,7 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
           if (open > 0) ...[
             const SizedBox(width: 8),
             _chip(Icons.pending_outlined, '$open bez powrotu',
-                color: const Color(0xFFE65100)),
+                color: OspTheme.attention),
           ],
         ],
       ),
@@ -338,11 +339,11 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
             if (_missingLabel(trip) != null)
               Text(_missingLabel(trip)!,
                   style: const TextStyle(
-                      color: Color(0xFFE65100), fontWeight: FontWeight.w600)),
+                      color: OspTheme.attention, fontWeight: FontWeight.w600)),
             if (trip.hasOdometerConflict)
               const Text('Licznik po powrocie mniejszy niż przed wyjazdem',
                   style: TextStyle(
-                      color: Color(0xFFB71C1C), fontWeight: FontWeight.w600)),
+                      color: OspTheme.danger, fontWeight: FontWeight.w600)),
           ],
         ),
         isThreeLine: true,
@@ -391,11 +392,11 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
   Color _purposeColor(String purpose) {
     switch (purpose) {
       case TripPurposes.alarm:
-        return const Color(0xFFB71C1C);
+        return OspTheme.sectionReports;
       case TripPurposes.refuelling:
-        return const Color(0xFF1565C0);
+        return OspTheme.info;
       default:
-        return const Color(0xFF546E7A);
+        return OspTheme.neutral;
     }
   }
 

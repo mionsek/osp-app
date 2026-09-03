@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 import '../../models/models.dart';
 import '../../providers/providers.dart';
+import '../../core/theme/osp_theme.dart';
 
 class FirefighterFormScreen extends ConsumerStatefulWidget {
   final String? firefighterId;
@@ -96,7 +97,7 @@ class _FirefighterFormScreenState extends ConsumerState<FirefighterFormScreen> {
       label = 'np. $placeholder';
       icon = Icons.help_outline;
     } else if (_medicalExamExpiry!.isBefore(DateTime.now())) {
-      chipColor = const Color(0xFFB71C1C);
+      chipColor = OspTheme.danger;
       label = 'Wygasło: ${DateFormat('dd.MM.yyyy').format(_medicalExamExpiry!)}';
       icon = Icons.error_outline;
     } else if (_medicalExamExpiry!
@@ -105,7 +106,7 @@ class _FirefighterFormScreenState extends ConsumerState<FirefighterFormScreen> {
       label = 'Wygasa: ${DateFormat('dd.MM.yyyy').format(_medicalExamExpiry!)}';
       icon = Icons.warning_amber;
     } else {
-      chipColor = const Color(0xFF2E7D32);
+      chipColor = OspTheme.success;
       label = 'Ważne do: ${DateFormat('dd.MM.yyyy').format(_medicalExamExpiry!)}';
       icon = Icons.check_circle_outline;
     }

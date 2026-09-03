@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/providers.dart';
+import '../../core/theme/osp_theme.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
@@ -173,9 +174,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFFE8F5E9),
+                color: OspTheme.successSurface,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF2E7D32)),
+                border: Border.all(color: OspTheme.success),
               ),
               child: Text(
                 code,
@@ -183,7 +184,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                   fontSize: 32,
                   fontWeight: FontWeight.bold,
                   letterSpacing: 8,
-                  color: Color(0xFF2E7D32),
+                  color: OspTheme.success,
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -256,7 +257,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           const Icon(
             Icons.local_fire_department,
             size: 80,
-            color: Color(0xFFB71C1C),
+            color: OspTheme.primaryRed,
           ),
           const SizedBox(height: 24),
           Text(
@@ -414,7 +415,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           const Icon(
             Icons.login,
             size: 64,
-            color: Color(0xFFB71C1C),
+            color: OspTheme.primaryRed,
           ),
           const SizedBox(height: 24),
           Text(
@@ -683,7 +684,7 @@ class _ChoiceCard extends StatelessWidget {
           padding: const EdgeInsets.all(20),
           child: Row(
             children: [
-              Icon(icon, size: 40, color: const Color(0xFFB71C1C)),
+              Icon(icon, size: 40, color: OspTheme.primaryRed),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
@@ -705,7 +706,7 @@ class _ChoiceCard extends StatelessWidget {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 8, vertical: 2),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF2E7D32),
+                              color: OspTheme.success,
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(

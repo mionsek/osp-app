@@ -6,6 +6,7 @@ import '../../models/models.dart';
 import '../../providers/providers.dart';
 import '../../widgets/admin_only_notice.dart';
 import '../../widgets/correction_request_dialog.dart';
+import '../../core/theme/osp_theme.dart';
 
 class FirefightersScreen extends ConsumerStatefulWidget {
   const FirefightersScreen({super.key});
@@ -108,7 +109,7 @@ class _FirefightersScreenState extends ConsumerState<FirefightersScreen> {
                       return Card(
                         child: ListTile(
                           leading: CircleAvatar(
-                            backgroundColor: const Color(0xFF2E7D32),
+                            backgroundColor: OspTheme.sectionFirefighters,
                             child: Text(
                               ff.firstName.isNotEmpty
                                   ? ff.firstName[0].toUpperCase()
@@ -137,14 +138,14 @@ class _FirefightersScreenState extends ConsumerState<FirefightersScreen> {
                                   children: [
                                     IconButton(
                                       icon: const Icon(Icons.edit,
-                                          color: Color(0xFF1565C0)),
+                                          color: OspTheme.info),
                                       onPressed: () => context
                                           .push('/firefighters/edit/${ff.id}'),
                                       tooltip: 'Edytuj',
                                     ),
                                     IconButton(
                                       icon: const Icon(Icons.delete,
-                                          color: Color(0xFFB71C1C)),
+                                          color: OspTheme.danger),
                                       onPressed: () => _confirmDelete(context,
                                           ref, ff.id, ff.lastNameFirst),
                                       tooltip: 'Usuń',
@@ -243,7 +244,7 @@ class _FirefightersScreenState extends ConsumerState<FirefightersScreen> {
         Icons.error_outline,
         'Badania wygasły',
         'Badania lekarskie są nieważne.',
-        color: const Color(0xFFB71C1C),
+        color: OspTheme.danger,
       ));
     } else if (ff.isMedicalExamExpiringSoon) {
       icons.add(_roleIcon(
@@ -259,7 +260,7 @@ class _FirefightersScreenState extends ConsumerState<FirefightersScreen> {
         Icons.check_circle,
         'Ważne badania lekarskie',
         'Badania lekarskie są ważne.',
-        color: const Color(0xFF2E7D32),
+        color: OspTheme.success,
       ));
     } else if (!ff.hasMedicalExam) {
       icons.add(_roleIcon(
@@ -347,7 +348,7 @@ class _FirefightersScreenState extends ConsumerState<FirefightersScreen> {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFB71C1C),
+              backgroundColor: OspTheme.danger,
             ),
             onPressed: () {
               ref.read(firefightersProvider.notifier).delete(id);

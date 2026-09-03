@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/providers.dart';
 import '../../providers/statistics_provider.dart';
-import '../../services/pdf_service.dart';
+import '../../services/stats_pdf.dart';
+import '../../core/theme/osp_theme.dart';
 
 class StatisticsScreen extends ConsumerWidget {
   const StatisticsScreen({super.key});
@@ -66,14 +67,14 @@ class StatisticsScreen extends ConsumerWidget {
               // --- Przyciski drukuj / udostępnij ---
               ElevatedButton.icon(
                 onPressed: () =>
-                    PdfService.generateAndPrintStats(stats, config),
+                    StatsPdf.generateAndPrint(stats, config),
                 icon: const Icon(Icons.print),
                 label: const Text('Drukuj statystyki'),
               ),
               const SizedBox(height: 8),
               OutlinedButton.icon(
                 onPressed: () =>
-                    PdfService.generateAndShareStats(stats, config),
+                    StatsPdf.generateAndShare(stats, config),
                 icon: const Icon(Icons.share),
                 label: const Text('Udostępnij / Wyślij'),
               ),
@@ -280,13 +281,13 @@ class _ThreatStatsTable extends StatelessWidget {
     if (lower == 'pożar') {
       return const CircleAvatar(
         radius: 14,
-        backgroundColor: Color(0xFFB71C1C),
+        backgroundColor: OspTheme.danger,
         child: Icon(Icons.local_fire_department, color: Colors.white, size: 16),
       );
     } else if (lower == 'miejscowe zagrożenie') {
       return const CircleAvatar(
         radius: 14,
-        backgroundColor: Color(0xFFF9A825),
+        backgroundColor: OspTheme.warning,
         child: Icon(Icons.warning, color: Colors.white, size: 16),
       );
     } else if (lower == 'fałszywy alarm') {
@@ -298,7 +299,7 @@ class _ThreatStatsTable extends StatelessWidget {
     }
     return const CircleAvatar(
       radius: 14,
-      backgroundColor: Color(0xFF1565C0),
+      backgroundColor: OspTheme.info,
       child: Icon(Icons.help_outline, color: Colors.white, size: 16),
     );
   }
@@ -320,7 +321,7 @@ class _TotalDurationTile extends StatelessWidget {
 
     return Row(
       children: [
-        const Icon(Icons.timer, color: Color(0xFF1565C0), size: 28),
+        const Icon(Icons.timer, color: OspTheme.info, size: 28),
         const SizedBox(width: 12),
         Text(
           '$hours godz. $minutes min.',
@@ -357,7 +358,7 @@ class _FirefighterStatsList extends StatelessWidget {
             children: [
               CircleAvatar(
                 radius: 14,
-                backgroundColor: const Color(0xFF2E7D32),
+                backgroundColor: OspTheme.sectionFirefighters,
                 child: Text(
                   item.firefighter.firstName.isNotEmpty
                       ? item.firefighter.firstName[0].toUpperCase()
@@ -390,9 +391,9 @@ class _FirefighterStatsList extends StatelessWidget {
   }
 
   Color _chipColor(int rank) {
-    if (rank == 0) return const Color(0xFFFFD700); // złoty
-    if (rank == 1) return const Color(0xFFB0BEC5); // srebrny
-    if (rank == 2) return const Color(0xFFBCAAA4); // brązowy
-    return const Color(0xFFE3F2FD); // niebieski pastelowy
+    if (rank == 0) return OspTheme.medalGold; // złoty
+    if (rank == 1) return OspTheme.medalSilver; // srebrny
+    if (rank == 2) return OspTheme.medalBronze; // brązowy
+    return OspTheme.infoSurface; // niebieski pastelowy
   }
 }

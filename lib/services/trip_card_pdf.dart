@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../core/utils/file_names.dart';
 import '../core/utils/polish_text.dart';
 import '../models/models.dart';
+import 'pdf_output.dart';
 
 /// Miesięczna karta drogowa pożarniczego pojazdu samochodowego.
 ///
@@ -20,7 +21,7 @@ import '../models/models.dart';
 class TripCardPdf {
   TripCardPdf._();
 
-  static Future<void> printCard({
+  static Future<void> generateAndPrint({
     required List<VehicleTrip> trips,
     required Vehicle vehicle,
     required UnitConfig config,
@@ -28,16 +29,14 @@ class TripCardPdf {
     required int month,
   }) async {
     final doc = await _build(trips, vehicle, config, year, month);
-    await Printing.layoutPdf(
-      onLayout: (_) => doc.save(),
-      name: _fileName(vehicle, year, month),
-      // Bez tego okno druku startuje z domyślnym `PdfPageFormat.standard`
-      // (US Letter, pionowo) i wciska poziomą kartę na pionową kartkę.
+    await PdfOutput.layoutPdf(
+      doc,
+      _fileName(vehicle, year, month),
       format: PdfPageFormat.a4.landscape,
     );
   }
 
-  static Future<void> shareCard({
+  static Future<void> generateAndShare({
     required List<VehicleTrip> trips,
     required Vehicle vehicle,
     required UnitConfig config,
@@ -45,10 +44,7 @@ class TripCardPdf {
     required int month,
   }) async {
     final doc = await _build(trips, vehicle, config, year, month);
-    await Printing.sharePdf(
-      bytes: await doc.save(),
-      filename: _fileName(vehicle, year, month),
-    );
+    await PdfOutput.sharePdf(doc, _fileName(vehicle, year, month));
   }
 
   /// Minimalna liczba wierszy tabeli przejazdów.

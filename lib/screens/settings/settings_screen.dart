@@ -9,6 +9,7 @@ import '../../services/bluetooth_print_service.dart';
 import '../../widgets/admin_only_notice.dart';
 import '../../widgets/bluetooth_printer_picker.dart';
 import 'unit_members_section.dart';
+import '../../core/theme/osp_theme.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -75,7 +76,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Ustawienia zapisane'),
-          backgroundColor: Color(0xFF2E7D32),
+          backgroundColor: OspTheme.success,
         ),
       );
     }
@@ -462,7 +463,7 @@ class _BluetoothPrinterSectionState
             content: Text(ok
                 ? 'Wysłano wydruk testowy — sprawdź drukarkę.'
                 : 'Drukarka odrzuciła wydruk testowy.'),
-            backgroundColor: ok ? const Color(0xFF2E7D32) : Colors.red,
+            backgroundColor: ok ? OspTheme.success : Colors.red,
           ),
         );
       }
