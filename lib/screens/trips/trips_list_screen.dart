@@ -6,6 +6,8 @@ import '../../models/models.dart';
 import '../../providers/providers.dart';
 import '../../core/utils/polish_text.dart';
 import '../../services/trip_odometer.dart';
+import '../../services/bluetooth_print_service.dart';
+import '../../widgets/bluetooth_printer_picker.dart';
 import '../../services/trip_card_pdf.dart';
 import '../../core/theme/osp_theme.dart';
 
@@ -51,12 +53,17 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
             IconButton(
               icon: const Icon(Icons.print),
               tooltip: 'Drukuj kartę drogową',
-              onPressed: () => _printCard(vehicles, share: false),
+              onPressed: () => _printCard(vehicles, _CardOutput.system),
+            ),
+            IconButton(
+              icon: const Icon(Icons.bluetooth),
+              tooltip: 'Drukuj na drukarce Bluetooth',
+              onPressed: () => _printCard(vehicles, _CardOutput.bluetooth),
             ),
             IconButton(
               icon: const Icon(Icons.share),
               tooltip: 'Udostępnij / wyślij kartę',
-              onPressed: () => _printCard(vehicles, share: true),
+              onPressed: () => _printCard(vehicles, _CardOutput.share),
             ),
           ],
         ],
@@ -72,11 +79,12 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
     );
   }
 
-  /// Drukuje lub udostępnia kartę drogową wybranego pojazdu za wybrany miesiąc.
+  /// Drukuje, wysyła na drukarkę Bluetooth albo udostępnia kartę drogową
+  /// wybranego pojazdu za wybrany miesiąc.
   ///
   /// Karta powstaje z tego, co widać na ekranie — ta sama para pojazd + miesiąc,
   /// więc nie ma osobnego okna wyboru zakresu.
-  Future<void> _printCard(List<Vehicle> vehicles, {required bool share}) async {
+  Future<void> _printCard(List<Vehicle> vehicles, _CardOutput output) async {
     final vehicle = vehicles.where((v) => v.id == _vehicleId).firstOrNull;
     if (vehicle == null) return;
 
@@ -84,33 +92,33 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
       (vehicleId: _vehicleId!, year: _year, month: _month),
     ));
 
-    if (trips.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Brak przejazdów w tym miesiącu — nie ma czego drukować'),
-        ),
-      );
-      return;
-    }
+    // Miesiąc bez przejazdów nie blokuje druku. Papierową kartę zakłada się
+    // **na początku miesiąca** i wypełnia długopisem w trakcie, więc czysty
+    // formularz z nagłówkiem pojazdu jest osobną, sensowną potrzebą. Pytamy
+    // jednak wprost, żeby nikt nie oddał gminy pustej kartki przez pomyłkę.
+    if (trips.isEmpty && !await _confirmEmptyCard()) return;
 
     final config = ref.read(unitConfigProvider);
     try {
-      if (share) {
-        await TripCardPdf.generateAndShare(
-          trips: trips,
-          vehicle: vehicle,
-          config: config,
-          year: _year,
-          month: _month,
-        );
-      } else {
-        await TripCardPdf.generateAndPrint(
-          trips: trips,
-          vehicle: vehicle,
-          config: config,
-          year: _year,
-          month: _month,
-        );
+      switch (output) {
+        case _CardOutput.system:
+          await TripCardPdf.generateAndPrint(
+            trips: trips,
+            vehicle: vehicle,
+            config: config,
+            year: _year,
+            month: _month,
+          );
+        case _CardOutput.share:
+          await TripCardPdf.generateAndShare(
+            trips: trips,
+            vehicle: vehicle,
+            config: config,
+            year: _year,
+            month: _month,
+          );
+        case _CardOutput.bluetooth:
+          await _printViaBluetooth(vehicle, config, trips);
       }
     } catch (e) {
       if (mounted) {
@@ -119,6 +127,89 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
         );
       }
     }
+  }
+
+  /// Pyta, czy naprawdę wydrukować kartę za miesiąc bez ani jednego przejazdu.
+  Future<bool> _confirmEmptyCard() async {
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Miesiąc bez przejazdów'),
+        // Nazwa miesiąca w nawiasie, a nie po przyimku: `monthLabel` zwraca
+        // mianownik („wrzesień 2026"), więc „W wrzesień 2026" byłoby błędem.
+        // Nawias omija odmianę zamiast dokładać tablicę przypadków dla jednego
+        // komunikatu.
+        content: Text(
+          'W tym miesiącu (${PolishText.monthLabel(_month, _year)}) nie ma '
+          'jeszcze żadnego przejazdu. Karta wyjdzie z nagłówkiem pojazdu '
+          'i pustymi wierszami — do wypełnienia długopisem.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Anuluj'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Drukuj pustą kartę'),
+          ),
+        ],
+      ),
+    );
+    return proceed ?? false;
+  }
+
+  /// Druk karty na sparowanej drukarce termicznej Bluetooth.
+  ///
+  /// Karta jest w A4 poziomo, ale drukarka ma szerokość A4, więc obrót o 90°
+  /// przy renderowaniu układa ją wzdłuż taśmy — dokładnie tak, jak działa to
+  /// od feature/016 dla raportu i przekazania mienia.
+  Future<void> _printViaBluetooth(
+    Vehicle vehicle,
+    UnitConfig config,
+    List<VehicleTrip> trips,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    void show(String text, {bool ok = false}) {
+      messenger.showSnackBar(SnackBar(
+        content: Text(text),
+        backgroundColor: ok ? OspTheme.success : OspTheme.danger,
+      ));
+    }
+
+    var mac = config.btPrinterMac;
+    if (mac == null || mac.isEmpty) {
+      final result = await pickBluetoothPrinter(context, ref);
+      if (result.errorMessage != null) {
+        show(result.errorMessage!);
+        return;
+      }
+      if (!result.selected) return;
+      mac = ref.read(unitConfigProvider).btPrinterMac;
+      if (mac == null || mac.isEmpty) return;
+    }
+
+    if (!await BluetoothPrintService.ensurePermission()) {
+      show('Brak zgody na dostęp do Bluetooth.');
+      return;
+    }
+    if (!await BluetoothPrintService.connectIfNeeded(mac)) {
+      show('Nie udało się połączyć z drukarką.');
+      return;
+    }
+    messenger.showSnackBar(const SnackBar(
+      content: Text('Wysyłanie do drukarki...'),
+      duration: Duration(seconds: 2),
+    ));
+    final bytes = await TripCardPdf.bytes(
+      trips: trips,
+      vehicle: vehicle,
+      config: ref.read(unitConfigProvider),
+      year: _year,
+      month: _month,
+    );
+    final ok = await BluetoothPrintService.printPdf(bytes);
+    show(ok ? 'Wysłano do drukarki.' : 'Drukarka odrzuciła zadanie.', ok: ok);
   }
 
   Widget _noVehicles(BuildContext context) {
@@ -162,10 +253,15 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
       month: _month,
     );
 
+    final vehicle = vehicles.where((v) => v.id == _vehicleId).firstOrNull;
+    final normsNotice =
+        vehicle == null ? null : _missingNormsNotice(context, vehicle);
+
     return Column(
       children: [
         _selectors(vehicles),
         _summary(context, trips, km),
+        ?normsNotice,
         const Divider(height: 1),
         Expanded(
           child: trips.isEmpty
@@ -230,22 +326,89 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
     );
   }
 
+  /// Podsumowanie miesiąca — to samo, co wchodzi do rozliczenia na wydruku.
+  ///
+  /// Minuty urządzeń i postoju są tu dlatego, że to **one** trafiają do pozycji
+  /// 5 i 7 rozliczenia materiałów pędnych. Bez nich nie dało się sprawdzić przed
+  /// drukiem, czy karta wyjdzie kompletna — liczby widać było dopiero na kartce.
+  ///
+  /// `Wrap` zamiast `Row`, bo pięć znaczników nie mieści się w jednej linii
+  /// na węższym telefonie.
   Widget _summary(BuildContext context, List<VehicleTrip> trips, int km) {
     final open = trips.where((t) => !t.isClosed).length;
+    final equipment =
+        trips.fold(0, (sum, t) => sum + t.totalEquipmentMinutes);
+    final idle = trips.fold(0, (sum, t) => sum + (t.idleMinutes ?? 0));
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-      child: Row(
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 6,
         children: [
           _chip(Icons.route, '${trips.length} ${PolishText.trips(trips.length)}'),
-          const SizedBox(width: 8),
           _chip(Icons.speed, '$km km'),
-          if (open > 0) ...[
-            const SizedBox(width: 8),
+          if (equipment > 0)
+            _chip(Icons.settings_input_component, 'urządzenia $equipment min'),
+          if (idle > 0) _chip(Icons.motion_photos_pause, 'postój $idle min'),
+          if (open > 0)
             _chip(Icons.pending_outlined, '$open bez powrotu',
                 color: OspTheme.attention),
-          ],
         ],
+      ),
+    );
+  }
+
+  /// Ostrzeżenie, że pojazd nie ma norm zużycia paliwa.
+  ///
+  /// Bez nich rozliczenie na drugiej stronie karty drukuje się **puste** —
+  /// pozycje 4, 5, 7, 8 i 9 wychodzą bez liczb. Zachowanie jest celowe (lepiej
+  /// puste niż zmyślone), ale dotąd nic o tym nie mówiło: sekcja „Dane do karty
+  /// drogowej" w formularzu pojazdu jest zwijana i domyślnie zamknięta, więc
+  /// łatwo ją pominąć, a skutek widać dopiero na wydrukowanej kartce dla gminy.
+  Widget? _missingNormsNotice(BuildContext context, Vehicle vehicle) {
+    final missing = <String>[
+      if (vehicle.fuelPer100Km == null) 'na 100 km',
+      if (vehicle.pumpFuelPerHour == null) 'autopompy',
+      if (vehicle.idleFuelPerMinute == null) 'pracy na postoju',
+      if (vehicle.startupFuelPerMonth == null) 'rozruchu',
+    ];
+    if (missing.isEmpty) return null;
+
+    final all = missing.length == 4;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+      child: Material(
+        color: OspTheme.vehiclesSurface.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: () => context.push('/vehicles/edit/${vehicle.id}'),
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.local_gas_station,
+                    size: 19, color: OspTheme.attention),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Text(
+                    all
+                        ? 'Pojazd nie ma wpisanych norm zużycia paliwa — '
+                            'rozliczenie na karcie wydrukuje się puste. '
+                            'Dotknij, żeby je uzupełnić.'
+                        : 'Brakuje norm zużycia: ${missing.join(', ')}. '
+                            'Te pozycje rozliczenia zostaną na karcie puste. '
+                            'Dotknij, żeby je uzupełnić.',
+                    style: TextStyle(fontSize: 12.5, color: Colors.grey[850]),
+                  ),
+                ),
+                const Icon(Icons.chevron_right, size: 18),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -443,3 +606,10 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
     }
   }
 }
+
+/// Sposób wyprowadzenia karty drogowej z ekranu ewidencji.
+///
+/// Trzy drogi, bo trzy różne sytuacje: drukarka w sieci (Mopria), przenośna
+/// drukarka termiczna sparowana przez Bluetooth i wysyłka pliku, gdy karta
+/// ma trafić do gminy mailem.
+enum _CardOutput { system, bluetooth, share }

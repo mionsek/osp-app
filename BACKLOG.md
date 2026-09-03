@@ -557,3 +557,36 @@ wtyczki wydały w międzyczasie wersje przygotowane na Built-in Kotlin.
 - [x] Sprawdzone, że **żadna z pozostałych ośmiu wtyczek Androida** (connectivity_plus, geocoding, geolocator, google_sign_in, path_provider, permission_handler, printing, url_launcher, jni) nie stosuje KGP
 - [x] **Log budowania jest teraz całkowicie czysty** — po refactor/036 zostały dwa ostrzeżenia o KGP, teraz nie ma żadnego. Cała treść logu to jedna linijka: „Built app-debug.apk"
 - [x] Zweryfikowane: 158 testów jednostkowych i widoków zielonych, test integracyjny przechodzi na emulatorze, wersja aplikacji z `package_info_plus` wyświetla się poprawnie po skoku o dwa numery główne
+
+## Zrobione (fix/038-ewidencja-poprawki)
+Przegląd sekcji „Ewidencja przejazdów" na prośbę Dawida: czego brakuje i czy
+da się tę ewidencję wydrukować. Drukowanie było — od feature/032, dwie ikony
+w pasku ekranu. Wyszły natomiast cztery braki, których backlog nie znał.
+
+### Ostrzeżenie o brakujących normach pojazdu
+- [x] **Bez norm rozliczenie na karcie drukowało się puste, a nic o tym nie mówiło.** Sekcja „Dane do karty drogowej" w formularzu pojazdu jest zwijana i **domyślnie zamknięta**, więc przy zwykłym dodawaniu wozu łatwo ją pominąć. Skutek — puste pozycje 4, 5, 7, 8 i 9 rozliczenia — widać było dopiero na kartce wydrukowanej dla gminy
+- [x] Ekran ewidencji pokazuje teraz klikalne ostrzeżenie prowadzące wprost do formularza pojazdu. **Wymienia z nazwy, których norm brakuje** („na 100 km", „autopompy", „pracy na postoju", „rozruchu"), bo samo „uzupełnij normy" kazałoby szukać po omacku wśród czterech pól
+- [x] Samo drukowanie **nie jest blokowane** — puste pole zamiast zmyślonej liczby to decyzja z feature/033 i zostaje w mocy. Zmienia się tylko to, że użytkownik wie o tym **przed** wydrukiem, a nie po
+
+### Podsumowanie pokazuje to, co wchodzi do rozliczenia
+- [x] **Dopisane minuty pracy urządzeń i minuty postoju** — to one trafiają do pozycji 5 i 7 rozliczenia materiałów pędnych, a podsumowanie podawało dotąd tylko liczbę przejazdów, sumę kilometrów i wpisy bez powrotu. Nie dało się sprawdzić na ekranie, czy karta wyjdzie kompletna
+- [x] Znaczniki pokazują się **tylko gdy są niezerowe** — „0 min" przy każdym miesiącu byłoby szumem, a nie informacją
+- [x] Rząd znaczników zamieniony z `Row` na `Wrap` — pięć pozycji nie mieści się w jednej linii na węższym telefonie i przy poprzednim układzie groziło przepełnieniem
+
+### Druk karty na drukarce Bluetooth
+- [x] **Karta dołącza do raportu i przekazania mienia** — dotąd druk termiczny miały tylko te dwa dokumenty. Trzecia ikona w pasku, ten sam przepływ: wybór drukarki, uprawnienie, połączenie, wysyłka
+- [x] Geometria się zgadza i nie wymagała niczego nowego: drukarka ma 208 bajtów na wiersz, czyli **1664 punkty przy 201 DPI ≈ 210 mm**, dokładnie szerokość A4. Karta w A4 poziomo po obrocie o 90° układa się wzdłuż taśmy tak samo jak raport
+- [x] `TripCardPdf.bytes` dopisane obok `generateAndPrint` i `generateAndShare` — jak `ReportPdf.bytes` i `HandoverPdf.bytes`
+- [x] Trzy drogi wyjścia opisane typem `_CardOutput` zamiast flagi `bool share` — przy trzech wariantach flaga przestała cokolwiek tłumaczyć
+
+### Druk pustej karty
+- [x] **Miesiąc bez przejazdów nie blokuje już druku.** Wcześniej komunikat „nie ma czego drukować" zamykał sprawę — a papierową kartę zakłada się **na początku miesiąca** i wypełnia długopisem w trakcie, więc czysty formularz z nagłówkiem pojazdu i pustymi wierszami jest osobną, sensowną potrzebą
+- [x] Komunikat pytania podaje miesiąc **w nawiasie**, nie po przyimku — `PolishText.monthLabel` zwraca mianownik, więc pierwsza wersja brzmiała „W wrzesień 2026". Wyszło dopiero na emulatorze; test pilnuje, żeby nie wróciło
+- [x] Zamiast blokady jest pytanie („Karta wyjdzie z nagłówkiem pojazdu i pustymi wierszami"), żeby nikt nie oddał gminie pustej kartki przez pomyłkę
+
+### Testy
+- [x] **8 nowych testów widoku ewidencji** ([trips_list_test.dart](test/widgets/trips_list_test.dart)) — ostrzeżenie przy braku wszystkich norm i przy braku jednej, brak ostrzeżenia przy komplecie, minuty w podsumowaniu, brak zer, trzy drogi druku, pytanie o pustą kartę wraz z działającym „Anuluj". Łącznie **166 testów**
+- [x] Cztery pojazdy przygotowane w `setUp`, a testy różnią się wyborem z listy — druga po trip_form okazja, w której zapis do Hive w ciele `testWidgets` zawiesiłby test na głucho
+
+### Świadomie nie zrobione
+- **Ewidencja nadal nie ma widoku rocznego ani zbiorczego dla wszystkich pojazdów.** Wynika to wprost z zasady „karta = pojazd + miesiąc" (feature/026) i przy rozliczeniu rocznym oznacza wydrukowanie dwunastu kart osobno. Do zmiany dopiero, gdyby ktoś to zgłosił jako realną uciążliwość — na razie to domysł, a nie potrzeba

@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -45,6 +47,23 @@ class TripCardPdf {
   }) async {
     final doc = await _build(trips, vehicle, config, year, month);
     await PdfOutput.sharePdf(doc, _fileName(vehicle, year, month));
+  }
+
+  /// Surowe bajty PDF karty — na potrzeby druku przez Bluetooth, gdzie stronę
+  /// renderujemy do bitmapy zamiast oddawać ją systemowemu oknu drukowania.
+  ///
+  /// Karta jest w A4 poziomo, a drukarka termiczna ma 1664 punkty przy 201 DPI,
+  /// czyli dokładnie szerokość A4. Obrót o 90° przy druku układa kartę wzdłuż
+  /// taśmy — tak samo, jak dzieje się to z raportem i przekazaniem mienia.
+  static Future<Uint8List> bytes({
+    required List<VehicleTrip> trips,
+    required Vehicle vehicle,
+    required UnitConfig config,
+    required int year,
+    required int month,
+  }) async {
+    final doc = await _build(trips, vehicle, config, year, month);
+    return Uint8List.fromList(await doc.save());
   }
 
   /// Minimalna liczba wierszy tabeli przejazdów.
