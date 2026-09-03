@@ -537,6 +537,23 @@ Było **124 testy, wszystkie bez dotykania interfejsu**. Jest **158** plus test 
 Po podbiciu wersji zniknęły ostrzeżenia o AGP i Kotlinie, ale wyszło następne
 w kolejce. Flutter przechodzi na **Built-in Kotlin**: wtyczka Kotlina ma być
 stosowana przez AGP, a nie przez projekt. Nas dotyczy podwójnie.
-- [ ] **Aplikacja sama stosuje KGP** (`id("kotlin-android")` w [android/app/build.gradle.kts](android/app/build.gradle.kts)) — do zdjęcia razem z `android.builtInKotlin=true`
-- [ ] **Dwie wtyczki z pub.dev stosują KGP u siebie**: `package_info_plus` i `print_bluetooth_thermal`. **To one blokują migrację** — nad ich kodem nie mamy kontroli, a Flutter zapowiada, że przyszłe wersje odmówią budowania. Do sprawdzenia w ich changelogach, zanim zacznie boleć; `print_bluetooth_thermal` jest najmniej aktywnie rozwijaną zależnością w projekcie i to najbardziej prawdopodobny kandydat do wymiany
-- Póki co trzyma nas `android.builtInKotlin=false` — flaga, nie rozwiązanie
+- [x] **Aplikacja sama stosuje KGP** (`id("kotlin-android")` w [android/app/build.gradle.kts](android/app/build.gradle.kts)) — do zdjęcia razem z `android.builtInKotlin=true`
+- [x] **Dwie wtyczki z pub.dev stosują KGP u siebie**: `package_info_plus` i `print_bluetooth_thermal`. **To one blokują migrację** — nad ich kodem nie mamy kontroli, a Flutter zapowiada, że przyszłe wersje odmówią budowania. Do sprawdzenia w ich changelogach, zanim zacznie boleć; `print_bluetooth_thermal` jest najmniej aktywnie rozwijaną zależnością w projekcie i to najbardziej prawdopodobny kandydat do wymiany
+- ~~Póki co trzyma nas `android.builtInKotlin=false` — flaga, nie rozwiązanie~~
+
+**Zrobione w chore/037.** Obie wtyczki wydały wersje bez własnego KGP, więc blokada
+zniknęła sama — patrz sekcja niżej.
+
+## Zrobione (chore/037-built-in-kotlin)
+Domknięcie ostrzeżenia, które ujawniło się dopiero po podbiciu AGP w refactor/036.
+Okazało się dużo prostsze, niż wyglądało: blokada rozeszła się sama, bo obie
+wtyczki wydały w międzyczasie wersje przygotowane na Built-in Kotlin.
+
+- [x] **`package_info_plus` 8.3.1 → 10.2.1** — wydanie 10.2.0 wprost dodało *„Add support of built-in Kotlin"*. Wtyczka stosuje teraz KGP **tylko przy AGP starszym niż 9** (`if (agpMajor < 9)`), więc u nas nie stosuje go wcale. Dwa numery główne w przód, ale zmiany w 9.0.0 i 10.0.0 dotyczyły wyłącznie minimalnych wersji Fluttera, Darta i `win32` — API `PackageInfo.fromPlatform()` bez zmian, kod aplikacji nietknięty
+- [x] **`print_bluetooth_thermal` 1.2.1 → 1.2.4** — nie stosuje już `kotlin-android`, została sama `com.android.library`. Wydane 1 września 2026, czyli dwa dni przed tą gałęzią; obawa z refactor/036, że to najsłabiej utrzymywana zależność i kandydat do wymiany, okazała się nieuzasadniona
+- [x] **`android.builtInKotlin=true`** ([android/gradle.properties](android/gradle.properties)) — od AGP 9 to i tak wartość domyślna, ale migrator Fluttera wstawił jawne `false`. Ustawione wprost razem z wyjaśnieniem, żeby nie wyglądało na przeoczenie
+- [x] **`id("kotlin-android")` zdjęte z modułu aplikacji** ([android/app/build.gradle.kts](android/app/build.gradle.kts)) — to jego obecność wywoływała ostrzeżenie „applies the Kotlin Gradle Plugin, which will cause build failures in future versions of Flutter". Blok `kotlin { compilerOptions { jvmTarget } }` **zostaje** i działa, bo rozszerzenie Kotlina dostarcza teraz AGP
+- [x] **`org.jetbrains.kotlin.android` zostaje zadeklarowane w [settings.gradle.kts](android/settings.gradle.kts) z `apply false`** — świadomie. Ostrzeżenie sprawdza pliki modułów, nie deklarację wersji, a zdjęcie jej wysypałoby każdą wtyczkę, która nadal woła KGP po swojemu. Kosztuje nic i zostawia furtkę
+- [x] Sprawdzone, że **żadna z pozostałych ośmiu wtyczek Androida** (connectivity_plus, geocoding, geolocator, google_sign_in, path_provider, permission_handler, printing, url_launcher, jni) nie stosuje KGP
+- [x] **Log budowania jest teraz całkowicie czysty** — po refactor/036 zostały dwa ostrzeżenia o KGP, teraz nie ma żadnego. Cała treść logu to jedna linijka: „Built app-debug.apk"
+- [x] Zweryfikowane: 158 testów jednostkowych i widoków zielonych, test integracyjny przechodzi na emulatorze, wersja aplikacji z `package_info_plus` wyświetla się poprawnie po skoku o dwa numery główne
