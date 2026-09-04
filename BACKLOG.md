@@ -658,3 +658,10 @@ pytanie brzmiało wprost, czy ucierpią (nie ucierpiały).
 - [x] **`FileNames.sanitizeLegacy`** trzyma starą regułę wyłącznie na potrzeby tego wyszukiwania. Do niczego nowego nie jest używana
 - [x] Pobieranie z Dysku jest niezależne od nazw — czyta zawartość wszystkich plików JSON w folderze — więc tam nie było czego zmieniać
 - [x] Testy: komplet polskich liter w obu wielkościach, kontrola że wynik jest zawsze czystym ASCII, oraz strażnik starej reguły. Łącznie **202 testy**
+
+## Zrobione (chore/041-wersja-1.6.0)
+- [x] **Wersja podbita z `1.5.0+10` na `1.6.0+11`** — numer stał niezmieniony od **przed** refactor/036, czyli przez sześć gałęzi. Efekt był taki, że paczka leżąca na Dysku i paczka zbudowana dzisiaj miały w środku **ten sam numer**, mimo innego klucza podpisu, poprawek ewidencji, transliteracji nazw plików i całej reszty. Obie pokazywały „Wersja 1.5.0 (10)" w „O aplikacji" i nie dało się ich odróżnić inaczej niż po dacie pliku
+- [x] `versionName` **1.6.0** — widoczny dla ludzi, w „O aplikacji" i docelowo w Play Store. Podniesiony numer pomocniczy, a nie poprawkowy, bo zakres zmian to uzasadnia
+- [x] `versionCode` **11** — ten, którego faktycznie używa Android: blokuje cofnięcie wersji i po nim Play ustawia kolejność wydań
+- Przy **tej** wymianie podbicie nie pomaga w aktualizacji — koledzy i tak muszą odinstalować starą wersję z powodu zmiany klucza podpisu (chore/039). Wartość jest inna: od teraz wiadomo, kto co ma, a kolejne wydania będą się aktualizować normalnie
+- **Do rozdania idzie `app-release.apk`** (wariant uniwersalny, wszystkie architektury w jednym pliku). Warianty per architektura mają `versionCode` podbity o tysiące (2011, 3011, 4011), więc mieszanie ich z uniwersalnym blokuje instalację jako cofnięcie wersji — rozdajemy konsekwentnie jeden wariant
