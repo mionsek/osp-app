@@ -98,6 +98,49 @@ void main() {
       expect(FileNames.sanitize(''), '');
       expect(FileNames.sanitize('   '), '');
     });
+
+    test('polskie znaki traca ogonki zamiast znikac', () {
+      // Wcześniej `\w` w Darcie obejmowało tylko ASCII, więc polskie litery
+      // stawały się podkreśleniami — a te z brzegów były jeszcze obcinane.
+      // „Żukowo" dawało `ukowo`, a „Łódź" samo `d`.
+      expect(FileNames.sanitize('Żukowo'), 'Zukowo');
+      expect(FileNames.sanitize('Łódź'), 'Lodz');
+      expect(FileNames.sanitize('Gdańsk'), 'Gdansk');
+      expect(FileNames.sanitize('Będzin'), 'Bedzin');
+      expect(FileNames.sanitize('Miejscowe Zagrożenie'), 'Miejscowe_Zagrozenie');
+    });
+
+    test('komplet polskich liter, male i wielkie', () {
+      expect(FileNames.sanitize('ąćęłńóśźż'), 'acelnoszz');
+      expect(FileNames.sanitize('ĄĆĘŁŃÓŚŹŻ'), 'ACELNOSZZ');
+    });
+
+    test('wynik jest zawsze czystym ASCII', () {
+      for (final input in [
+        'Żukowo',
+        'Świętajno',
+        'Łęczna',
+        'Pożar sadzy w kominie',
+        'Kowalczyk-Żółć',
+      ]) {
+        final out = FileNames.sanitize(input);
+        expect(out.codeUnits.every((c) => c < 128), isTrue,
+            reason: '„$input" dało „$out" ze znakiem spoza ASCII');
+        expect(out, isNotEmpty);
+      }
+    });
+
+    test('stara regula zachowana do odnajdywania plikow na Dysku', () {
+      // Potrzebna wyłącznie po to, żeby znaleźć plik zapisany starszą wersją
+      // aplikacji i zmienić mu nazwę — inaczej synchronizacja utworzyłaby obok
+      // drugi plik z tą samą treścią.
+      expect(FileNames.sanitizeLegacy('Żukowo'), 'ukowo');
+      expect(FileNames.sanitizeLegacy('Miejscowe Zagrożenie'),
+          'Miejscowe_Zagro_enie');
+      // Nazwy bez polskich znaków wychodzą tak samo w obu regułach, więc
+      // dla nich migracja nie ma czego szukać.
+      expect(FileNames.sanitizeLegacy('Kielno'), FileNames.sanitize('Kielno'));
+    });
   });
 
   group('FileNames — daty w nazwach', () {

@@ -8,15 +8,45 @@
 class FileNames {
   FileNames._();
 
-  /// Zamienia na podkreślenie wszystko, co nie jest literą, cyfrą, myślnikiem
-  /// ani podkreśleniem.
+  /// Polskie znaki i ich odpowiedniki bez ogonków.
   ///
-  /// Celowo agresywniej niż sama lista znaków zabronionych w Windows: nazwy
-  /// trafiają też na Dysk Google i do udostępniania, gdzie spacje i polskie
-  /// znaki potrafią się rozjechać w zależności od klienta.
+  /// Nazwy plików trzymamy w czystym ASCII, bo trafiają mailem do gminy i KP PSP,
+  /// na Dysk Google i do okna udostępniania Androida — a starsze klienty poczty
+  /// potrafią poprzestawiać znaki w nazwie załącznika. Transliteracja daje
+  /// nazwę odporną na to wszystko i **nadal czytelną**.
+  ///
+  /// Dotyczy wyłącznie nazw plików. Treść dokumentów — w tym nazwiska —
+  /// idzie na wydruk bez żadnych zamian, czcionką z pełnym polskim zestawem.
+  static const Map<String, String> _polishLetters = {
+    'ą': 'a', 'ć': 'c', 'ę': 'e', 'ł': 'l', 'ń': 'n',
+    'ó': 'o', 'ś': 's', 'ź': 'z', 'ż': 'z',
+    'Ą': 'A', 'Ć': 'C', 'Ę': 'E', 'Ł': 'L', 'Ń': 'N',
+    'Ó': 'O', 'Ś': 'S', 'Ź': 'Z', 'Ż': 'Z',
+  };
+
+  /// Zamienia polskie znaki na ich odpowiedniki bez ogonków, a wszystko poza
+  /// literą, cyfrą, myślnikiem i podkreśleniem — na podkreślenie.
+  ///
+  /// Transliteracja **musi** iść przed czyszczeniem: `\w` w Darcie to tylko
+  /// ASCII, więc bez niej „Żukowo" dawało `ukowo`, a „Łódź" — samo `d`.
+  /// Dla aplikacji, w której miejscowości rutynowo mają ą, ę, ł czy ż, nazwy
+  /// plików robiły się nieczytelne.
   static String sanitize(String s) {
-    final cleaned = s.replaceAll(RegExp(r'[^\w\-]+'), '_');
+    final transliterated = s.split('').map((c) => _polishLetters[c] ?? c).join();
+    final cleaned = transliterated.replaceAll(RegExp(r'[^\w\-]+'), '_');
     // Podkreślenia na brzegach i ich ciągi tylko zaśmiecają nazwę.
+    return cleaned.replaceAll(RegExp(r'_+'), '_').replaceAll(RegExp(r'^_|_$'), '');
+  }
+
+  /// Sanityzacja sprzed wprowadzenia transliteracji — polskie znaki lądowały
+  /// jako podkreślenia i znikały z brzegów nazwy.
+  ///
+  /// Potrzebna **wyłącznie** do odnalezienia na Dysku plików zapisanych
+  /// starszą wersją aplikacji, żeby przy najbliższej synchronizacji zmienić im
+  /// nazwę zamiast utworzyć obok drugi plik z tą samą treścią. Do niczego
+  /// nowego jej nie używamy.
+  static String sanitizeLegacy(String s) {
+    final cleaned = s.replaceAll(RegExp(r'[^\w\-]+'), '_');
     return cleaned.replaceAll(RegExp(r'_+'), '_').replaceAll(RegExp(r'^_|_$'), '');
   }
 

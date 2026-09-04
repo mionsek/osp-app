@@ -207,16 +207,30 @@ class GoogleDriveService {
 
   /// Write a JSON map to a file in the given folder.
   /// If the file already exists (by name), it's updated. Otherwise created.
+  /// Zapisuje dane pod nazwą [fileName], nadpisując istniejący plik.
+  ///
+  /// [legacyFileName] to nazwa, jaką ten sam dokument miał w starszej wersji
+  /// aplikacji. Gdy pliku nie ma pod nazwą bieżącą, szukamy go pod starą i —
+  /// jeśli jest — **aktualizujemy go razem ze zmianą nazwy**, bo `files.update`
+  /// przyjmuje nazwę w tym samym wywołaniu. Bez tego zmiana reguły nazywania
+  /// zostawiłaby na Dysku stary plik i utworzyła obok drugi z tą samą treścią,
+  /// a jednostka zobaczyłaby duplikaty każdego raportu.
   Future<String> writeJsonFile(
     String folderId,
     String fileName,
-    Map<String, dynamic> data,
-  ) async {
+    Map<String, dynamic> data, {
+    String? legacyFileName,
+  }) async {
     final content = utf8.encode(const JsonEncoder.withIndent('  ').convert(data));
     final media = drive.Media(Stream.value(content), content.length);
 
     // Check if file exists
-    final existingId = await _findFileId(folderId, fileName);
+    var existingId = await _findFileId(folderId, fileName);
+    if (existingId == null &&
+        legacyFileName != null &&
+        legacyFileName != fileName) {
+      existingId = await _findFileId(folderId, legacyFileName);
+    }
 
     if (existingId != null) {
       // Update existing

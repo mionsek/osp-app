@@ -644,5 +644,17 @@ Zapisane, żeby następny przegląd nie zaczynał od zera.
 - **Obsługa błędów**: 27 bloków `catch`, wszystkie pokazują błąd użytkownikowi albo przez stan ekranu, albo przez pasek. Jedyny „cichy" to `isFolderAccessible` w usłudze Dysku, gdzie zwrócenie `false` **jest** wynikiem sondy
 
 ### Znalezione, świadomie niezmienione
-- [ ] **`FileNames.sanitize` kaleczy polskie znaki** — `\w` w Darcie to tylko ASCII, więc „Żukowo" daje `ukowo`, a „Łódź" daje `d`. Dla polskiej aplikacji, w której miejscowości rutynowo mają ą/ę/ł/ó/ż, nazwy plików robią się nieczytelne. Naprawą byłaby transliteracja (ż→z, ł→l), **ale zapisy na Dysk są kluczowane nazwą pliku** (`writeJsonFile` szuka po nazwie i dopiero przy braku tworzy nowy). Zmiana sanityzacji osieroci wszystkie istniejące pliki i **zdubluje je** przy najbliższej synchronizacji. Wymaga migracji nazw na Dysku, nie samej poprawki funkcji
-- [ ] **Druk Bluetooth alokuje jednorazowo ~62 MB** — `Printing.raster` renderuje stronę w podwójnej gęstości (`201,3 × 2 ≈ 402 DPI`), co dla A4 daje ok. 3325 × 4700 px, czyli 15,6 mln pikseli RGBA. Sterta procesu w pomiarach z feature/032 miała limit 192 MB. To rachunek, nie zaobserwowana awaria — nie udało się tego wywołać bez prawdziwej drukarki. Zmniejszenie nadpróbkowania do 1 obniża zużycie czterokrotnie, ale pogarsza jakość wydruku, więc to decyzja, a nie oczywista poprawka
+- [x] **`FileNames.sanitize` kaleczy polskie znaki** — `\w` w Darcie to tylko ASCII, więc „Żukowo" dawało `ukowo`, a „Łódź" samo `d`. **Naprawione w tej samej gałęzi po decyzji Dawida** — opis niżej
+- **Druk Bluetooth alokuje jednorazowo ~62 MB** — `Printing.raster` renderuje stronę w podwójnej gęstości (`201,3 × 2 ≈ 402 DPI`), co dla A4 daje ok. 3325 × 4700 px, czyli 15,6 mln pikseli RGBA. Sterta procesu w pomiarach z feature/032 miała limit 192 MB. To rachunek, nie zaobserwowana awaria. **Zostaje bez zmian — decyzja Dawida: jakość wydruku jest potwierdzona i ma taka pozostać.** Zmniejszenie nadpróbkowania obniżyłoby zużycie czterokrotnie kosztem czytelności druku, więc nie jest to kompromis do przyjęcia
+
+### Polskie znaki w nazwach plików — naprawione
+Sanityzacja dotyczy **wyłącznie nazw plików**. Nazwiska na wydrukach i ekranach
+idą surowe, czcionką z pełnym polskim zestawem — sprawdzone przy okazji, bo
+pytanie brzmiało wprost, czy ucierpią (nie ucierpiały).
+
+- [x] **Transliteracja zamiast kasowania** — ą→a, ć→c, ę→e, ł→l, ń→n, ó→o, ś→s, ź/ż→z, w obu wielkościach. „Żukowo" daje `Zukowo`, „Łódź" — `Lodz`, „Miejscowe Zagrożenie" — `Miejscowe_Zagrozenie`. Musi iść **przed** czyszczeniem, bo `\w` w Darcie jest tylko ASCII
+- [x] **Czyste ASCII, a nie zachowane polskie znaki** — nazwy trafiają mailem do gminy i KP PSP, a starsze klienty poczty potrafią poprzestawiać znaki w nazwie załącznika. Transliteracja jest odporna i nadal czytelna
+- [x] **Migracja bez duplikatów na Dysku** — `writeJsonFile` przyjmuje teraz `legacyFileName`. Gdy pliku nie ma pod nową nazwą, szuka go pod starą i **aktualizuje razem ze zmianą nazwy**, bo `files.update` przyjmuje nazwę w tym samym wywołaniu. Bez tego pierwsza synchronizacja po aktualizacji zostawiłaby stary plik i utworzyła obok drugi z tą samą treścią — jednostka zobaczyłaby każdy raport podwójnie
+- [x] **`FileNames.sanitizeLegacy`** trzyma starą regułę wyłącznie na potrzeby tego wyszukiwania. Do niczego nowego nie jest używana
+- [x] Pobieranie z Dysku jest niezależne od nazw — czyta zawartość wszystkich plików JSON w folderze — więc tam nie było czego zmieniać
+- [x] Testy: komplet polskich liter w obu wielkościach, kontrola że wynik jest zawsze czystym ASCII, oraz strażnik starej reguły. Łącznie **202 testy**

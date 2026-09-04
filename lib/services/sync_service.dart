@@ -337,11 +337,11 @@ class SyncService {
           reportsFolderId,
           report.year,
         );
-        final fileName = _buildReportFileName(report);
         await _driveService.writeJsonFile(
           yearFolderId,
-          fileName,
+          _buildReportFileName(report),
           reportToJson(report),
+          legacyFileName: _buildReportFileName(report, legacy: true),
         );
       }
     }
@@ -358,6 +358,7 @@ class SyncService {
         handoversFolderId,
         _buildHandoverFileName(handover),
         handoverToJson(handover),
+        legacyFileName: _buildHandoverFileName(handover, legacy: true),
       );
     }
 
@@ -369,6 +370,7 @@ class SyncService {
         tripsFolderId,
         _buildTripFileName(trip),
         tripToJson(trip),
+        legacyFileName: _buildTripFileName(trip, legacy: true),
       );
     }
   }
@@ -617,16 +619,24 @@ class SyncService {
   }
 
   /// Build descriptive report file name: 0001_2026_Pozar.json
-  String _buildReportFileName(Report report) {
+  /// [legacy] buduje nazwę wedle reguły sprzed transliteracji polskich znaków —
+  /// służy tylko do odnalezienia pliku zapisanego starszą wersją aplikacji,
+  /// żeby zmienić mu nazwę zamiast utworzyć obok duplikat.
+  String _buildReportFileName(Report report, {bool legacy = false}) {
     final number = report.reportNumber.replaceAll('/', '_');
-    final threat = FileNames.sanitize(report.threatCategory);
+    final threat = legacy
+        ? FileNames.sanitizeLegacy(report.threatCategory)
+        : FileNames.sanitize(report.threatCategory);
     return '${number}_$threat.json';
   }
 
   /// Build descriptive handover file name: 2026-07-20_Kielno_`id-prefix`.json
-  String _buildHandoverFileName(PropertyHandover handover) {
+  String _buildHandoverFileName(PropertyHandover handover,
+      {bool legacy = false}) {
     final dateStr = FileNames.date(handover.eventDate);
-    final locality = FileNames.sanitize(handover.eventLocation);
+    final locality = legacy
+        ? FileNames.sanitizeLegacy(handover.eventLocation)
+        : FileNames.sanitize(handover.eventLocation);
     final idPrefix = handover.id.length >= 8
         ? handover.id.substring(0, 8)
         : handover.id;
@@ -764,10 +774,11 @@ class SyncService {
   ///
   /// Data i pojazd w nazwie, żeby zawartość folderu dała się przejrzeć na
   /// Dysku bez otwierania każdego pliku — kartę czyta się po miesiącach.
-  String _buildTripFileName(VehicleTrip t) {
+  String _buildTripFileName(VehicleTrip t, {bool legacy = false}) {
     final date = FileNames.date(t.date);
+    final name = _db.getVehicle(t.vehicleId)?.name ?? t.vehicleId;
     final vehicle =
-        FileNames.sanitize(_db.getVehicle(t.vehicleId)?.name ?? t.vehicleId);
+        legacy ? FileNames.sanitizeLegacy(name) : FileNames.sanitize(name);
     final idPrefix = t.id.length >= 8 ? t.id.substring(0, 8) : t.id;
     return '${date}_${vehicle}_$idPrefix.json';
   }
