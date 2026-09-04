@@ -2,7 +2,6 @@ import '../../core/utils/bottom_inset.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/constants/handover_property_kinds.dart';
 import '../../core/constants/handover_recipient_types.dart';
@@ -11,6 +10,7 @@ import '../../providers/providers.dart';
 import '../../services/location_service.dart';
 import '../../widgets/firefighter_picker.dart';
 import '../../core/theme/osp_theme.dart';
+import '../../core/utils/time_format.dart';
 
 /// Formularz „Potwierdzenie przekazania terenu, obiektu lub mienia".
 /// Jeden ekran (nie kreator) — pola są prostsze niż w wyjeździe.
@@ -721,7 +721,7 @@ class _DateField extends StatelessWidget {
           labelText: label,
           prefixIcon: const Icon(Icons.calendar_today),
         ),
-        child: Text(DateFormat('dd.MM.yyyy').format(value)),
+        child: Text(TimeFormat.date(value)),
       ),
     );
   }
@@ -760,7 +760,7 @@ class _TimeField extends StatelessWidget {
           prefixIcon: const Icon(Icons.access_time),
         ),
         child: Text(
-          '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}',
+          TimeFormat.hhmmOf(value),
         ),
       ),
     );

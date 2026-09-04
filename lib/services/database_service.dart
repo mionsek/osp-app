@@ -471,12 +471,16 @@ class DatabaseService {
                       !ThreatTypes.retiredSubtypes.contains(s),
                 )
                 .toList();
+      final subtypes = [...entry.value, ...customSubtypes];
+      // Zapisujemy tylko wtedy, gdy coś się faktycznie zmienia. Bez tego
+      // migracja przepisywała trzy rekordy przy **każdym** starcie aplikacji
+      // i po **każdym** pobraniu z Dysku, mimo że wynik był identyczny.
+      if (existing != null && _sameSubtypes(existing.subtypes, subtypes)) {
+        continue;
+      }
       await threatsBox.put(
         entry.key,
-        ThreatEntry(
-          category: entry.key,
-          subtypes: [...entry.value, ...customSubtypes],
-        ),
+        ThreatEntry(category: entry.key, subtypes: subtypes),
       );
     }
     final extraCategories = threatsBox.keys
@@ -485,5 +489,14 @@ class DatabaseService {
     if (extraCategories.isNotEmpty) {
       await threatsBox.deleteAll(extraCategories);
     }
+  }
+
+  /// Czy dwie listy podtypów są identyczne co do kolejności i zawartości.
+  static bool _sameSubtypes(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
   }
 }

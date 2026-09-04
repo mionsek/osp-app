@@ -2,9 +2,9 @@ import '../../core/utils/bottom_inset.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import '../../providers/providers.dart';
 import '../../core/theme/osp_theme.dart';
+import '../../core/utils/time_format.dart';
 
 class HandoversListScreen extends ConsumerWidget {
   const HandoversListScreen({super.key});
@@ -65,7 +65,7 @@ class HandoversListScreen extends ConsumerWidget {
                       style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
                     subtitle: Text(
-                      '${DateFormat('dd.MM.yyyy').format(h.eventDate)} • '
+                      '${TimeFormat.date(h.eventDate)} • '
                       'Przejmujący: ${h.recipientName.isNotEmpty ? h.recipientName : "—"}'
                       '${h.recipientTypeLabel.isNotEmpty ? " (${h.recipientTypeLabel})" : ""}',
                     ),

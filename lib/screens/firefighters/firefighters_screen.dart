@@ -162,7 +162,7 @@ class _FirefightersScreenState extends ConsumerState<FirefightersScreen> {
     );
   }
 
-  Widget _buildFirefighterSubtitle(BuildContext context, dynamic ff) {
+  Widget _buildFirefighterSubtitle(BuildContext context, Firefighter ff) {
     final subtitleParts = <String>[ff.rank];
 
     if (ff.isMedicalExamExpired) {
@@ -198,7 +198,7 @@ class _FirefightersScreenState extends ConsumerState<FirefightersScreen> {
     );
   }
 
-  Widget _buildRoleIcons(BuildContext context, dynamic ff) {
+  Widget _buildRoleIcons(BuildContext context, Firefighter ff) {
     final icons = <Widget>[];
 
     // Kierowca, dowódca i KPP to dodatkowe uprawnienia — kto nie ma

@@ -9,6 +9,7 @@ import '../core/constants/handover_recipient_types.dart';
 import '../core/utils/file_names.dart';
 import '../models/models.dart';
 import 'pdf_output.dart';
+import '../core/utils/time_format.dart';
 
 /// „Potwierdzenie przekazania terenu, obiektu lub mienia objętego działaniem
 /// ratowniczym" — § 21 ust. 2 pkt 2 rozp. MSWiA z 17.09.2021 r.
@@ -196,10 +197,10 @@ class HandoverPdf {
       author: config.fullName,
     );
 
-    final eventDateStr = DateFormat('dd.MM.yyyy').format(handover.eventDate);
+    final eventDateStr = TimeFormat.date(handover.eventDate);
     final eventTimeStr =
-        '${handover.eventTime.hour.toString().padLeft(2, '0')}:${handover.eventTime.minute.toString().padLeft(2, '0')}';
-    final signDateStr = DateFormat('dd.MM.yyyy').format(handover.signDate);
+        TimeFormat.hhmm(handover.eventTime);
+    final signDateStr = TimeFormat.date(handover.signDate);
 
     pw.Widget dottedLine(String text, {double size = 6, bool bold = false}) {
       return pw.Container(

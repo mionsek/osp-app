@@ -1,10 +1,10 @@
 import '../../../core/utils/bottom_inset.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import '../../../models/models.dart';
 import '../../../providers/providers.dart';
 import '../../../core/theme/osp_theme.dart';
+import '../../../core/utils/time_format.dart';
 
 class StepSummary extends ConsumerWidget {
   final String reportNumber;
@@ -48,8 +48,6 @@ class StepSummary extends ConsumerWidget {
     }
     final totalFirefighters = allAssignedIds.length;
 
-    String formatTime(TimeOfDay t) =>
-        '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
     Firefighter? findFF(String? id) {
       if (id == null || id.isEmpty) return null;
@@ -81,10 +79,10 @@ class StepSummary extends ConsumerWidget {
                 children: [
                   _SummaryRow('Nr ewidencyjny', reportNumber),
                   _SummaryRow(
-                      'Data', DateFormat('dd.MM.yyyy').format(date)),
+                      'Data', TimeFormat.date(date)),
                   _SummaryRow(
                     'Godziny',
-                    '${formatTime(departureTime)} – ${returnTime != null ? formatTime(returnTime!) : "—"}',
+                    TimeFormat.rangeOf(departureTime, returnTime),
                   ),
                   _SummaryRow(
                     'Adres',

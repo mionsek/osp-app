@@ -183,4 +183,64 @@ void main() {
       expect(report.totalFirefighters, 2);
     });
   });
+
+  group('Firefighter — badania lekarskie', () {
+    Firefighter withExpiry(DateTime? d) => Firefighter(
+          id: 'f1',
+          firstName: 'Jan',
+          lastName: 'Kowalski',
+          rank: '',
+          medicalExamExpiry: d,
+        );
+
+    test('brak daty to stan nieznany, nie brak waznosci', () {
+      // Ratownik bez wpisanej daty nie jest tym samym, co ratownik po
+      // terminie — pierwszemu brakuje danych, drugi nie może jechać.
+      final ff = withExpiry(null);
+      expect(ff.medicalExamStatus, MedicalExamStatus.unknown);
+      expect(ff.hasMedicalExam, isFalse);
+      expect(ff.isMedicalExamExpired, isFalse);
+      expect(ff.isMedicalExamExpiringSoon, isFalse);
+    });
+
+    test('data z przeszlosci to brak waznosci', () {
+      final ff = withExpiry(DateTime.now().subtract(const Duration(days: 1)));
+      expect(ff.medicalExamStatus, MedicalExamStatus.expired);
+      expect(ff.isMedicalExamExpired, isTrue);
+      // Po terminie nie jest jednocześnie „wygasające" — inaczej lista
+      // pokazywałaby dwa ostrzeżenia naraz.
+      expect(ff.isMedicalExamExpiringSoon, isFalse);
+    });
+
+    test('data w oknie ostrzegawczym to stan wygasajacy', () {
+      final ff = withExpiry(
+        DateTime.now().add(Firefighter.medicalExamWarningWindow ~/ 2),
+      );
+      expect(ff.medicalExamStatus, MedicalExamStatus.expiringSoon);
+      expect(ff.isMedicalExamExpiringSoon, isTrue);
+    });
+
+    test('data poza oknem to badania wazne', () {
+      final ff = withExpiry(
+        DateTime.now().add(Firefighter.medicalExamWarningWindow * 2),
+      );
+      expect(ff.medicalExamStatus, MedicalExamStatus.valid);
+      expect(ff.isMedicalExamExpiringSoon, isFalse);
+      expect(ff.isMedicalExamExpired, isFalse);
+    });
+
+    test('formularz liczy stan z samej daty tak samo jak model', () {
+      // Formularz ratownika trzyma wpisywaną datę, zanim powstanie z niej
+      // `Firefighter`. Wcześniej miał **własną** kopię reguły z własnym progiem
+      // 30 dni — po zmianie progu w modelu lista ostrzegałaby, a formularz nie.
+      for (final d in <DateTime?>[
+        null,
+        DateTime.now().subtract(const Duration(days: 5)),
+        DateTime.now().add(Firefighter.medicalExamWarningWindow ~/ 2),
+        DateTime.now().add(Firefighter.medicalExamWarningWindow * 3),
+      ]) {
+        expect(MedicalExamStatusX.of(d), withExpiry(d).medicalExamStatus);
+      }
+    });
+  });
 }

@@ -2,9 +2,9 @@ import '../../core/utils/bottom_inset.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import '../../providers/providers.dart';
 import '../../core/theme/osp_theme.dart';
+import '../../core/utils/time_format.dart';
 
 class ReportsListScreen extends ConsumerWidget {
   const ReportsListScreen({super.key});
@@ -64,7 +64,7 @@ class ReportsListScreen extends ConsumerWidget {
                       style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
                     subtitle: Text(
-                      '${DateFormat('dd.MM.yyyy').format(report.date)} • '
+                      '${TimeFormat.date(report.date)} • '
                       '${report.threatCategory}'
                       '${report.threatSubtype != null ? " → ${report.threatSubtype}" : ""}'
                       ' • ${report.totalFirefighters} ratowników',

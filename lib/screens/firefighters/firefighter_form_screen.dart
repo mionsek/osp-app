@@ -2,11 +2,11 @@ import '../../core/utils/bottom_inset.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 import '../../models/models.dart';
 import '../../providers/providers.dart';
 import '../../core/theme/osp_theme.dart';
+import '../../core/utils/time_format.dart';
 
 class FirefighterFormScreen extends ConsumerStatefulWidget {
   final String? firefighterId;
@@ -87,28 +87,35 @@ class _FirefighterFormScreenState extends ConsumerState<FirefighterFormScreen> {
   }
 
   Widget _buildMedicalExamField(BuildContext context) {
-    Color chipColor;
-    String label;
-    IconData icon;
-    String placeholder = DateFormat('dd.MM.yyyy').format(DateTime.now().add(const Duration(days: 30)));
+    // Stan liczy model, nie ten ekran. Wcześniej formularz miał **własną**
+    // kopię reguły razem z własnym progiem 30 dni — po zmianie progu w modelu
+    // lista ratowników ostrzegałaby, a formularz jeszcze nie.
+    final status = MedicalExamStatusX.of(_medicalExamExpiry);
 
-    if (_medicalExamExpiry == null) {
-      chipColor = Colors.grey;
-      label = 'np. $placeholder';
-      icon = Icons.help_outline;
-    } else if (_medicalExamExpiry!.isBefore(DateTime.now())) {
-      chipColor = OspTheme.danger;
-      label = 'Wygasło: ${DateFormat('dd.MM.yyyy').format(_medicalExamExpiry!)}';
-      icon = Icons.error_outline;
-    } else if (_medicalExamExpiry!
-        .isBefore(DateTime.now().add(const Duration(days: 30)))) {
-      chipColor = Colors.orange;
-      label = 'Wygasa: ${DateFormat('dd.MM.yyyy').format(_medicalExamExpiry!)}';
-      icon = Icons.warning_amber;
-    } else {
-      chipColor = OspTheme.success;
-      label = 'Ważne do: ${DateFormat('dd.MM.yyyy').format(_medicalExamExpiry!)}';
-      icon = Icons.check_circle_outline;
+    final Color chipColor;
+    final String label;
+    final IconData icon;
+
+    switch (status) {
+      case MedicalExamStatus.unknown:
+        final placeholder = TimeFormat.date(
+          DateTime.now().add(Firefighter.medicalExamWarningWindow),
+        );
+        chipColor = Colors.grey;
+        label = 'np. $placeholder';
+        icon = Icons.help_outline;
+      case MedicalExamStatus.expired:
+        chipColor = OspTheme.danger;
+        label = 'Wygasło: ${TimeFormat.date(_medicalExamExpiry!)}';
+        icon = Icons.error_outline;
+      case MedicalExamStatus.expiringSoon:
+        chipColor = Colors.orange;
+        label = 'Wygasa: ${TimeFormat.date(_medicalExamExpiry!)}';
+        icon = Icons.warning_amber;
+      case MedicalExamStatus.valid:
+        chipColor = OspTheme.success;
+        label = 'Ważne do: ${TimeFormat.date(_medicalExamExpiry!)}';
+        icon = Icons.check_circle_outline;
     }
 
     return Row(

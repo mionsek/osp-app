@@ -2,11 +2,11 @@ import '../../../core/utils/bottom_inset.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import '../../../core/constants/threat_types.dart';
 import '../../../providers/providers.dart';
 import '../../../services/location_service.dart';
 import '../../../core/theme/osp_theme.dart';
+import '../../../core/utils/time_format.dart';
 
 class StepBasicInfo extends ConsumerStatefulWidget {
   final String reportNumber;
@@ -507,7 +507,7 @@ class _DateField extends StatelessWidget {
           labelText: label,
           prefixIcon: const Icon(Icons.calendar_today),
         ),
-        child: Text(DateFormat('dd.MM.yyyy').format(value)),
+        child: Text(TimeFormat.date(value)),
       ),
     );
   }
@@ -545,7 +545,7 @@ class _TimeField extends StatelessWidget {
         ),
         child: Text(
           value != null
-              ? '${value!.hour.toString().padLeft(2, '0')}:${value!.minute.toString().padLeft(2, '0')}'
+              ? TimeFormat.hhmmOf(value!)
               : '—',
         ),
       ),

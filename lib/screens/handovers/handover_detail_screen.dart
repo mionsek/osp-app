@@ -2,13 +2,13 @@ import '../../core/utils/bottom_inset.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import '../../models/models.dart';
 import '../../providers/providers.dart';
 import '../../services/bluetooth_print_service.dart';
 import '../../services/handover_pdf.dart';
 import '../../widgets/bluetooth_printer_picker.dart';
 import '../../core/theme/osp_theme.dart';
+import '../../core/utils/time_format.dart';
 
 class HandoverDetailScreen extends ConsumerWidget {
   final String handoverId;
@@ -89,8 +89,6 @@ class HandoverDetailScreen extends ConsumerWidget {
     }
 
     final handoverFF = findFF(handover.handoverFirefighterId);
-    String formatTime(DateTime dt) =>
-        '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
 
     return Scaffold(
       appBar: AppBar(
@@ -130,8 +128,8 @@ class HandoverDetailScreen extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _Row('Miejsce zdarzenia', handover.eventLocation),
-                    _Row('Data', DateFormat('dd.MM.yyyy').format(handover.eventDate)),
-                    _Row('Godzina', formatTime(handover.eventTime)),
+                    _Row('Data', TimeFormat.date(handover.eventDate)),
+                    _Row('Godzina', TimeFormat.hhmm(handover.eventTime)),
                   ],
                 ),
               ),
@@ -197,7 +195,7 @@ class HandoverDetailScreen extends ConsumerWidget {
                   children: [
                     _Row('Przekazujący', handoverFF?.fullNameWithRank ?? '—'),
                     _Row('Miejscowość, dnia',
-                        '${handover.signLocality}, ${DateFormat('dd.MM.yyyy').format(handover.signDate)}'),
+                        '${handover.signLocality}, ${TimeFormat.date(handover.signDate)}'),
                   ],
                 ),
               ),

@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../core/utils/file_names.dart';
 import '../models/models.dart';
 import 'pdf_output.dart';
+import '../core/utils/time_format.dart';
 
 /// „Potwierdzenie udziału sił i środków podmiotu ratowniczego w działaniu
 /// ratowniczym" — formularz KP PSP.
@@ -80,11 +81,11 @@ class ReportPdf {
       author: config.fullName,
     );
 
-    final dateStr = DateFormat('dd.MM.yyyy').format(report.date);
+    final dateStr = TimeFormat.date(report.date);
     final depTime =
-        '${report.departureTime.hour.toString().padLeft(2, '0')}:${report.departureTime.minute.toString().padLeft(2, '0')}';
+        TimeFormat.hhmm(report.departureTime);
     final retTime = report.returnTime != null
-        ? '${report.returnTime!.hour.toString().padLeft(2, '0')}:${report.returnTime!.minute.toString().padLeft(2, '0')}'
+        ? TimeFormat.hhmm(report.returnTime!)
         : '—';
 
 

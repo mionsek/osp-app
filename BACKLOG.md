@@ -612,3 +612,37 @@ przy przygotowywaniu APK do rozdania kolegom.
 ### Czego pilnować
 - **Utrata keystore'a oznacza koniec aktualizacji.** Po publikacji w Play Store aplikacji podpisanej innym kluczem nie da się zaktualizować — trzeba by wydać ją pod nowym identyfikatorem i stracić wszystkich użytkowników. Plik i hasło muszą mieć kopię poza tym komputerem
 - **SHA-1 do dopisania w Google Cloud** przed testami z logowaniem — bez tego działa wyłącznie tryb offline. Odcisk jest w sekcji „Przed publikacją" wyżej
+
+## Zrobione (fix/040-przeglad-kodu)
+Przegląd na prośbę Dawida: jakość, komentarze i logi, testy, magic numbers,
+duplikaty, kod do wydzielenia, pamięć, idempotencja. Naprawione wyłącznie to,
+co dało się potwierdzić — reszta opisana niżej jako znaleziska bez zmian w kodzie.
+
+### Naprawione duplikaty
+- [x] **Reguła badań lekarskich żyła w trzech miejscach** — próg „30 dni do końca ważności" był wpisany z ręki w modelu, w ostrzeżeniu formularza ratownika i w podpowiedzi daty w tym samym formularzu. Formularz **odtwarzał całą kaskadę warunków** zamiast użyć gotowych getterów modelu, więc zmiana progu w modelu dałaby aplikację, która na liście ostrzega, a w formularzu jeszcze nie. Wprowadzone `Firefighter.medicalExamWarningWindow` i `MedicalExamStatus` (cztery stany zamiast kaskady `if`), formularz liczy stan przez `MedicalExamStatusX.of`
+- [x] **Format godziny `HH:mm` powielony siedem razy** — dwa razy jako lokalna funkcja `formatTime`, cztery razy wklejony w środek widżetu, raz jako `DateFormat('HH:mm')` w karcie drogowej. Format daty `dd.MM.yyyy` — **piętnaście** razy, w tym na wydrukach
+- [x] **Nowy [time_format.dart](lib/core/utils/time_format.dart)** w `core/utils`, obok istniejących `PolishText` i `FileNames`. Formaty są konwencją całej aplikacji, a nie parametrem układu strony — w odróżnieniu od rozmiarów czcionek i szerokości kolumn, które świadomie zostają przy swoich wydrukach
+- [x] **`dynamic ff` w dwóch sygnaturach** ([firefighters_screen.dart](lib/screens/firefighters/firefighters_screen.dart)) zamienione na `Firefighter`. `dynamic` wyłączał sprawdzanie typów przy każdym `ff.isMedicalExamExpired` — literówka w nazwie gettera przeszłaby kompilację i wywaliła się dopiero na telefonie
+
+### Naprawiona nadmiarowa praca przy starcie
+- [x] **`ensureDefaultThreats` przepisywał trzy rekordy przy każdym uruchomieniu** aplikacji i po **każdym** pobraniu z Dysku, mimo że wynik był identyczny. Teraz zapisuje tylko wtedy, gdy lista podtypów faktycznie się zmienia. Wynik bez zmian — pilnują tego dwa testy: jeden po tożsamości obiektów w pudełku, drugi porównuje stan po jednym i po trzech przebiegach
+
+### Testy — trzy funkcje bez ani jednego testu
+Wszystkie czyste i deterministyczne, a **dwie z nich powstały właśnie dlatego, że ich powielone wersje się rozjechały**. Wydzielenie naprawiło objaw, ale nic nie pilnowało wyniku.
+- [x] **`PolishText`** — 23 przypadki, w tym nastki 12–14, które w kopiach sprzed refactor/034 były **realnym błędem** („12 miejsca" zamiast „12 miejsc"), nieszkodliwym tylko dlatego, że pojazd ma najwyżej 6 miejsc. Przejazdów w miesiącu bywa kilkanaście
+- [x] **`FileNames`** — sanityzacja, sortowalność dat, powtarzalność wyniku dla tej samej nazwy. To ostatnie jest sednem wydzielenia: wcześniej ta sama miejscowość dawała różne nazwy pliku w PDF-ie i na Dysku
+- [x] **`PdfOutput.wrapText`** — dopełnianie pustymi liniami, dzielenie po słowach, dokładanie nadmiaru do ostatniej linii zamiast obcinania
+- [x] **`Firefighter.medicalExamStatus`** — cztery stany plus test, że formularz i model liczą to samo
+- [x] Łącznie **198 testów** (było 158)
+
+### Sprawdzone i czyste — bez zmian w kodzie
+Zapisane, żeby następny przegląd nie zaczynał od zera.
+- **Zwalnianie zasobów**: każde pole typu `TextEditingController`, `FocusNode`, `PageController` i `ScrollController` sprawdzone z osobna — wszystkie mają `dispose`. Timer auto-synchronizacji i subskrypcja połączenia są anulowane
+- **Nasłuch fokusu w wyborze ratownika** ([step_crew.dart](lib/screens/reports/steps/step_crew.dart)) — jedyne `addListener` w projekcie. Przypina się tylko przy zmianie `FocusNode`, odpina poprzedni i sprząta w `dispose`. Lekcja z refactor/034 została tu zastosowana poprawnie
+- **Idempotencja migracji startowych**: `backfillTripsFromReports` trzyma listę przerobionych raportów, `fillMissingRouteFrom` rusza wyłącznie puste pola, `rechain` zwraca tylko faktycznie zmienione przejazdy. Powtórny przebieg każdej z nich nie zapisuje niczego
+- **`rechain` nie podbija `updatedAt`** — i tak ma być. Stan licznika przed wyjazdem jest **wyliczany** z przejazdów pojazdu, a `addTrip` przelicza łańcuch po każdym pobraniu z Dysku, więc każde urządzenie dochodzi do tej samej wartości samo. Podbijanie znacznika robiłoby ruch w synchronizacji bez powodu
+- **Obsługa błędów**: 27 bloków `catch`, wszystkie pokazują błąd użytkownikowi albo przez stan ekranu, albo przez pasek. Jedyny „cichy" to `isFolderAccessible` w usłudze Dysku, gdzie zwrócenie `false` **jest** wynikiem sondy
+
+### Znalezione, świadomie niezmienione
+- [ ] **`FileNames.sanitize` kaleczy polskie znaki** — `\w` w Darcie to tylko ASCII, więc „Żukowo" daje `ukowo`, a „Łódź" daje `d`. Dla polskiej aplikacji, w której miejscowości rutynowo mają ą/ę/ł/ó/ż, nazwy plików robią się nieczytelne. Naprawą byłaby transliteracja (ż→z, ł→l), **ale zapisy na Dysk są kluczowane nazwą pliku** (`writeJsonFile` szuka po nazwie i dopiero przy braku tworzy nowy). Zmiana sanityzacji osieroci wszystkie istniejące pliki i **zdubluje je** przy najbliższej synchronizacji. Wymaga migracji nazw na Dysku, nie samej poprawki funkcji
+- [ ] **Druk Bluetooth alokuje jednorazowo ~62 MB** — `Printing.raster` renderuje stronę w podwójnej gęstości (`201,3 × 2 ≈ 402 DPI`), co dla A4 daje ok. 3325 × 4700 px, czyli 15,6 mln pikseli RGBA. Sterta procesu w pomiarach z feature/032 miała limit 192 MB. To rachunek, nie zaobserwowana awaria — nie udało się tego wywołać bez prawdziwej drukarki. Zmniejszenie nadpróbkowania do 1 obniża zużycie czterokrotnie, ale pogarsza jakość wydruku, więc to decyzja, a nie oczywista poprawka

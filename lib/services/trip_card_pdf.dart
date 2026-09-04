@@ -6,6 +6,7 @@ import 'package:printing/printing.dart';
 import 'package:intl/intl.dart';
 import '../core/utils/file_names.dart';
 import '../core/utils/polish_text.dart';
+import '../core/utils/time_format.dart';
 import '../models/models.dart';
 import 'pdf_output.dart';
 
@@ -76,8 +77,9 @@ class TripCardPdf {
       'karta_drogowa_${FileNames.sanitize(v.name)}_'
       '${FileNames.yearMonth(year, month)}.pdf';
 
-  static String _hhmm(DateTime? t) =>
-      t == null ? '' : DateFormat('HH:mm').format(t);
+  /// Godzina w komórce tabeli; pusta dla przejazdu bez wpisanego powrotu —
+  /// na papierowej karcie taka rubryka też zostaje pusta.
+  static String _hhmm(DateTime? t) => t == null ? '' : TimeFormat.hhmm(t);
 
   /// Liczba po polsku: przecinek dziesiętny, bez zbędnych zer.
   static String _n(num? v, {int decimals = 2}) {

@@ -73,13 +73,26 @@ class Firefighter extends HiveObject {
   /// Funkcje w jednej linii, np. „Kierowca, KPP" albo „Ratownik".
   String get functionsLabel => functionLabels.join(', ');
 
+  /// Ile dni przed końcem ważności badania uznajemy za „wygasające".
+  ///
+  /// Reguła jest jedna na całą aplikację, bo była zapisana z ręki w trzech
+  /// miejscach: tutaj, w ostrzeżeniu formularza ratownika i w podpowiedzi daty
+  /// w tym samym formularzu. Zmiana progu w jednym z nich dawała aplikację,
+  /// która na liście ostrzega, a w formularzu jeszcze nie.
+  static const Duration medicalExamWarningWindow = Duration(days: 30);
+
   bool get hasMedicalExam => medicalExamExpiry != null;
   bool get isMedicalExamExpired =>
       medicalExamExpiry != null && medicalExamExpiry!.isBefore(DateTime.now());
   bool get isMedicalExamExpiringSoon =>
       medicalExamExpiry != null &&
       !isMedicalExamExpired &&
-      medicalExamExpiry!.isBefore(DateTime.now().add(const Duration(days: 30)));
+      medicalExamExpiry!.isBefore(DateTime.now().add(medicalExamWarningWindow));
+
+  /// Stan badań lekarskich jako jedna wartość — do wyboru koloru i ikony
+  /// bez powtarzania kolejności warunków w każdym widoku z osobna.
+  MedicalExamStatus get medicalExamStatus =>
+      MedicalExamStatusX.of(medicalExamExpiry);
 
   @override
   String toString() => fullName;
@@ -107,5 +120,25 @@ class Firefighter extends HiveObject {
           ? null
           : (medicalExamExpiry ?? this.medicalExamExpiry),
     );
+  }
+}
+
+/// Stan badań lekarskich ratownika.
+///
+/// Cztery przypadki, w tej kolejności sprawdzane: brak daty, po terminie,
+/// wygasające w oknie [Firefighter.medicalExamWarningWindow], ważne.
+enum MedicalExamStatus { unknown, expired, expiringSoon, valid }
+
+extension MedicalExamStatusX on MedicalExamStatus {
+  /// Stan wyliczony z samej daty — dla formularza, który trzyma wpisywaną
+  /// datę zanim powstanie z niej [Firefighter].
+  static MedicalExamStatus of(DateTime? expiry) {
+    if (expiry == null) return MedicalExamStatus.unknown;
+    final now = DateTime.now();
+    if (expiry.isBefore(now)) return MedicalExamStatus.expired;
+    if (expiry.isBefore(now.add(Firefighter.medicalExamWarningWindow))) {
+      return MedicalExamStatus.expiringSoon;
+    }
+    return MedicalExamStatus.valid;
   }
 }

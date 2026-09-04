@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:osp_app/models/models.dart';
+import 'package:osp_app/core/constants/threat_types.dart';
 import 'package:osp_app/services/database_service.dart';
 
 /// Testy warstwy bazy — dotąd nietestowanej.
@@ -281,6 +282,80 @@ void main() {
 
       expect(await db.fillMissingRouteFrom('   '), 0);
       expect(db.getTrip('a')!.routeFrom, '');
+    });
+  });
+
+  group('ensureDefaultThreats — migracja słownika zagrożeń', () {
+    test('zaklada domyslne kategorie i nic wiecej', () async {
+      await db.ensureDefaultThreats();
+
+      final categories = db.threatsBox.keys.map((k) => k.toString()).toSet();
+      expect(categories, ThreatTypes.defaults.keys.toSet());
+    });
+
+    test('zachowuje wlasne podtypy uzytkownika', () async {
+      await db.ensureDefaultThreats();
+      final pozar = db.threatsBox.get('Pożar')!;
+      await db.threatsBox.put(
+        'Pożar',
+        ThreatEntry(
+          category: 'Pożar',
+          subtypes: [...pozar.subtypes, 'Pożar stodoły'],
+        ),
+      );
+
+      await db.ensureDefaultThreats();
+
+      expect(db.threatsBox.get('Pożar')!.subtypes, contains('Pożar stodoły'));
+      // Domyślne zostają i idą pierwsze.
+      expect(db.threatsBox.get('Pożar')!.subtypes.first,
+          ThreatTypes.defaults['Pożar']!.first);
+    });
+
+    test('usuwa kategorie spoza zamknietej listy', () async {
+      await db.threatsBox.put(
+        'Wyjazd gospodarczy',
+        ThreatEntry(category: 'Wyjazd gospodarczy', subtypes: const []),
+      );
+
+      await db.ensureDefaultThreats();
+
+      expect(db.threatsBox.get('Wyjazd gospodarczy'), isNull);
+    });
+
+    test('powtorny przebieg nie zapisuje niczego ponownie', () async {
+      // Migracja idzie przy **każdym** starcie aplikacji i po **każdym**
+      // pobraniu z Dysku. Wcześniej przepisywała trzy rekordy za każdym razem,
+      // mimo że wynik był identyczny. Sprawdzamy po tożsamości obiektów:
+      // brak zapisu znaczy, że w pudełku leżą te same instancje.
+      await db.ensureDefaultThreats();
+      final before = {
+        for (final k in db.threatsBox.keys) k: db.threatsBox.get(k)
+      };
+
+      await db.ensureDefaultThreats();
+
+      for (final k in db.threatsBox.keys) {
+        expect(identical(db.threatsBox.get(k), before[k]), isTrue,
+            reason: 'kategoria $k została przepisana bez potrzeby');
+      }
+    });
+
+    test('wynik jest ten sam niezaleznie od liczby przebiegow', () async {
+      await db.ensureDefaultThreats();
+      final once = {
+        for (final k in db.threatsBox.keys)
+          k.toString(): [...db.threatsBox.get(k)!.subtypes]
+      };
+
+      await db.ensureDefaultThreats();
+      await db.ensureDefaultThreats();
+
+      final thrice = {
+        for (final k in db.threatsBox.keys)
+          k.toString(): [...db.threatsBox.get(k)!.subtypes]
+      };
+      expect(thrice, once);
     });
   });
 }

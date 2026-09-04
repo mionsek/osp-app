@@ -2,7 +2,6 @@ import '../../core/utils/bottom_inset.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import '../../models/models.dart';
 import '../../models/sync_state.dart';
 import '../../providers/providers.dart';
@@ -10,6 +9,7 @@ import '../../services/bluetooth_print_service.dart';
 import '../../services/report_pdf.dart';
 import '../../widgets/bluetooth_printer_picker.dart';
 import '../../core/theme/osp_theme.dart';
+import '../../core/utils/time_format.dart';
 
 class ReportDetailScreen extends ConsumerWidget {
   final String reportId;
@@ -85,8 +85,6 @@ class ReportDetailScreen extends ConsumerWidget {
       return firefighters.where((f) => f.id == id).firstOrNull;
     }
 
-    String formatTime(DateTime dt) =>
-        '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
 
     return Scaffold(
       appBar: AppBar(
@@ -175,10 +173,10 @@ class ReportDetailScreen extends ConsumerWidget {
                   children: [
                     _Row('Nr ewidencyjny', report.reportNumber),
                     _Row('Data',
-                        DateFormat('dd.MM.yyyy').format(report.date)),
+                        TimeFormat.date(report.date)),
                     _Row(
                       'Godziny',
-                      '${formatTime(report.departureTime)} – ${report.returnTime != null ? formatTime(report.returnTime!) : "—"}',
+                      TimeFormat.range(report.departureTime, report.returnTime),
                     ),
                     _Row(
                       'Adres',
