@@ -68,6 +68,13 @@ android {
             signingConfig = if (hasReleaseKey) {
                 signingConfigs.getByName("release")
             } else {
+                // Głośno, bo po cichu to już raz się stało: po zmianie
+                // komputera paczka „do rozdania" wyszła na kluczu debug.
+                logger.warn(
+                    "UWAGA: brak android/key.properties — wydanie podpisane " +
+                        "kluczem DEBUG. Taki APK nie zaktualizuje aplikacji " +
+                        "u kolegów. Nie rozdawaj go."
+                )
                 signingConfigs.getByName("debug")
             }
 

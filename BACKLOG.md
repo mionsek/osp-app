@@ -360,7 +360,7 @@ Obecnie druk startuje od razu po kliknięciu.
 
 ### Przed publikacją w Play Store
 - [x] **Własny klucz podpisu** — dziś APK jest podpisany kluczem debug. Po zmianie klucza Android potraktuje aplikację jako inną i **każdy będzie musiał odinstalować przed aktualizacją, tracąc dane lokalne**. Im więcej osób dostanie wersję na kluczu debug, tym boleśniejsze. Wymaga dopisania nowego odcisku SHA-1 do klienta OAuth w Google Cloud, inaczej przestanie działać logowanie Google (błąd 10). **Zrobione w chore/039** — patrz sekcja niżej
-- [ ] **Dopisać SHA-1 klucza wydań do klienta OAuth** w Google Cloud: `B4:8D:C9:C8:B7:FB:93:69:FB:86:27:1A:60:73:89:1F:7E:94:92:C2` (pakiet `pl.osp.osp_app`). **Do czasu dopisania logowanie Google zwraca błąd 10** i działa tylko tryb offline
+- [ ] **Dopisać SHA-1 klucza wydań do Google Cloud** — nowy klient OAuth typu Android, pakiet `pl.osp.osp_app`, SHA-1 `59:9C:CA:C1:B1:E1:B1:35:5E:76:11:11:B0:53:B8:51:78:6A:FD:6D` (klucz z chore/043; poprzedni `B4:8D:…` przepadł razem z laptopem Lenovo). **Do czasu dopisania logowanie Google zwraca błąd 10** i działa tylko tryb offline
 - [ ] Grafiki do sklepu: ikona 512×512, feature graphic 1024×500, min. 2 screenshoty
 - [ ] Polityka prywatności — po usunięciu reklam aplikacja nie zbiera praktycznie nic (dane leżą na Dysku Google użytkownika), więc mieści się w akapicie
 - [ ] (opcjonalnie) Ikona monochromatyczna `<monochrome>` w adaptive icon — motywy Android 13+
@@ -710,8 +710,8 @@ cichej utraty danych.
 Kolejność według wagi.
 
 **Przed rozdaniem kolejnej wersji**
-- [ ] **Klucz wydań jest tylko na drugim komputerze** (`C:/Users/Lenovo/.keys/`). APK zbudowany na tym komputerze podpisuje się kluczem debug **bez ostrzeżenia** — nie zaktualizuje 1.6.0 u kolegów. Wydania budować tam albo przenieść keystore i `key.properties` (bezpiecznie, nie przez repo). Rozważyć, żeby build release bez `key.properties` kończył się błędem zamiast cicho spadać na klucz debug. I potwierdzić, że keystore ma kopię poza komputerem
-- [ ] **SHA-1 klucza wydań w Google Cloud** — nadal nie dopisany (patrz „Przed publikacją"). Bez tego 1.6.x logowanie zwraca błąd 10
+- [x] ~~Klucz wydań jest tylko na drugim komputerze~~ — laptopa już nie ma, klucz przepadł; zastąpiony nowym w chore/043 niżej. Pierwotny opis: (`C:/Users/Lenovo/.keys/`). APK zbudowany na tym komputerze podpisuje się kluczem debug **bez ostrzeżenia** — nie zaktualizuje 1.6.0 u kolegów. Wydania budować tam albo przenieść keystore i `key.properties` (bezpiecznie, nie przez repo). Rozważyć, żeby build release bez `key.properties` kończył się błędem zamiast cicho spadać na klucz debug. I potwierdzić, że keystore ma kopię poza komputerem
+- [ ] **SHA-1 klucza wydań w Google Cloud** — nowy odcisk z chore/043 (patrz „Przed publikacją"). Bez tego 1.6.1 zwraca przy logowaniu błąd 10
 - [ ] **Tryb ekranu zgody OAuth** — w „Testing" zalogują się tylko konta dopisane jako testerzy, a zgoda wygasa po 7 dniach. Do sprawdzenia razem z SHA-1
 - [ ] **Wszyscy w jednostce na tej samej wersji** — stare wersje nie znają ochrony poprawek ani daty badań. Rozważyć minimalną wersję w `unit_config.json` z komunikatem „zaktualizuj"
 
@@ -749,3 +749,25 @@ Nie ma tego w backlogu, uporządkowane od największej wartości:
 - [ ] **Przeniesienie jednostki na konto OSP** — folder leży na prywatnym Gmailu założyciela
 - [ ] Numer zdarzenia z systemu PSP na potwierdzeniu udziału — do ustalenia z KP PSP
 - [ ] Ewidencja sprzętu i jego przeglądów (ODO, butle, pilarki) — duże, na później
+
+## Zrobione (chore/043-nowy-klucz-podpisu)
+Laptopa Lenovo już nie ma, a z nim przepadł klucz wydań z chore/039 — nie było
+kopii. Wersji 1.6.0 podpisanej tamtym kluczem nie da się już zaktualizować.
+Decyzja Dawida: nowy własny klucz (zamiast klucza debug tego komputera, który
+pozwoliłby właścicielom 1.5.0 zaktualizować się bez odinstalowania, ale
+wymagałby kolejnej zmiany przed Sklepem Play).
+
+- [x] **Keystore `osp-app-upload.jks`** — RSA 4096, alias `upload`, ważny do 15.02.2054, `CN=Dawid Mionskowski, O=Raporty OSP, C=PL`. Leży **poza repozytorium** w `C:/Users/Mio/.keys/`
+- [x] Odciski: SHA-1 `59:9C:CA:C1:B1:E1:B1:35:5E:76:11:11:B0:53:B8:51:78:6A:FD:6D`, SHA-256 `6A:A9:06:EE:89:02:C8:D2:46:D1:43:91:34:90:00:48:B4:CC:01:A5:DE:FB:36:1D:AA:15:86:BF:C3:AF:0D:6B`
+- [x] `android/key.properties` z losowym hasłem — ignorowany przez git (sprawdzone `git check-ignore`)
+- [x] **Build release bez `key.properties` ostrzega głośno** zamiast po cichu podpisywać kluczem debug — dokładnie to groziło przy zmianie komputera
+- [x] Podpis sprawdzony na gotowym pliku (`apksigner`), wersja 1.6.1 (12) uruchomiona na czystym emulatorze
+- [x] Kopia klucza z hasłem i instrukcją przygotowana w `Pobrane/OSP-klucz-KOPIA`
+
+### Do zrobienia przez Dawida
+- [ ] **Kopia klucza w dwóch miejscach poza komputerem** (pendrive + prywatny Dysk), hasło w menedżerze haseł, potem usunąć folder z „Pobrane". Utrata klucza drugi raz = znowu wszyscy odinstalowują
+- [ ] **Nowy klient OAuth w Google Cloud** z nowym SHA-1 (patrz „Przed publikacją"). Stary klient z odciskiem `D0:EB:…` zostaje — to klucz debug tego komputera, potrzebny do testów na emulatorze
+- [ ] **Przejście kolegów na 1.6.1**: najpierw synchronizacja na starej wersji (żeby dane były na Dysku), potem odinstalowanie, instalacja 1.6.1, logowanie Google i dołączenie do jednostki kodem zaproszenia z Ustawień. Kto pracował w trybie offline (bez logowania), straci dane lokalne
+
+### Czego pilnować
+- Emulator OSP_Test ma aplikację podpisaną kluczem debug. Wersji release z nowym kluczem nie da się na nim zainstalować przez `adb install -r` bez odinstalowania (i utraty danych testowych) — do sprawdzania wydań służy czysty emulator **OSP_IT**
