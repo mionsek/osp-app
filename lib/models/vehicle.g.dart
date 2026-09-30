@@ -30,13 +30,14 @@ class VehicleAdapter extends TypeAdapter<Vehicle> {
       pumpFuelPerHour: fields[10] as double?,
       idleFuelPerMinute: fields[11] as double?,
       startupFuelPerMonth: fields[12] as double?,
+      updatedAt: fields[13] as DateTime?,
     );
   }
 
   @override
   void write(BinaryWriter writer, Vehicle obj) {
     writer
-      ..writeByte(13)
+      ..writeByte(14)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -62,7 +63,9 @@ class VehicleAdapter extends TypeAdapter<Vehicle> {
       ..writeByte(11)
       ..write(obj.idleFuelPerMinute)
       ..writeByte(12)
-      ..write(obj.startupFuelPerMonth);
+      ..write(obj.startupFuelPerMonth)
+      ..writeByte(13)
+      ..write(obj.updatedAt);
   }
 
   @override

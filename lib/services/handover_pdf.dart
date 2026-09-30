@@ -2,7 +2,6 @@ import 'dart:typed_data';
 
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 import 'package:intl/intl.dart';
 import '../core/constants/handover_property_kinds.dart';
 import '../core/constants/handover_recipient_types.dart';
@@ -183,14 +182,7 @@ class HandoverPdf {
     UnitConfig config,
     Firefighter? handoverFirefighter,
   ) async {
-    final baseFont = await PdfGoogleFonts.openSansRegular();
-    final boldFont = await PdfGoogleFonts.openSansBold();
-    final italicFont = await PdfGoogleFonts.openSansItalic();
-    final pageTheme = pw.ThemeData.withFont(
-      base: baseFont,
-      bold: boldFont,
-      italic: italicFont,
-    );
+    final pageTheme = await PdfOutput.theme();
 
     final pdf = pw.Document(
       title: 'Potwierdzenie przekazania mienia',

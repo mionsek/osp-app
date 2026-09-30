@@ -1,7 +1,10 @@
+import 'dart:convert';
+
 import 'package:hive_flutter/hive_flutter.dart';
 import '../core/constants/threat_types.dart';
 import '../core/utils/time_format.dart';
 import '../models/models.dart';
+import 'sync_json.dart';
 import 'trip_from_report.dart';
 import 'trip_odometer.dart';
 
@@ -87,6 +90,90 @@ class DatabaseService {
   Future<void> cacheAdminEmails(List<String> emails) =>
       settingsBox.put(_adminEmailsKey, emails);
 
+  // --- Dane jednostki: kiedy ostatnio zmienione na tym telefonie ---
+  //
+  // Nazwa jednostki i adres remizy są wspólne dla wszystkich telefonów.
+  // Bez stempla pobranie z Dysku nadpisywało zmianę wpisaną tu przed chwilą,
+  // zanim zdążyła zostać wysłana.
+  static const String _unitConfigEditedAtKey = 'unitConfigEditedAt';
+
+  DateTime? get unitConfigEditedAt {
+    final raw = settingsBox.get(_unitConfigEditedAtKey);
+    return raw is String ? DateTime.tryParse(raw) : null;
+  }
+
+  Future<void> markUnitConfigEdited([DateTime? at]) => settingsBox.put(
+      _unitConfigEditedAtKey, (at ?? DateTime.now()).toIso8601String());
+
+  // --- Znaczniki usunięcia (synchronizacja) ---
+  //
+  // Usunięty rekord znika z bazy, ale ślad po nim musi zostać: inaczej przy
+  // najbliższej synchronizacji wracał z Dysku, bo plik nadal tam leżał, a
+  // telefony kolegów wysyłały swoją kopię z powrotem. Znacznik to ostatnia
+  // treść rekordu z dopiskiem `deleted` — trafia na Dysk w miejsce rekordu.
+  //
+  // Trzymany jako tekst JSON: Hive oddaje zagnieżdżone mapy jako
+  // Map<dynamic, dynamic>, a znacznik ma wyglądać dokładnie jak plik na Dysku.
+  static const String _tombstonesKey = 'syncTombstones';
+
+  Map<String, String> get _tombstoneStore =>
+      ((settingsBox.get(_tombstonesKey) as Map?) ?? const {})
+          .map((k, v) => MapEntry(k.toString(), v.toString()));
+
+  static String _tombstoneKey(String kind, String id) => '$kind:$id';
+
+  /// Znacznik usunięcia rekordu albo `null`, gdy rekordu nie usuwano.
+  Map<String, dynamic>? tombstoneOf(String kind, String id) {
+    final raw = _tombstoneStore[_tombstoneKey(kind, id)];
+    return raw == null ? null : jsonDecode(raw) as Map<String, dynamic>;
+  }
+
+  /// Wszystkie znaczniki danego rodzaju.
+  List<Map<String, dynamic>> tombstonesOf(String kind) => [
+        for (final e in _tombstoneStore.entries)
+          if (e.key.startsWith('$kind:'))
+            jsonDecode(e.value) as Map<String, dynamic>,
+      ];
+
+  Future<void> saveTombstone(
+      String kind, String id, Map<String, dynamic> json) async {
+    final store = Map<String, String>.of(_tombstoneStore);
+    store[_tombstoneKey(kind, id)] = jsonEncode(json);
+    await settingsBox.put(_tombstonesKey, store);
+  }
+
+  /// Zdejmuje znacznik — rekord wrócił, bo ktoś edytował go później, niż
+  /// został usunięty.
+  Future<void> removeTombstone(String kind, String id) async {
+    final store = Map<String, String>.of(_tombstoneStore);
+    if (store.remove(_tombstoneKey(kind, id)) == null) return;
+    await settingsBox.put(_tombstonesKey, store);
+  }
+
+  Future<void> _tombstone(String kind, String id, Map<String, dynamic> json) =>
+      saveTombstone(kind, id, SyncJson.tombstone(json, DateTime.now()));
+
+  /// Usunięcie, które przyszło z Dysku: kasuje rekord bez wystawiania
+  /// nowego znacznika — zapisuje ten, który przyszedł.
+  Future<void> applyRemoteDeletion(
+      String kind, String id, Map<String, dynamic> tombstone) async {
+    switch (kind) {
+      case SyncKind.report:
+        await reportsBox.delete(id);
+      case SyncKind.handover:
+        await handoversBox.delete(id);
+      case SyncKind.trip:
+        final trip = tripsBox.get(id);
+        await tripsBox.delete(id);
+        if (trip != null) await _rechainVehicle(trip.vehicleId);
+      case SyncKind.firefighter:
+        await firefightersBox.delete(id);
+      case SyncKind.vehicle:
+        await vehiclesBox.delete(id);
+    }
+    await saveTombstone(kind, id, tombstone);
+  }
+
   // --- Vehicles ---
 
   Box<Vehicle> get vehiclesBox => Hive.box<Vehicle>(_vehiclesBox);
@@ -102,6 +189,8 @@ class DatabaseService {
   }
 
   Future<void> deleteVehicle(String id) async {
+    final v = vehiclesBox.get(id);
+    if (v != null) await _tombstone(SyncKind.vehicle, id, SyncJson.vehicleToJson(v));
     await vehiclesBox.delete(id);
   }
 
@@ -123,6 +212,10 @@ class DatabaseService {
   }
 
   Future<void> deleteFirefighter(String id) async {
+    final ff = firefightersBox.get(id);
+    if (ff != null) {
+      await _tombstone(SyncKind.firefighter, id, SyncJson.firefighterToJson(ff));
+    }
     await firefightersBox.delete(id);
   }
 
@@ -159,6 +252,8 @@ class DatabaseService {
   }
 
   Future<void> deleteReport(String id) async {
+    final r = reportsBox.get(id);
+    if (r != null) await _tombstone(SyncKind.report, id, SyncJson.reportToJson(r));
     await reportsBox.delete(id);
   }
 
@@ -212,6 +307,10 @@ class DatabaseService {
   }
 
   Future<void> deleteHandover(String id) async {
+    final h = handoversBox.get(id);
+    if (h != null) {
+      await _tombstone(SyncKind.handover, id, SyncJson.handoverToJson(h));
+    }
     await handoversBox.delete(id);
   }
 
@@ -283,6 +382,7 @@ class DatabaseService {
 
   Future<void> deleteTrip(String id) async {
     final trip = tripsBox.get(id);
+    if (trip != null) await _tombstone(SyncKind.trip, id, SyncJson.tripToJson(trip));
     await tripsBox.delete(id);
     if (trip != null) await _rechainVehicle(trip.vehicleId);
   }
@@ -340,6 +440,9 @@ class DatabaseService {
 
       for (final trip in trips) {
         if (existingIds.contains(trip.id)) continue;
+        // Usunięty ręcznie — na innym telefonie albo przed reinstalacją —
+        // nie może wrócić tylko dlatego, że raport jest nadal na miejscu.
+        if (tombstoneOf(SyncKind.trip, trip.id) != null) continue;
         await tripsBox.put(trip.id, trip);
         affectedVehicles.add(trip.vehicleId);
         added++;

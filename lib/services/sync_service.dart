@@ -1,12 +1,15 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:googleapis/drive/v3.dart' as drive;
 import '../models/models.dart';
 import '../models/sync_state.dart';
 import 'database_service.dart';
 import 'google_auth_service.dart';
 import 'google_drive_service.dart';
+import 'sync_json.dart';
 import '../core/utils/file_names.dart';
 
 /// Orchestrates bidirectional sync between local Hive and Google Drive.
@@ -34,7 +37,7 @@ class SyncService {
 
   SyncService(this._db, this.authService, this._driveService);
 
-  // â”€â”€ Initialization â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Initialization ─────────────────────────────────────────────
 
   /// Start auto-sync: every 5 minutes + on connectivity change.
   void startAutoSync() {
@@ -67,22 +70,27 @@ class SyncService {
     stopAutoSync();
   }
 
-  // â”€â”€ Unit creation / joining â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Unit creation / joining ────────────────────────────────────
 
   /// Create a new unit on Google Drive. Returns invite code.
   Future<String> createUnit(String unitName) async {
+    await _resetUnitState();
     final folderId = await _driveService.createUnitFolder(unitName);
     final inviteCode = _generateInviteCode();
 
     // Write unit config to Drive (in config subfolder)
     var configFolderId = await _driveService.findConfigFolder(folderId);
     configFolderId ??= await _driveService.createSubfolder(folderId, 'config');
-    await _driveService.writeJsonFile(configFolderId, 'unit_config.json', {
+    final unitConfig = {
       'unitName': unitName,
       'inviteCode': inviteCode,
       'createdAt': DateTime.now().toIso8601String(),
       'createdBy': authService.userEmail,
-    });
+      'syncFormat': syncFormat,
+    };
+    await _driveService.writeJsonFile(
+        configFolderId, 'unit_config.json', unitConfig);
+    _remoteUnitConfig = unitConfig;
 
     _updateState(
       _state.copyWith(
@@ -117,6 +125,7 @@ class SyncService {
       code.trim().toUpperCase(),
     );
     if (folderId == null) return false;
+    await _resetUnitState();
 
     _updateState(
       _state.copyWith(
@@ -216,33 +225,49 @@ class SyncService {
     // jednostką — także po zalogowaniu innym kontem.
     await _db.configBox.delete('driveSync');
     await _db.cacheAdminEmails(const []);
+    await _resetUnitState();
     _updateState(const SyncState());
   }
 
-  // â”€â”€ Full sync â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  /// Zapomina wszystko, co dotyczyło plików poprzedniej jednostki — inaczej
+  /// zapis w nowej trafiałby do plików starej.
+  Future<void> _resetUnitState() async {
+    _remoteDocs.clear();
+    _remoteConfigHashes.clear();
+    _remoteUnitConfig = null;
+    _remoteSyncFormat = 1;
+    _reportsFolderId = null;
+    _yearFolderIds.clear();
+    _handoversFolderId = null;
+    _tripsFolderId = null;
+    await _db.settingsBox.delete(_fileCacheKey);
+  }
 
+  // ── Full sync ──────────────────────────────────────────────────
   /// Run a full bidirectional sync.
   /// Returns the number of duplicate report numbers detected after pull.
+  ///
+  /// Kolejność: najpierw pobieramy, potem wysyłamy — i wysyłamy tylko to,
+  /// co różni się od Dysku. Rozstrzyga stempel `updatedAt` każdego rekordu
+  /// (także ratownika i pojazdu), a usunięcia jeżdżą jako znaczniki, więc
+  /// nie wracają przy następnej synchronizacji.
   Future<int> syncAll() async {
     if (_isSyncing || !_state.isConnected || _state.unitFolderId == null) {
       return 0;
     }
 
     _isSyncing = true;
+    _skippedFiles = 0;
     _updateState(_state.copyWith(status: SyncStatus.syncing));
 
     try {
-      // Listy (ratownicy, pojazdy) nie mają stempli per wpis, więc idą po
-      // staremu: najpierw własna wersja, potem cudza.
-      await _pushConfig();
-      await _pullConfig();
-      // Dokumenty mają stemple, więc najpierw pobieramy nowsze z Dysku,
-      // a dopiero potem wysyłamy. Odwrotnie każdy telefon przy każdej
-      // synchronizacji nadpisywał Dysk swoją, często starą kopią, i poprawki
-      // istniejących raportów czy przejazdów nie docierały do kolegów.
-      await _pullDocuments();
-      await _afterPull();
-      await _pushDocuments();
+      await _withAuthRetry(() async {
+        await _pullConfig();
+        await _pullDocuments();
+        await _afterPull();
+        await _pushConfig();
+        await _pushDocuments();
+      });
 
       final duplicates = _db.findDuplicateReportNumbers();
 
@@ -250,11 +275,19 @@ class SyncService {
         _state.copyWith(
           status: SyncStatus.idle,
           lastSyncTime: DateTime.now(),
-          errorMessage: null,
+          clearError: true,
           duplicateReportNumbers: duplicates,
+          skippedFiles: _skippedFiles,
         ),
       );
       return duplicates.length;
+    } on SyncFormatTooNewException {
+      _updateState(_state.copyWith(
+        status: SyncStatus.error,
+        errorMessage: 'Jednostka używa nowszej wersji aplikacji. '
+            'Zaktualizuj aplikację, żeby synchronizować dane.',
+      ));
+      return 0;
     } catch (e) {
       debugPrint('Sync error: $e');
       _updateState(
@@ -272,160 +305,95 @@ class SyncService {
   /// Returns true if pull succeeded.
   Future<bool> pullReportsOnly() async {
     if (!_state.isConnected || _state.unitFolderId == null) return false;
+    // Pełna synchronizacja i tak pobiera raporty, a dwa przebiegi naraz
+    // zapisywałyby te same rekordy z dwóch miejsc.
+    if (_isSyncing) return true;
+    _isSyncing = true;
     try {
-      final folderId = _state.unitFolderId!;
-      final reportsFolderId = await _driveService.findReportsFolder(folderId);
-      if (reportsFolderId == null) return true;
-
-      final yearFolders = await _driveService.listSubfolders(reportsFolderId);
-      for (final yearFolder in yearFolders) {
-        final reportFiles = await _driveService.listJsonFiles(yearFolder.id!);
-        for (final file in reportFiles) {
-          final data = await _driveService.readJsonFile(file.id!);
-          if (data != null) {
-            final report = reportFromJson(data);
-            final local = _db.getReport(report.id);
-            if (local == null || report.updatedAt.isAfter(local.updatedAt)) {
-              await _db.addReport(report);
-            }
-          }
-        }
-      }
+      await _withAuthRetry(
+          () => _pullDocuments(kinds: const {SyncKind.report}));
       // Raport mógł przyjść z nowymi godzinami — ewidencja ma je dostać od
-      // razu, a nie dopiero przy następnym pełnym przebiegu. Nie w trakcie
-      // pełnej synchronizacji: ta sama instancja przejazdu byłaby zapisywana
-      // z dwóch miejsc naraz.
-      if (!_isSyncing) {
-        await _db.fixOvernightReturnTimes();
-        await _db.reconcileTripsWithReports();
-      }
-      onDataPulled?.call();
+      // razu, a nie dopiero przy następnym pełnym przebiegu.
+      await _db.fixOvernightReturnTimes();
+      await _db.reconcileTripsWithReports();
       return true;
     } catch (e) {
       debugPrint('pullReportsOnly error: $e');
       return false;
+    } finally {
+      _isSyncing = false;
+      onDataPulled?.call();
     }
   }
 
-  // â”€â”€ Push local â†’ Drive â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-  Future<void> _pushAllData() async {
-    await _pushConfig();
-    await _pushDocuments();
+  /// Świeży token przed pracą z Dyskiem, a przy odmowie (401) jeszcze jedna
+  /// próba z tokenem wymuszonym na nowo.
+  Future<void> _withAuthRetry(Future<void> Function() body) async {
+    await authService.refreshAuth();
+    try {
+      await body();
+    } on drive.DetailedApiRequestError catch (e) {
+      if (e.status != 401) rethrow;
+      await authService.refreshAuth(force: true);
+      await body();
+    }
   }
 
-  /// Wysyłka list jednostki: ratownicy, pojazdy, słownik zagrożeń, dane
-  /// jednostki.
-  Future<void> _pushConfig() async {
+  // ── Stan jednego przebiegu ─────────────────────────────────────────
+
+  /// Pliki dokumentów na Dysku: "rodzaj:id" → plik, w którym leży rekord.
+  /// Budowane przy pobieraniu, używane przy wysyłce — dzięki temu wysyłka
+  /// nie szuka plików po nazwie i nie wysyła tego, co już tam jest.
+  final Map<String, _RemoteDoc> _remoteDocs = {};
+
+  /// Skróty treści plików konfiguracji na Dysku — do decyzji, czy wysyłać.
+  final Map<String, String> _remoteConfigHashes = {};
+  Map<String, dynamic>? _remoteUnitConfig;
+  int _remoteSyncFormat = 1;
+
+  int _skippedFiles = 0;
+
+  String? _reportsFolderId;
+  final Map<int, String> _yearFolderIds = {};
+  String? _handoversFolderId;
+  String? _tripsFolderId;
+
+  /// Wersja formatu danych na Dysku, którą ta aplikacja rozumie.
+  ///
+  /// 2 — znaczniki usunięcia i stemple ratowników i pojazdów. Jednostka
+  /// z wyższą wersją (nowsza aplikacja u kolegi) blokuje synchronizację
+  /// z komunikatem „zaktualizuj", zamiast pozwolić staremu telefonowi
+  /// nadpisać dane w formacie, którego nie rozumie.
+  static const int syncFormat = 2;
+
+  // ── Pamięć plików Dysku ────────────────────────────────────────────
+  //
+  // Dla każdego pliku: chwila modyfikacji i skrót treści. Plik, który od
+  // poprzedniej synchronizacji się nie zmienił, nie jest czytany ponownie —
+  // wcześniej każdy telefon co 5 minut pobierał treść wszystkich plików.
+
+  static const String _fileCacheKey = 'driveFileCache';
+
+  Map<String, Map<String, dynamic>> _loadFileCache() {
+    final raw = _db.settingsBox.get(_fileCacheKey);
+    if (raw is! String) return {};
+    try {
+      return (jsonDecode(raw) as Map<String, dynamic>)
+          .map((k, v) => MapEntry(k, v as Map<String, dynamic>));
+    } catch (_) {
+      return {};
+    }
+  }
+
+  Future<void> _saveFileCache(Map<String, Map<String, dynamic>> cache) =>
+      _db.settingsBox.put(_fileCacheKey, jsonEncode(cache));
+
+  // ── Konfiguracja jednostki: pobranie i scalenie ────────────────────
+
+  Future<String> _configFolder() async {
     final folderId = _state.unitFolderId!;
-
-    // Find or create config folder
-    var configFolderId = await _driveService.findConfigFolder(folderId);
-    configFolderId ??= await _driveService.createSubfolder(folderId, 'config');
-
-    // Push firefighters to config/
-    final firefighters = _db.getAllFirefighters();
-    await _driveService.writeJsonFile(configFolderId, 'firefighters.json', {
-      'updatedAt': DateTime.now().toIso8601String(),
-      'data': firefighters.map(firefighterToJson).toList(),
-    });
-
-    // Push vehicles to config/
-    final vehicles = _db.getAllVehicles();
-    await _driveService.writeJsonFile(configFolderId, 'vehicles.json', {
-      'updatedAt': DateTime.now().toIso8601String(),
-      'data': vehicles.map(vehicleToJson).toList(),
-    });
-
-    // Push threat types to config/
-    final threats = _db.getAllThreats();
-    await _driveService.writeJsonFile(configFolderId, 'threat_types.json', {
-      'updatedAt': DateTime.now().toIso8601String(),
-      'data': threats.map(_threatToJson).toList(),
-    });
-
-    // Push unit config to config/
-    final config = _db.getConfig();
-    await _driveService.writeJsonFile(configFolderId, 'unit_config.json', {
-      'unitName': config.fullName,
-      // Adres remizy jest wspólny dla całej jednostki — kolega, który
-      // dołącza kodem, ma dostać podpowiedź „Skąd” bez wpisywania jej u siebie.
-      'locality': config.locality,
-      'unitStreet': config.unitStreet,
-      'inviteCode': _state.unitInviteCode,
-      'updatedAt': DateTime.now().toIso8601String(),
-      // Założyciela ustala pierwszy zapis — potem go nie nadpisujemy,
-      // bo to on jest stałym administratorem jednostki.
-      'createdBy': _state.founderEmail ?? _state.userEmail,
-    });
-  }
-
-  /// Wysyłka raportów, przekazań mienia i przejazdów.
-  Future<void> _pushDocuments() async {
-    final folderId = _state.unitFolderId!;
-
-    // Push reports to reports/{year}/
-    final reportsFolderId = await _driveService.findReportsFolder(folderId);
-    if (reportsFolderId != null) {
-      final reports = _db.getAllReports();
-      for (final report in reports) {
-        final yearFolderId = await _driveService.findOrCreateYearFolder(
-          reportsFolderId,
-          report.year,
-        );
-        await _driveService.writeJsonFile(
-          yearFolderId,
-          _buildReportFileName(report),
-          reportToJson(report),
-          legacyFileNames: [_buildReportFileName(report, legacy: true)],
-        );
-      }
-    }
-
-    // Push property handovers to handovers/
-    var handoversFolderId = await _driveService.findHandoversFolder(folderId);
-    handoversFolderId ??= await _driveService.createSubfolder(
-      folderId,
-      'handovers',
-    );
-    final handovers = _db.getAllHandovers();
-    for (final handover in handovers) {
-      await _driveService.writeJsonFile(
-        handoversFolderId,
-        _buildHandoverFileName(handover),
-        handoverToJson(handover),
-        legacyFileNames: [_buildHandoverFileName(handover, legacy: true)],
-      );
-    }
-
-    // Push ewidencji przejazdów pojazdów do trips/
-    var tripsFolderId = await _findTripsFolder(folderId);
-    tripsFolderId ??= await _driveService.createSubfolder(folderId, 'trips');
-    for (final trip in _db.getAllTrips()) {
-      await _driveService.writeJsonFile(
-        tripsFolderId,
-        _buildTripFileName(trip),
-        tripToJson(trip),
-        legacyFileNames: _legacyTripFileNames(trip),
-      );
-    }
-  }
-
-  /// Podfolder `trips/` z ewidencją przejazdów.
-  Future<String?> _findTripsFolder(String unitFolderId) async {
-    final subfolders = await _driveService.listSubfolders(unitFolderId);
-    for (final f in subfolders) {
-      if (f.name == 'trips') return f.id;
-    }
-    return null;
-  }
-
-  // â”€â”€ Pull Drive â†’ local â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-  Future<void> _pullAllData() async {
-    await _pullConfig();
-    await _pullDocuments();
-    await _afterPull();
+    return await _driveService.findConfigFolder(folderId) ??
+        await _driveService.createSubfolder(folderId, 'config');
   }
 
   /// Pobranie list jednostki, danych jednostki i listy administratorów.
@@ -436,33 +404,28 @@ class SyncService {
     final configFolderId = await _driveService.findConfigFolder(folderId);
     final dataFolderId = configFolderId ?? folderId;
 
-    // Pull firefighters
+    final configData = await _driveService.readJsonFileByName(
+      dataFolderId,
+      'unit_config.json',
+    );
+    _remoteUnitConfig = configData;
+    _remoteSyncFormat = (configData?['syncFormat'] as num?)?.toInt() ?? 1;
+    if (_remoteSyncFormat > syncFormat) throw SyncFormatTooNewException();
+    if (configData != null) await _mergeUnitConfig(configData);
+
     final ffData = await _driveService.readJsonFileByName(
       dataFolderId,
       'firefighters.json',
     );
-    if (ffData != null && ffData['data'] is List) {
-      for (final item in ffData['data'] as List) {
-        final json = item as Map<String, dynamic>;
-        final ff = firefighterFromJson(
-          json,
-          local: _db.getFirefighter(json['id'] as String),
-        );
-        await _db.addFirefighter(ff);
-      }
-    }
+    _remoteConfigHashes['firefighters.json'] =
+        await _mergeList(SyncKind.firefighter, ffData?['data']);
 
-    // Pull vehicles
     final vData = await _driveService.readJsonFileByName(
       dataFolderId,
       'vehicles.json',
     );
-    if (vData != null && vData['data'] is List) {
-      for (final item in vData['data'] as List) {
-        final v = vehicleFromJson(item as Map<String, dynamic>);
-        await _db.addVehicle(v);
-      }
-    }
+    _remoteConfigHashes['vehicles.json'] =
+        await _mergeList(SyncKind.vehicle, vData?['data']);
 
     // Pull threat types (new name: threat_types.json, fallback: threats.json)
     var tData = await _driveService.readJsonFileByName(
@@ -473,41 +436,8 @@ class SyncService {
       dataFolderId,
       'threats.json',
     );
-    if (tData != null && tData['data'] is List) {
-      for (final item in tData['data'] as List) {
-        final t = _threatFromJson(item as Map<String, dynamic>);
-        await _db.addThreat(t);
-      }
-      // Dane z Drive mogą pochodzić ze starszej wersji aplikacji —
-      // uzgodnij słownik ze stałymi listami kategorii.
-      await _db.ensureDefaultThreats();
-    }
-
-    // Pull unit config
-    final configData = await _driveService.readJsonFileByName(
-      dataFolderId,
-      'unit_config.json',
-    );
-    if (configData != null && configData['unitName'] != null) {
-      // Nazwę bierzemy w całości. Wcześniej była rozbijana po spacjach
-      // („ostatni wyraz to miejscowość"), co przy nazwach w rodzaju
-      // „Ochotnicza Straż Pożarna w Kielnie" dawało bezsens — a widziałby
-      // to każdy, kto dołączy do jednostki.
-      final unitName = (configData['unitName'] as String).trim();
-      final config = _db.getConfig();
-      // Adresu z Dysku nie wymuszamy na pustkę: starsze jednostki nie mają go
-      // jeszcze zapisanego, a nadpisanie skasowałoby to, co ktoś wpisał lokalnie.
-      final remoteLocality = (configData['locality'] as String? ?? '').trim();
-      final remoteStreet = (configData['unitStreet'] as String? ?? '').trim();
-      await _db.saveConfig(
-        config.copyWith(
-          unitFullName: unitName.isEmpty ? null : unitName,
-          locality: remoteLocality.isEmpty ? null : remoteLocality,
-          unitStreet: remoteStreet.isEmpty ? null : remoteStreet,
-          ownerEmail: configData['createdBy'] as String? ?? '',
-        ),
-      );
-    }
+    _remoteConfigHashes['threat_types.json'] =
+        await _mergeThreats(tData?['data']);
 
     // Lista administratorów jednostki
     final adminsData = await _driveService.readJsonFileByName(
@@ -525,79 +455,518 @@ class SyncService {
     ));
   }
 
+  /// Dane jednostki z Dysku — chyba że na tym telefonie zmieniono je później.
+  Future<void> _mergeUnitConfig(Map<String, dynamic> configData) async {
+    final config = _db.getConfig();
+    final editedHere = _db.unitConfigEditedAt;
+    final remoteAt = SyncJson.stampOf(configData);
+    final localIsNewer = editedHere != null &&
+        (remoteAt == null || editedHere.isAfter(remoteAt));
+
+    final unitName = (configData['unitName'] as String? ?? '').trim();
+    // Adresu z Dysku nie wymuszamy na pustkę: starsze jednostki nie mają go
+    // jeszcze zapisanego, a nadpisanie skasowałoby to, co ktoś wpisał lokalnie.
+    final remoteLocality = (configData['locality'] as String? ?? '').trim();
+    final remoteStreet = (configData['unitStreet'] as String? ?? '').trim();
+
+    await _db.saveConfig(localIsNewer
+        ? config.copyWith(ownerEmail: configData['createdBy'] as String? ?? '')
+        : config.copyWith(
+            // Nazwę bierzemy w całości. Wcześniej była rozbijana po spacjach
+            // („ostatni wyraz to miejscowość"), co przy nazwach w rodzaju
+            // „Ochotnicza Straż Pożarna w Kielnie" dawało bezsens.
+            unitFullName: unitName.isEmpty ? null : unitName,
+            locality: remoteLocality.isEmpty ? null : remoteLocality,
+            unitStreet: remoteStreet.isEmpty ? null : remoteStreet,
+            ownerEmail: configData['createdBy'] as String? ?? '',
+          ));
+  }
+
+  /// Scala listę ratowników albo pojazdów z Dysku z lokalną — wpis po
+  /// wpisie, według stempli. Zwraca skrót treści listy na Dysku.
+  ///
+  /// Dawniej lista z Dysku zastępowała lokalną w całości, więc wygrywał
+  /// telefon, który wysłał ostatni — zmiana administratora mogła zostać
+  /// losowo cofnięta przez kolegę ze starszą kopią.
+  Future<String> _mergeList(String kind, Object? rawList) async {
+    final canonical = <Map<String, dynamic>>[];
+    if (rawList is List) {
+      for (final item in rawList) {
+        try {
+          final entry = Map<String, dynamic>.from(item as Map);
+          canonical.add(await _mergeListEntry(kind, entry));
+        } catch (e) {
+          debugPrint('Pominięty wpis ($kind): $e');
+          _skippedFiles++;
+        }
+      }
+    }
+    return _listHash(canonical);
+  }
+
+  Future<Map<String, dynamic>> _mergeListEntry(
+      String kind, Map<String, dynamic> entry) async {
+    final id = entry['id'] as String;
+    final remoteAt = SyncJson.stampOf(entry);
+    final localAt = _localStamp(kind, id);
+    final exists = _existsLocally(kind, id);
+
+    if (SyncJson.isTombstone(entry)) {
+      final newerHere = localAt != null &&
+          remoteAt != null &&
+          localAt.isAfter(remoteAt);
+      if (!newerHere &&
+          (exists || _db.tombstoneOf(kind, id) == null)) {
+        await _db.applyRemoteDeletion(kind, id, entry);
+      }
+      return entry;
+    }
+
+    final canonical = kind == SyncKind.firefighter
+        ? SyncJson.firefighterToJson(SyncJson.firefighterFromJson(entry))
+        : SyncJson.vehicleToJson(SyncJson.vehicleFromJson(entry));
+
+    final tomb = _db.tombstoneOf(kind, id);
+    final tombAt = tomb == null ? null : SyncJson.stampOf(tomb);
+    if (tombAt != null && (remoteAt == null || !remoteAt.isAfter(tombAt))) {
+      return canonical; // usunięcie tutaj jest nowsze
+    }
+
+    // Wpis bez stempla (sprzed tej wersji) po obu stronach: bierzemy Dysk,
+    // jak dawniej. Ze stemplem wygrywa nowszy.
+    final takeRemote = !exists ||
+        (remoteAt == null && localAt == null) ||
+        (remoteAt != null && (localAt == null || remoteAt.isAfter(localAt)));
+    if (takeRemote) {
+      if (kind == SyncKind.firefighter) {
+        await _db.addFirefighter(SyncJson.firefighterFromJson(
+          entry,
+          local: _db.getFirefighter(id),
+        ));
+      } else {
+        await _db.addVehicle(SyncJson.vehicleFromJson(entry));
+      }
+      if (tomb != null) await _db.removeTombstone(kind, id);
+    }
+    return canonical;
+  }
+
+  /// Słownik zagrożeń: suma zbiorów. Własnych podtypów nie da się usuwać,
+  /// więc łączenie nie wskrzesza niczego, co ktoś skasował.
+  Future<String> _mergeThreats(Object? rawList) async {
+    final remote = <ThreatEntry>[];
+    if (rawList is List) {
+      for (final item in rawList) {
+        try {
+          remote.add(SyncJson.threatFromJson(
+              Map<String, dynamic>.from(item as Map)));
+        } catch (e) {
+          debugPrint('Pominięty wpis słownika: $e');
+          _skippedFiles++;
+        }
+      }
+    }
+    for (final t in remote) {
+      final local =
+          _db.getAllThreats().where((l) => l.category == t.category).firstOrNull;
+      if (local == null) {
+        await _db.addThreat(t);
+        continue;
+      }
+      final missing = t.subtypes.where((s) => !local.subtypes.contains(s));
+      if (missing.isEmpty) continue;
+      await _db.addThreat(ThreatEntry(
+        category: local.category,
+        subtypes: [...local.subtypes, ...missing],
+        isCustom: local.isCustom,
+      ));
+    }
+    if (remote.isNotEmpty) {
+      // Dane z Drive mogą pochodzić ze starszej wersji aplikacji —
+      // uzgodnij słownik ze stałymi listami kategorii.
+      await _db.ensureDefaultThreats();
+    }
+    return _threatsHash(remote);
+  }
+
+  // ── Konfiguracja jednostki: wysyłka ────────────────────────────────
+
+  Future<void> _pushConfig() async {
+    String? configFolderId;
+    Future<String> folder() async => configFolderId ??= await _configFolder();
+
+    Future<void> pushList(
+        String fileName, List<Map<String, dynamic>> entries) async {
+      if (_listHash(entries) == _remoteConfigHashes[fileName]) return;
+      await _driveService.writeJsonFile(await folder(), fileName, {
+        'updatedAt': DateTime.now().toIso8601String(),
+        'data': entries,
+      });
+      _remoteConfigHashes[fileName] = _listHash(entries);
+    }
+
+    await pushList('firefighters.json', [
+      ..._db.getAllFirefighters().map(SyncJson.firefighterToJson),
+      ..._db.tombstonesOf(SyncKind.firefighter),
+    ]);
+    await pushList('vehicles.json', [
+      ..._db.getAllVehicles().map(SyncJson.vehicleToJson),
+      ..._db.tombstonesOf(SyncKind.vehicle),
+    ]);
+
+    final threats = _db.getAllThreats();
+    if (_threatsHash(threats) != _remoteConfigHashes['threat_types.json']) {
+      await _driveService.writeJsonFile(await folder(), 'threat_types.json', {
+        'updatedAt': DateTime.now().toIso8601String(),
+        'data': threats.map(SyncJson.threatToJson).toList(),
+      });
+      _remoteConfigHashes['threat_types.json'] = _threatsHash(threats);
+    }
+
+    final config = _db.getConfig();
+    final content = <String, dynamic>{
+      'unitName': config.fullName,
+      // Adres remizy jest wspólny dla całej jednostki — kolega, który
+      // dołącza kodem, ma dostać podpowiedź „Skąd” bez wpisywania jej u siebie.
+      'locality': config.locality,
+      'unitStreet': config.unitStreet,
+      'inviteCode': _state.unitInviteCode,
+      // Założyciela ustala pierwszy zapis — potem go nie nadpisujemy,
+      // bo to on jest stałym administratorem jednostki.
+      'createdBy': _state.founderEmail ?? _state.userEmail,
+      'syncFormat':
+          _remoteSyncFormat > syncFormat ? _remoteSyncFormat : syncFormat,
+    };
+    final remote = _remoteUnitConfig;
+    final unchanged = remote != null &&
+        content.entries.every((e) => remote[e.key] == e.value);
+    if (unchanged) return;
+    final written = {
+      ...content,
+      if (remote?['createdAt'] != null) 'createdAt': remote!['createdAt'],
+      'updatedAt':
+          (_db.unitConfigEditedAt ?? DateTime.now()).toIso8601String(),
+    };
+    await _driveService.writeJsonFile(
+        await folder(), 'unit_config.json', written);
+    _remoteUnitConfig = written;
+  }
+
+  // ── Dokumenty: pobranie ────────────────────────────────────────────
+
   /// Pobranie raportów, przekazań mienia i przejazdów — nowszych niż lokalne.
-  Future<void> _pullDocuments() async {
+  ///
+  /// [kinds] zawęża do wybranych rodzajów (szybkie pobranie raportów przed
+  /// kreatorem).
+  Future<void> _pullDocuments({Set<String>? kinds}) async {
     final folderId = _state.unitFolderId!;
+    bool wanted(String kind) => kinds == null || kinds.contains(kind);
 
-    // Pull reports from reports/{year}/ subfolders
-    final reportsFolderId = await _driveService.findReportsFolder(folderId);
-    if (reportsFolderId != null) {
-      // List year subfolders
-      final yearFolders = await _driveService.listSubfolders(reportsFolderId);
-      for (final yearFolder in yearFolders) {
-        final reportFiles = await _driveService.listJsonFiles(yearFolder.id!);
-        for (final file in reportFiles) {
-          final data = await _driveService.readJsonFile(file.id!);
-          if (data != null) {
-            final report = reportFromJson(data);
-            final local = _db.getReport(report.id);
-            if (local == null || report.updatedAt.isAfter(local.updatedAt)) {
-              await _db.addReport(report);
-            }
-          }
+    final cache = _loadFileCache();
+    final seen = <String>{};
+    _remoteDocs.removeWhere(
+        (key, _) => wanted(key.substring(0, key.indexOf(':'))));
+
+    if (wanted(SyncKind.report)) {
+      _reportsFolderId = await _driveService.findReportsFolder(folderId);
+      final reportsFolderId = _reportsFolderId;
+      if (reportsFolderId != null) {
+        for (final yearFolder
+            in await _driveService.listSubfolders(reportsFolderId)) {
+          final year = int.tryParse(yearFolder.name ?? '');
+          if (year != null) _yearFolderIds[year] = yearFolder.id!;
+          await _pullFolder(SyncKind.report, yearFolder.id!, cache, seen);
         }
-      }
-      // Also check for legacy reports directly in reports/ folder
-      final legacyFiles = await _driveService.listJsonFiles(reportsFolderId);
-      for (final file in legacyFiles) {
-        final data = await _driveService.readJsonFile(file.id!);
-        if (data != null) {
-          final report = reportFromJson(data);
-          final local = _db.getReport(report.id);
-          if (local == null || report.updatedAt.isAfter(local.updatedAt)) {
-            await _db.addReport(report);
-          }
-        }
+        // Raporty ze starszej struktury — wprost w reports/.
+        await _pullFolder(SyncKind.report, reportsFolderId, cache, seen);
       }
     }
 
-    // Pull property handovers from handovers/
-    final handoversFolderId = await _driveService.findHandoversFolder(
-      folderId,
-    );
-    if (handoversFolderId != null) {
-      final handoverFiles = await _driveService.listJsonFiles(
-        handoversFolderId,
+    if (wanted(SyncKind.handover)) {
+      _handoversFolderId = await _driveService.findHandoversFolder(folderId);
+      final id = _handoversFolderId;
+      if (id != null) await _pullFolder(SyncKind.handover, id, cache, seen);
+    }
+
+    if (wanted(SyncKind.trip)) {
+      _tripsFolderId = await _findTripsFolder(folderId);
+      final id = _tripsFolderId;
+      if (id != null) await _pullFolder(SyncKind.trip, id, cache, seen);
+    }
+
+    // Pliki, których już nie ma na Dysku, nie są potrzebne w pamięci.
+    cache.removeWhere(
+        (fileId, e) => wanted(e['k'] as String? ?? '') && !seen.contains(fileId));
+    await _saveFileCache(cache);
+  }
+
+  Future<void> _pullFolder(
+    String kind,
+    String folderId,
+    Map<String, Map<String, dynamic>> cache,
+    Set<String> seen,
+  ) async {
+    for (final file in await _driveService.listJsonFiles(folderId)) {
+      final fileId = file.id!;
+      seen.add(fileId);
+      final modified = file.modifiedTime?.toIso8601String();
+
+      var entry = cache[fileId];
+      if (entry == null || entry['m'] != modified || entry['k'] != kind) {
+        final data = await _driveService.readJsonFile(fileId);
+        if (data == null) {
+          _skippedFiles++;
+          continue;
+        }
+        try {
+          final hash = await _applyRemoteDoc(kind, data);
+          entry = {
+            'm': modified,
+            'k': kind,
+            'id': data['id'] as String,
+            'h': hash,
+            'u': data['updatedAt'],
+          };
+          cache[fileId] = entry;
+        } catch (e) {
+          // Jeden uszkodzony plik nie może zatrzymać synchronizacji całej
+          // jednostki — pomijamy go i idziemy dalej.
+          debugPrint('Pominięty plik $fileId ($kind): $e');
+          _skippedFiles++;
+          continue;
+        }
+      }
+
+      final key = '$kind:${entry['id']}';
+      final doc = _RemoteDoc(
+        fileId: fileId,
+        hash: entry['h'] as String,
+        updatedAt: DateTime.tryParse(entry['u'] as String? ?? ''),
       );
-      for (final file in handoverFiles) {
-        final data = await _driveService.readJsonFile(file.id!);
-        if (data != null) {
-          final handover = handoverFromJson(data);
-          final local = _db.getHandover(handover.id);
-          if (local == null || handover.updatedAt.isAfter(local.updatedAt)) {
-            await _db.addHandover(handover);
-          }
-        }
+      // Ten sam rekord w kilku plikach (duplikaty po zmianach nazw) —
+      // pracujemy na najnowszym.
+      final current = _remoteDocs[key];
+      if (current == null || doc.isNewerThan(current)) _remoteDocs[key] = doc;
+    }
+  }
+
+  /// Nakłada dokument z Dysku na bazę, jeśli jest nowszy. Zwraca skrót
+  /// treści pliku (po sprowadzeniu do postaci, jaką zapisałby ten telefon).
+  Future<String> _applyRemoteDoc(String kind, Map<String, dynamic> data) async {
+    final id = data['id'] as String;
+    final remoteAt = SyncJson.stampOf(data) ?? DateTime(2000);
+
+    if (SyncJson.isTombstone(data)) {
+      final localAt = _localStamp(kind, id);
+      final tombAt = _tombstoneStamp(kind, id);
+      final newerHere = localAt != null && localAt.isAfter(remoteAt);
+      if (!newerHere &&
+          (localAt != null || tombAt == null || tombAt.isBefore(remoteAt))) {
+        await _db.applyRemoteDeletion(kind, id, data);
       }
+      return SyncJson.contentHash(data);
     }
 
-    // Pull ewidencji przejazdów z trips/
-    final tripsFolderId = await _findTripsFolder(folderId);
-    if (tripsFolderId != null) {
-      final tripFiles = await _driveService.listJsonFiles(tripsFolderId);
-      for (final file in tripFiles) {
-        final data = await _driveService.readJsonFile(file.id!);
-        if (data == null) continue;
-        final trip = tripFromJson(data);
-        final local = _db.getTrip(trip.id);
-        if (local == null || trip.updatedAt.isAfter(local.updatedAt)) {
+    final canonical = _canonical(kind, data);
+    final tombAt = _tombstoneStamp(kind, id);
+    if (tombAt != null && !remoteAt.isAfter(tombAt)) {
+      return SyncJson.contentHash(canonical); // usunięcie tutaj jest nowsze
+    }
+
+    final localAt = _localStamp(kind, id);
+    if (localAt == null || remoteAt.isAfter(localAt)) {
+      switch (kind) {
+        case SyncKind.report:
+          await _db.addReport(SyncJson.reportFromJson(data));
+        case SyncKind.handover:
+          await _db.addHandover(SyncJson.handoverFromJson(data));
+        case SyncKind.trip:
+          final trip = SyncJson.tripFromJson(data);
+          final local = _db.getTrip(id);
           if (local != null && !data.containsKey('overriddenFields')) {
             keepLocalOverrides(trip, local);
           }
           await _db.addTrip(trip);
-        }
+      }
+      if (tombAt != null) await _db.removeTombstone(kind, id);
+    }
+    return SyncJson.contentHash(canonical);
+  }
+
+  // ── Dokumenty: wysyłka ─────────────────────────────────────────────
+
+  /// Wysyłka raportów, przekazań mienia i przejazdów — tylko tych, które
+  /// różnią się od Dysku, oraz znaczników usunięcia.
+  Future<void> _pushDocuments() async {
+    final folderId = _state.unitFolderId!;
+    final cache = _loadFileCache();
+
+    Future<String> yearFolder(int year) async {
+      _reportsFolderId ??= await _driveService.findReportsFolder(folderId) ??
+          await _driveService.createSubfolder(folderId, 'reports');
+      return _yearFolderIds[year] ??= await _driveService
+          .findOrCreateYearFolder(_reportsFolderId!, year);
+    }
+
+    Future<String> handoversFolder() async => _handoversFolderId ??=
+        await _driveService.findHandoversFolder(folderId) ??
+            await _driveService.createSubfolder(folderId, 'handovers');
+
+    Future<String> tripsFolder() async => _tripsFolderId ??=
+        await _findTripsFolder(folderId) ??
+            await _driveService.createSubfolder(folderId, 'trips');
+
+    for (final r in _db.getAllReports()) {
+      await _pushDoc(cache, SyncKind.report, r.id, SyncJson.reportToJson(r),
+          name: _buildReportFileName(r), folder: () => yearFolder(r.year));
+    }
+    for (final h in _db.getAllHandovers()) {
+      await _pushDoc(
+          cache, SyncKind.handover, h.id, SyncJson.handoverToJson(h),
+          name: _buildHandoverFileName(h), folder: handoversFolder);
+    }
+    for (final t in _db.getAllTrips()) {
+      await _pushDoc(cache, SyncKind.trip, t.id, SyncJson.tripToJson(t),
+          name: _buildTripFileName(t), folder: tripsFolder);
+    }
+
+    // Znaczniki usunięcia nadpisują plik rekordu. Gdy pliku nie ma, rekord
+    // nigdy nie opuścił telefonu i nie ma czego usuwać z Dysku.
+    for (final kind in const [
+      SyncKind.report,
+      SyncKind.handover,
+      SyncKind.trip,
+    ]) {
+      for (final tomb in _db.tombstonesOf(kind)) {
+        final remote = _remoteDocs['$kind:${tomb['id']}'];
+        if (remote == null) continue;
+        await _pushDoc(cache, kind, tomb['id'] as String, tomb);
       }
     }
+
+    await _saveFileCache(cache);
+  }
+
+  /// Zapisuje rekord na Dysk, jeśli różni się od tego, co tam leży.
+  ///
+  /// Plik rozpoznajemy po identyfikatorze w treści (zebranym przy
+  /// pobieraniu), a nie po nazwie — reguły nazw zmieniały się między
+  /// wersjami i szukanie po nazwie dawało duplikaty.
+  Future<void> _pushDoc(
+    Map<String, Map<String, dynamic>> cache,
+    String kind,
+    String id,
+    Map<String, dynamic> json, {
+    String? name,
+    Future<String> Function()? folder,
+  }) async {
+    final key = '$kind:$id';
+    final hash = SyncJson.contentHash(json);
+    final remote = _remoteDocs[key];
+    if (remote != null && remote.hash == hash) return;
+
+    final ({String id, DateTime? modifiedTime}) written;
+    if (remote != null) {
+      written = await _driveService.updateJsonFile(remote.fileId, json,
+          fileName: name);
+    } else {
+      if (folder == null || name == null) return;
+      written = await _driveService.createJsonFile(await folder(), name, json);
+    }
+
+    cache[written.id] = {
+      'm': written.modifiedTime?.toIso8601String(),
+      'k': kind,
+      'id': id,
+      'h': hash,
+      'u': json['updatedAt'],
+    };
+    _remoteDocs[key] = _RemoteDoc(
+      fileId: written.id,
+      hash: hash,
+      updatedAt: SyncJson.stampOf(json),
+    );
+  }
+
+  /// Podfolder `trips/` z ewidencją przejazdów.
+  Future<String?> _findTripsFolder(String unitFolderId) async {
+    final subfolders = await _driveService.listSubfolders(unitFolderId);
+    for (final f in subfolders) {
+      if (f.name == 'trips') return f.id;
+    }
+    return null;
+  }
+
+  // ── Pomocnicze do scalania ─────────────────────────────────────────
+
+  Map<String, dynamic> _canonical(String kind, Map<String, dynamic> data) =>
+      switch (kind) {
+        SyncKind.report =>
+          SyncJson.reportToJson(SyncJson.reportFromJson(data)),
+        SyncKind.handover =>
+          SyncJson.handoverToJson(SyncJson.handoverFromJson(data)),
+        SyncKind.trip => SyncJson.tripToJson(SyncJson.tripFromJson(data)),
+        _ => data,
+      };
+
+  bool _existsLocally(String kind, String id) => switch (kind) {
+        SyncKind.report => _db.getReport(id) != null,
+        SyncKind.handover => _db.getHandover(id) != null,
+        SyncKind.trip => _db.getTrip(id) != null,
+        SyncKind.firefighter => _db.getFirefighter(id) != null,
+        SyncKind.vehicle => _db.getVehicle(id) != null,
+        _ => false,
+      };
+
+  /// Stempel rekordu w telefonie; `null`, gdy go tu nie ma albo (ratownik,
+  /// pojazd) pochodzi sprzed stempli.
+  DateTime? _localStamp(String kind, String id) => switch (kind) {
+        SyncKind.report => _db.getReport(id)?.updatedAt,
+        SyncKind.handover => _db.getHandover(id)?.updatedAt,
+        SyncKind.trip => _db.getTrip(id)?.updatedAt,
+        SyncKind.firefighter => _db.getFirefighter(id)?.updatedAt,
+        SyncKind.vehicle => _db.getVehicle(id)?.updatedAt,
+        _ => null,
+      };
+
+  DateTime? _tombstoneStamp(String kind, String id) {
+    final tomb = _db.tombstoneOf(kind, id);
+    return tomb == null ? null : SyncJson.stampOf(tomb);
+  }
+
+  /// Skrót listy niezależny od kolejności wpisów.
+  static String _listHash(List<Map<String, dynamic>> entries) {
+    final sorted = [...entries]
+      ..sort((a, b) => '${a['id']}'.compareTo('${b['id']}'));
+    return SyncJson.contentHash(sorted);
+  }
+
+  /// Skrót słownika niezależny od kolejności kategorii i podtypów.
+  static String _threatsHash(List<ThreatEntry> threats) {
+    final canonical = [
+      for (final t in threats)
+        {
+          'category': t.category,
+          'subtypes': [...t.subtypes]..sort(),
+          'isCustom': t.isCustom,
+        },
+    ]..sort((a, b) =>
+        (a['category'] as String).compareTo(b['category'] as String));
+    return SyncJson.contentHash(canonical);
+  }
+
+  // ── Pobranie całości (dołączenie do jednostki) ─────────────────────
+
+  Future<void> _pullAllData() async {
+    await authService.refreshAuth();
+    await _pullConfig();
+    await _pullDocuments();
+    await _afterPull();
+  }
+
+  Future<void> _pushAllData() async {
+    await _pushConfig();
+    await _pushDocuments();
   }
 
   /// Porządki po pobraniu dokumentów — te same, co przy starcie aplikacji.
@@ -615,7 +984,7 @@ class SyncService {
     await _db.fillMissingRouteFrom(_db.getConfig().stationAddress);
   }
 
-  // â”€â”€ Restore state on app start â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Restore state on app start ─────────────────────────────────────
 
   /// Try to restore sync state from saved config.
   Future<void> restoreState() async {
@@ -653,7 +1022,7 @@ class SyncService {
     );
   }
 
-  // â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Helpers ────────────────────────────────────────────────────────
 
   Future<void> _saveDriveConfig(String folderId, String inviteCode) async {
     // Store Drive sync info using a separate config key
@@ -677,181 +1046,33 @@ class SyncService {
     return List.generate(6, (_) => chars[random.nextInt(chars.length)]).join();
   }
 
-  /// Build descriptive report file name: 0001_2026_Pozar.json
-  /// [legacy] buduje nazwę wedle reguły sprzed transliteracji polskich znaków —
-  /// służy tylko do odnalezienia pliku zapisanego starszą wersją aplikacji,
-  /// żeby zmienić mu nazwę zamiast utworzyć obok duplikat.
-  String _buildReportFileName(Report report, {bool legacy = false}) {
+  /// Nazwa pliku raportu: 0001_2026_Pozar.json
+  String _buildReportFileName(Report report) {
     final number = report.reportNumber.replaceAll('/', '_');
-    final threat = legacy
-        ? FileNames.sanitizeLegacy(report.threatCategory)
-        : FileNames.sanitize(report.threatCategory);
-    return '${number}_$threat.json';
+    return '${number}_${FileNames.sanitize(report.threatCategory)}.json';
   }
 
-  /// Build descriptive handover file name: 2026-07-20_Kielno_`id-prefix`.json
-  String _buildHandoverFileName(PropertyHandover handover,
-      {bool legacy = false}) {
+  /// Nazwa pliku przekazania mienia: 2026-07-20_Kielno_`id-prefix`.json
+  String _buildHandoverFileName(PropertyHandover handover) {
     final dateStr = FileNames.date(handover.eventDate);
-    final locality = legacy
-        ? FileNames.sanitizeLegacy(handover.eventLocation)
-        : FileNames.sanitize(handover.eventLocation);
+    final locality = FileNames.sanitize(handover.eventLocation);
     final idPrefix = handover.id.length >= 8
         ? handover.id.substring(0, 8)
         : handover.id;
     return '${dateStr}_${locality}_$idPrefix.json';
   }
 
-  // â”€â”€ JSON serialization â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-  /// Serializacja ratownika — patrz uwaga przy [vehicleToJson].
+  /// Nazwa pliku przejazdu: 2026-08-10_GBA_`skrót id`.json
   ///
-  /// Data badań lekarskich przez długi czas tu nie trafiała, więc każda
-  /// synchronizacja kasowała ją na wszystkich telefonach.
-  @visibleForTesting
-  static Map<String, dynamic> firefighterToJson(Firefighter ff) => {
-    'id': ff.id,
-    'firstName': ff.firstName,
-    'lastName': ff.lastName,
-    'rank': ff.rank,
-    'isDriver': ff.isDriver,
-    'isCommander': ff.isCommander,
-    'isKPP': ff.isKPP,
-    'medicalExamExpiry': ff.medicalExamExpiry?.toIso8601String(),
-  };
-
-  /// Odczyt ratownika z Dysku.
-  ///
-  /// [local] to ten sam ratownik z telefonu. Plik zapisany przez starszą
-  /// wersję aplikacji nie ma klucza z datą badań — wtedy zostawiamy datę
-  /// lokalną, zamiast ją kasować. Klucz z wartością pustą to co innego:
-  /// ktoś świadomie wyczyścił datę.
-  @visibleForTesting
-  static Firefighter firefighterFromJson(
-    Map<String, dynamic> j, {
-    Firefighter? local,
-  }) {
-    final expiry = j.containsKey('medicalExamExpiry')
-        ? (j['medicalExamExpiry'] == null
-            ? null
-            : DateTime.parse(j['medicalExamExpiry'] as String))
-        : local?.medicalExamExpiry;
-    return Firefighter(
-      id: j['id'] as String,
-      firstName: j['firstName'] as String,
-      lastName: j['lastName'] as String,
-      rank: j['rank'] as String? ?? '',
-      isDriver: j['isDriver'] as bool? ?? false,
-      isCommander: j['isCommander'] as bool? ?? false,
-      isKPP: j['isKPP'] as bool? ?? false,
-      medicalExamExpiry: expiry,
-    );
+  /// Data i pojazd w nazwie, żeby zawartość folderu dała się przejrzeć na
+  /// Dysku bez otwierania każdego pliku — kartę czyta się po miesiącach.
+  /// Skrót z całego identyfikatora: 8 pierwszych znaków bywało wspólne
+  /// dla miesięcy ręcznych wpisów (`trip_<milisekundy>`).
+  String _buildTripFileName(VehicleTrip t) {
+    final name = _db.getVehicle(t.vehicleId)?.name ?? t.vehicleId;
+    return '${FileNames.date(t.date)}_${FileNames.sanitize(name)}'
+        '_${FileNames.shortHash(t.id)}.json';
   }
-
-  /// Serializacja pojazdu na Dysk.
-  ///
-  /// Publiczna i statyczna, żeby dało się ją przetestować bez budowania
-  /// całego `SyncService`. To najbardziej krucha część synchronizacji:
-  /// przy każdym dodaniu pola do modelu trzeba pamiętać o dopisaniu go tutaj
-  /// **i** w mapowaniu odwrotnym, a nic tego nie wymusza.
-  @visibleForTesting
-  static Map<String, dynamic> vehicleToJson(Vehicle v) => {
-    'id': v.id,
-    'name': v.name,
-    'seats': v.seats,
-    // Dane z nagłówka karty drogowej — wspólne dla całej jednostki,
-    // więc kolega, który dołączy kodem, dostaje je bez przepisywania.
-    'make': v.make,
-    'model': v.model,
-    'kind': v.kind,
-    'plate': v.plate,
-    'operationalNumber': v.operationalNumber,
-    'fuelType': v.fuelType,
-    'fuelPer100Km': v.fuelPer100Km,
-    'pumpFuelPerHour': v.pumpFuelPerHour,
-    'idleFuelPerMinute': v.idleFuelPerMinute,
-    'startupFuelPerMonth': v.startupFuelPerMonth,
-  };
-
-  @visibleForTesting
-  static Vehicle vehicleFromJson(Map<String, dynamic> j) => Vehicle(
-    id: j['id'] as String,
-    name: j['name'] as String,
-    seats: j['seats'] as int,
-    make: j['make'] as String? ?? '',
-    model: j['model'] as String? ?? '',
-    kind: j['kind'] as String? ?? '',
-    plate: j['plate'] as String? ?? '',
-    operationalNumber: j['operationalNumber'] as String? ?? '',
-    fuelType: j['fuelType'] as String? ?? '',
-    fuelPer100Km: (j['fuelPer100Km'] as num?)?.toDouble(),
-    pumpFuelPerHour: (j['pumpFuelPerHour'] as num?)?.toDouble(),
-    idleFuelPerMinute: (j['idleFuelPerMinute'] as num?)?.toDouble(),
-    startupFuelPerMonth: (j['startupFuelPerMonth'] as num?)?.toDouble(),
-  );
-
-  Map<String, dynamic> _threatToJson(ThreatEntry t) => {
-    'category': t.category,
-    'subtypes': t.subtypes,
-    'isCustom': t.isCustom,
-  };
-
-  ThreatEntry _threatFromJson(Map<String, dynamic> j) => ThreatEntry(
-    category: j['category'] as String,
-    subtypes: (j['subtypes'] as List?)?.cast<String>() ?? [],
-    isCustom: j['isCustom'] as bool? ?? false,
-  );
-
-  /// Serializacja raportu na Dysk — patrz uwaga przy [vehicleToJson].
-  @visibleForTesting
-  static Map<String, dynamic> reportToJson(Report r) => {
-    'id': r.id,
-    'reportNumber': r.reportNumber,
-    'year': r.year,
-    'date': r.date.toIso8601String(),
-    'departureTime': r.departureTime.toIso8601String(),
-    'returnTime': r.returnTime?.toIso8601String(),
-    'addressLocality': r.addressLocality,
-    'addressStreet': r.addressStreet,
-    'addressDescription': r.addressDescription,
-    'threatCategory': r.threatCategory,
-    'threatSubtype': r.threatSubtype,
-    'crewAssignments': r.crewAssignments.map(crewToJson).toList(),
-    'operationCommanderId': r.operationCommanderId,
-    'notes': r.notes,
-    'createdAt': r.createdAt.toIso8601String(),
-    'updatedAt': r.updatedAt.toIso8601String(),
-    'createdBy': r.createdBy,
-    'syncStatus': 'synced',
-  };
-
-  @visibleForTesting
-  static Report reportFromJson(Map<String, dynamic> j) => Report(
-    id: j['id'] as String,
-    reportNumber: j['reportNumber'] as String,
-    year: j['year'] as int,
-    date: DateTime.parse(j['date'] as String),
-    departureTime: DateTime.parse(j['departureTime'] as String),
-    returnTime: j['returnTime'] != null
-        ? DateTime.parse(j['returnTime'] as String)
-        : null,
-    addressLocality: j['addressLocality'] as String,
-    addressStreet: j['addressStreet'] as String? ?? '',
-    addressDescription: j['addressDescription'] as String? ?? '',
-    threatCategory: j['threatCategory'] as String,
-    threatSubtype: j['threatSubtype'] as String?,
-    crewAssignments:
-        (j['crewAssignments'] as List?)
-            ?.map((c) => crewFromJson(c as Map<String, dynamic>))
-            .toList() ??
-        [],
-    operationCommanderId: j['operationCommanderId'] as String?,
-    notes: j['notes'] as String?,
-    createdAt: DateTime.parse(j['createdAt'] as String),
-    updatedAt: DateTime.parse(j['updatedAt'] as String),
-    createdBy: j['createdBy'] as String? ?? '',
-    syncStatus: 'synced',
-  );
 
   /// Plik z Dysku zapisany przez starszą wersję aplikacji nie zna ręcznych
   /// poprawek przejazdu ([VehicleTrip.overriddenFields]). Stara wersja
@@ -879,173 +1100,27 @@ class SyncService {
     }
     remote.overriddenFields = List.of(flags);
   }
+}
 
-  /// Nazwa pliku przejazdu: 2026-08-10_GBA_`skrót id`.json
-  ///
-  /// Data i pojazd w nazwie, żeby zawartość folderu dała się przejrzeć na
-  /// Dysku bez otwierania każdego pliku — kartę czyta się po miesiącach.
-  ///
-  /// Skrót z całego identyfikatora. Wcześniej było tu 8 pierwszych znaków,
-  /// a ręczne przejazdy mają id `trip_<milisekundy>` — prefiks „trip_179"
-  /// był wspólny dla miesięcy wpisów. Dwa przejazdy wozu z jednego dnia
-  /// (np. tankowanie i ćwiczenia) nadpisywały ten sam plik i jeden z nich
-  /// nie docierał na inne telefony.
-  String _buildTripFileName(VehicleTrip t) =>
-      '${_tripFileStem(t, FileNames.sanitize)}_${FileNames.shortHash(t.id)}.json';
+/// Jednostka zapisała dane w formacie nowszym, niż ta wersja aplikacji
+/// rozumie.
+class SyncFormatTooNewException implements Exception {}
 
-  /// Nazwy, pod którymi ten przejazd mógł leżeć na Dysku w starszych
-  /// wersjach — do przemianowania zamiast tworzenia duplikatu.
-  List<String> _legacyTripFileNames(VehicleTrip t) {
-    final idPrefix = t.id.length >= 8 ? t.id.substring(0, 8) : t.id;
-    return [
-      '${_tripFileStem(t, FileNames.sanitize)}_$idPrefix.json',
-      '${_tripFileStem(t, FileNames.sanitizeLegacy)}_$idPrefix.json',
-    ];
+/// Plik dokumentu na Dysku, zebrany przy pobieraniu.
+class _RemoteDoc {
+  final String fileId;
+  final String hash;
+  final DateTime? updatedAt;
+
+  const _RemoteDoc({
+    required this.fileId,
+    required this.hash,
+    required this.updatedAt,
+  });
+
+  bool isNewerThan(_RemoteDoc other) {
+    final a = updatedAt, b = other.updatedAt;
+    if (a == null) return false;
+    return b == null || a.isAfter(b);
   }
-
-  String _tripFileStem(VehicleTrip t, String Function(String) sanitize) {
-    final name = _db.getVehicle(t.vehicleId)?.name ?? t.vehicleId;
-    return '${FileNames.date(t.date)}_${sanitize(name)}';
-  }
-
-  /// Serializacja przejazdu na Dysk — patrz uwaga przy [vehicleToJson].
-  @visibleForTesting
-  static Map<String, dynamic> tripToJson(VehicleTrip t) => {
-    'id': t.id,
-    'vehicleId': t.vehicleId,
-    'date': t.date.toIso8601String(),
-    'dispatcherName': t.dispatcherName,
-    'routeFrom': t.routeFrom,
-    'routeTo': t.routeTo,
-    'purpose': t.purpose,
-    'driverName': t.driverName,
-    'driverId': t.driverId,
-    'departureTime': t.departureTime.toIso8601String(),
-    'returnTime': t.returnTime?.toIso8601String(),
-    'odometerStart': t.odometerStart,
-    'odometerEnd': t.odometerEnd,
-    'odometerStartManual': t.odometerStartManual,
-    'specialEquipmentMinutes': t.specialEquipmentMinutes,
-    'equipmentUse': [
-      for (final e in t.equipmentUse) {'name': e.name, 'minutes': e.minutes},
-    ],
-    'idleMinutes': t.idleMinutes,
-    'overriddenFields': t.overriddenFields,
-    'extras': t.extras,
-    'notes': t.notes,
-    'reportId': t.reportId,
-    'createdAt': t.createdAt.toIso8601String(),
-    'updatedAt': t.updatedAt.toIso8601String(),
-    'createdBy': t.createdBy,
-    'syncStatus': 'synced',
-  };
-
-  @visibleForTesting
-  static VehicleTrip tripFromJson(Map<String, dynamic> j) => VehicleTrip(
-    id: j['id'] as String,
-    vehicleId: j['vehicleId'] as String? ?? '',
-    date: DateTime.parse(j['date'] as String),
-    dispatcherName: j['dispatcherName'] as String? ?? '',
-    routeFrom: j['routeFrom'] as String? ?? '',
-    routeTo: j['routeTo'] as String? ?? '',
-    purpose: j['purpose'] as String? ?? TripPurposes.economic,
-    driverName: j['driverName'] as String? ?? '',
-    driverId: j['driverId'] as String?,
-    departureTime: DateTime.parse(j['departureTime'] as String),
-    returnTime: j['returnTime'] == null
-        ? null
-        : DateTime.parse(j['returnTime'] as String),
-    odometerStart: (j['odometerStart'] as num?)?.toInt(),
-    odometerEnd: (j['odometerEnd'] as num?)?.toInt(),
-    odometerStartManual: j['odometerStartManual'] as bool? ?? false,
-    specialEquipmentMinutes: (j['specialEquipmentMinutes'] as num?)?.toInt(),
-    idleMinutes: (j['idleMinutes'] as num?)?.toInt(),
-    equipmentUse: [
-      for (final e in (j['equipmentUse'] as List? ?? const []))
-        TripEquipmentUse(
-          name: (e as Map)['name'] as String? ?? '',
-          minutes: (e['minutes'] as num?)?.toInt() ?? 0,
-        ),
-    ],
-    overriddenFields: [
-      for (final f in (j['overriddenFields'] as List? ?? const []))
-        f.toString(),
-    ],
-    extras: j['extras'] as String? ?? '',
-    notes: j['notes'] as String?,
-    reportId: j['reportId'] as String?,
-    createdAt: DateTime.parse(j['createdAt'] as String),
-    updatedAt: DateTime.parse(j['updatedAt'] as String),
-    createdBy: j['createdBy'] as String? ?? '',
-    syncStatus: 'synced',
-  );
-
-  /// Serializacja przekazania mienia na Dysk — patrz uwaga przy [vehicleToJson].
-  @visibleForTesting
-  static Map<String, dynamic> handoverToJson(PropertyHandover h) => {
-    'id': h.id,
-    'reportId': h.reportId,
-    'eventLocation': h.eventLocation,
-    'eventDate': h.eventDate.toIso8601String(),
-    'eventTime': h.eventTime.toIso8601String(),
-    'recipientType': h.recipientType,
-    'recipientTypeOther': h.recipientTypeOther,
-    'recipientName': h.recipientName,
-    'recipientAddress': h.recipientAddress,
-    'recipientPhone': h.recipientPhone,
-    'propertyDescription': h.propertyDescription,
-    'propertyKind': h.propertyKind,
-    'notes': h.notes,
-    'handoverFirefighterId': h.handoverFirefighterId,
-    'signLocality': h.signLocality,
-    'signDate': h.signDate.toIso8601String(),
-    'createdAt': h.createdAt.toIso8601String(),
-    'updatedAt': h.updatedAt.toIso8601String(),
-    'createdBy': h.createdBy,
-    'syncStatus': 'synced',
-  };
-
-  @visibleForTesting
-  static PropertyHandover handoverFromJson(Map<String, dynamic> j) =>
-      PropertyHandover(
-        id: j['id'] as String,
-        reportId: j['reportId'] as String?,
-        eventLocation: j['eventLocation'] as String? ?? '',
-        eventDate: DateTime.parse(j['eventDate'] as String),
-        eventTime: DateTime.parse(j['eventTime'] as String),
-        recipientType: j['recipientType'] as String?,
-        recipientTypeOther: j['recipientTypeOther'] as String?,
-        recipientName: j['recipientName'] as String? ?? '',
-        recipientAddress: j['recipientAddress'] as String? ?? '',
-        recipientPhone: j['recipientPhone'] as String? ?? '',
-        propertyDescription: j['propertyDescription'] as String? ?? '',
-        propertyKind: j['propertyKind'] as String?,
-        notes: j['notes'] as String?,
-        handoverFirefighterId: j['handoverFirefighterId'] as String?,
-        signLocality: j['signLocality'] as String? ?? '',
-        signDate: DateTime.parse(j['signDate'] as String),
-        createdAt: DateTime.parse(j['createdAt'] as String),
-        updatedAt: DateTime.parse(j['updatedAt'] as String),
-        createdBy: j['createdBy'] as String? ?? '',
-        syncStatus: 'synced',
-      );
-
-  /// Skład zastępu — część raportu, więc musi być testowalny razem z nim.
-  @visibleForTesting
-  static Map<String, dynamic> crewToJson(CrewAssignment c) => {
-    'vehicleId': c.vehicleId,
-    'vehicleName': c.vehicleName,
-    'driverId': c.driverId,
-    'commanderId': c.commanderId,
-    'crewMemberIds': c.crewMemberIds,
-  };
-
-  @visibleForTesting
-  static CrewAssignment crewFromJson(Map<String, dynamic> j) => CrewAssignment(
-    vehicleId: j['vehicleId'] as String,
-    vehicleName: j['vehicleName'] as String,
-    driverId: j['driverId'] as String?,
-    commanderId: j['commanderId'] as String?,
-    crewMemberIds: (j['crewMemberIds'] as List?)?.cast<String>() ?? [],
-  );
 }

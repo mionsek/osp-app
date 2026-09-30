@@ -115,24 +115,40 @@ class BluetoothPrintService {
   /// pogrubiony niż poszarpany i miejscami zanikający.
   static const int _inkThreshold = 176;
 
-  /// Renderuje pierwszą stronę dokumentu PDF do bitmapy 1-bitowej w
-  /// formacie oczekiwanym przez drukarkę i wysyła ją przez Bluetooth.
+  /// Przerwa między stronami wysyłanymi jako osobne zadania — drukarka
+  /// dostaje czas na przyjęcie poprzedniego, zanim przyjdzie następne.
+  static const Duration _pauseBetweenPages = Duration(milliseconds: 800);
+
+  /// Renderuje **każdą** stronę dokumentu PDF do bitmapy 1-bitowej w
+  /// formacie oczekiwanym przez drukarkę i wysyła ją przez Bluetooth —
+  /// strona po stronie, jako osobne zadania.
   ///
-  /// [rotate90] — nasze potwierdzenie przekazania mienia jest w poziomie
-  /// (A4 landscape z dwoma egzemplarzami A5 obok siebie), a drukarka
+  /// Wcześniej szła tylko pierwsza strona. Raport i przekazanie mienia mają
+  /// jedną, ale karta drogowa ma co najmniej dwie, więc rozliczenie paliwa
+  /// nigdy nie wychodziło na drukarce, choć aplikacja mówiła „wysłano".
+  ///
+  /// Strony renderujemy po kolei, a nie wszystkie naraz: jedna strona
+  /// w nadpróbkowaniu to kilkadziesiąt MB pamięci.
+  ///
+  /// [rotate90] — nasze dokumenty są w poziomie (A4 landscape), a drukarka
   /// podaje papier pionowo, więc stronę trzeba obrócić.
   static Future<bool> printPdf(Uint8List pdfBytes, {bool rotate90 = true}) async {
-    final page = await Printing.raster(
+    var first = true;
+    await for (final page in Printing.raster(
       pdfBytes,
       dpi: printerDpi * _supersample,
-    ).first;
-    final bitmap = _toPrinterBitmap(
-      pixels: page.pixels,
-      srcWidth: page.width,
-      srcHeight: page.height,
-      rotate90: rotate90,
-    );
-    return _sendBitmap(bitmap.data, bitmap.rows);
+    )) {
+      if (!first) await Future<void>.delayed(_pauseBetweenPages);
+      first = false;
+      final bitmap = _toPrinterBitmap(
+        pixels: page.pixels,
+        srcWidth: page.width,
+        srcHeight: page.height,
+        rotate90: rotate90,
+      );
+      if (!await _sendBitmap(bitmap.data, bitmap.rows)) return false;
+    }
+    return !first;
   }
 
   /// Zamienia piksele RGBA na bitmapę 1-bitową o szerokości

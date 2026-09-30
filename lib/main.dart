@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'core/theme/osp_theme.dart';
@@ -9,6 +11,14 @@ import 'providers/providers.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await DatabaseService.initialize();
+  // Czcionka wydruków (Open Sans) jest w paczce aplikacji — jej licencja
+  // wymaga dołączenia tekstu licencji.
+  LicenseRegistry.addLicense(() async* {
+    yield LicenseEntryWithLineBreaks(
+      const ['Open Sans'],
+      await rootBundle.loadString('assets/fonts/OFL.txt'),
+    );
+  });
   runApp(const ProviderScope(child: OspApp()));
 }
 

@@ -58,13 +58,30 @@ class GoogleAuthService {
     _authHeaders = null;
   }
 
+  /// Pobiera świeży token dostępu.
+  ///
+  /// Token Google żyje około godziny. Wcześniej pobierany był raz, przy
+  /// logowaniu, więc aplikacja trzymana dłużej w tle dostawała przy każdej
+  /// automatycznej synchronizacji odmowę (401) aż do ponownego uruchomienia.
+  /// [force] czyści token z pamięci Google — na wypadek, gdy serwer już go
+  /// odrzucił, a telefon nadal uważa go za ważny.
+  Future<void> refreshAuth({bool force = false}) async {
+    final user = _currentUser;
+    if (user == null) return;
+    if (force) await user.clearAuthCache();
+    _authHeaders = await user.authHeaders;
+  }
+
   /// Returns an authenticated HTTP client for googleapis calls.
   /// Throws if not signed in.
+  ///
+  /// Klient czyta nagłówki przy każdym zapytaniu, więc po [refreshAuth]
+  /// od razu używa nowego tokenu — bez tworzenia klienta od nowa.
   http.Client getAuthenticatedClient() {
     if (_authHeaders == null) {
       throw StateError('Not signed in. Call signIn() first.');
     }
-    return _AuthenticatedClient(_authHeaders!);
+    return _AuthenticatedClient(() => _authHeaders ?? const {});
   }
 
   /// Get user email.
@@ -73,14 +90,14 @@ class GoogleAuthService {
 
 /// Simple HTTP client that injects auth headers into every request.
 class _AuthenticatedClient extends http.BaseClient {
-  final Map<String, String> _headers;
+  final Map<String, String> Function() _headers;
   final http.Client _inner = http.Client();
 
   _AuthenticatedClient(this._headers);
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) {
-    request.headers.addAll(_headers);
+    request.headers.addAll(_headers());
     return _inner.send(request);
   }
 

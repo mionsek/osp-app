@@ -713,20 +713,20 @@ Kolejność według wagi.
 - [x] ~~Klucz wydań jest tylko na drugim komputerze~~ — laptopa już nie ma, klucz przepadł; zastąpiony nowym w chore/043 niżej. Pierwotny opis: (`C:/Users/Lenovo/.keys/`). APK zbudowany na tym komputerze podpisuje się kluczem debug **bez ostrzeżenia** — nie zaktualizuje 1.6.0 u kolegów. Wydania budować tam albo przenieść keystore i `key.properties` (bezpiecznie, nie przez repo). Rozważyć, żeby build release bez `key.properties` kończył się błędem zamiast cicho spadać na klucz debug. I potwierdzić, że keystore ma kopię poza komputerem
 - [ ] **SHA-1 klucza wydań w Google Cloud** — nowy odcisk z chore/043 (patrz „Przed publikacją"). Bez tego 1.6.1 zwraca przy logowaniu błąd 10
 - [ ] **Tryb ekranu zgody OAuth** — w „Testing" zalogują się tylko konta dopisane jako testerzy, a zgoda wygasa po 7 dniach. Do sprawdzenia razem z SHA-1
-- [ ] **Wszyscy w jednostce na tej samej wersji** — stare wersje nie znają ochrony poprawek ani daty badań. Rozważyć minimalną wersję w `unit_config.json` z komunikatem „zaktualizuj"
+- [x] **Wszyscy w jednostce na tej samej wersji** (fix/044: `syncFormat` w `unit_config.json`) — stare wersje nie znają ochrony poprawek ani daty badań. Rozważyć minimalną wersję w `unit_config.json` z komunikatem „zaktualizuj"
 
-**Synchronizacja — osobna gałąź**
-- [ ] **Usuwanie nie działa w jednostce** — usunięty raport, przejazd czy przekazanie wraca z Dysku przy najbliższej synchronizacji (plik zostaje, pobieranie dodaje go z powrotem). Nie da się też usunąć danych osoby (RODO). Potrzebne znaczniki usunięcia respektowane przy pobieraniu
-- [ ] **Listy ratowników i pojazdów bez stempli per wpis** — wygrywa telefon, który wysłał ostatni; edycja administratora może zostać losowo cofnięta. Potrzebne `updatedAt` per wpis i scalanie po id
-- [ ] **Token Google nie jest odświeżany** — `GoogleAuthService` pobiera nagłówki raz (przy logowaniu/starcie), a `GoogleDriveService` trzyma klienta z nimi na stałe. Token żyje ok. godzinę, więc aplikacja trzymana dłużej w tle dostaje 401 przy każdej automatycznej synchronizacji, aż do restartu. Potwierdzone w kodzie; poprawka (świeże `authHeaders` przed synchronizacją) wymaga testu z prawdziwym logowaniem
-- [ ] Wysyłka wszystkich dokumentów co 5 minut (ok. 3 wywołania API na rekord) — wysyłać tylko zmienione
-- [ ] Jeden uszkodzony plik na Dysku przerywa całą synchronizację — parsować każdy plik osobno
-- [ ] Duplikaty plików po zmianie reguł nazw, gdy telefony są na różnych wersjach — docelowo dopasowanie po id rekordu (`appProperties`), nie po nazwie
+**Synchronizacja** — zrobione w fix/044, szczegóły niżej
+- [x] **Usuwanie nie działa w jednostce** — usunięty raport, przejazd czy przekazanie wraca z Dysku przy najbliższej synchronizacji (plik zostaje, pobieranie dodaje go z powrotem). Nie da się też usunąć danych osoby (RODO). Potrzebne znaczniki usunięcia respektowane przy pobieraniu
+- [x] **Listy ratowników i pojazdów bez stempli per wpis** — wygrywa telefon, który wysłał ostatni; edycja administratora może zostać losowo cofnięta. Potrzebne `updatedAt` per wpis i scalanie po id
+- [x] **Token Google nie jest odświeżany** — `GoogleAuthService` pobiera nagłówki raz (przy logowaniu/starcie), a `GoogleDriveService` trzyma klienta z nimi na stałe. Token żyje ok. godzinę, więc aplikacja trzymana dłużej w tle dostaje 401 przy każdej automatycznej synchronizacji, aż do restartu. Potwierdzone w kodzie; poprawka (świeże `authHeaders` przed synchronizacją) wymaga testu z prawdziwym logowaniem
+- [x] Wysyłka wszystkich dokumentów co 5 minut (ok. 3 wywołania API na rekord) — wysyłać tylko zmienione
+- [x] Jeden uszkodzony plik na Dysku przerywa całą synchronizację — parsować każdy plik osobno
+- [x] Duplikaty plików po zmianie reguł nazw, gdy telefony są na różnych wersjach — docelowo dopasowanie po id rekordu (`appProperties`), nie po nazwie
 - [ ] Test na **dwóch telefonach z różnymi kontami Google**
 
-**Druk**
-- [ ] **Druk BT karty drogowej drukuje tylko pierwszą stronę** — `BluetoothPrintService` rasteryzuje `.first`, a karta ma dwie strony, więc **rozliczenie paliwa nigdy nie wychodzi** na drukarce BT (komunikat mimo to mówi „Wysłano")
-- [ ] Układ rozliczenia na karcie drogowej łamie asercję biblioteki `pdf` (`childSize <= maxChildExtent`) — w trybie debug wydruk karty się wywala, w release może przycinać pole. Brak testu generowania karty
+**Druk** — zrobione w fix/044, szczegóły niżej
+- [x] **Druk BT karty drogowej drukuje tylko pierwszą stronę** — `BluetoothPrintService` rasteryzuje `.first`, a karta ma dwie strony, więc **rozliczenie paliwa nigdy nie wychodzi** na drukarce BT (komunikat mimo to mówi „Wysłano")
+- [x] Układ rozliczenia na karcie drogowej łamie asercję biblioteki `pdf` (`childSize <= maxChildExtent`) — w trybie debug wydruk karty się wywala, w release może przycinać pole. Brak testu generowania karty
 
 **Drobne**
 - [ ] „Skąd" celowo wyczyszczone wraca przy starcie (nie da się odróżnić „puste, bo stare" od „puste celowo")
@@ -771,3 +771,33 @@ wymagałby kolejnej zmiany przed Sklepem Play).
 
 ### Czego pilnować
 - Emulator OSP_Test ma aplikację podpisaną kluczem debug. Wersji release z nowym kluczem nie da się na nim zainstalować przez `adb install -r` bez odinstalowania (i utraty danych testowych) — do sprawdzania wydań służy czysty emulator **OSP_IT**
+
+## Zrobione (fix/044-synchronizacja-druk)
+Wszystkie pozycje „Synchronizacja" i „Druk" z przeglądu w fix/042, plus jedna
+nowa, poważna, znaleziona przy okazji: **bez internetu nie drukował się żaden
+dokument**.
+
+### Druk
+- [x] **Czcionki w paczce aplikacji zamiast z internetu** — wszystkie cztery dokumenty pobierały Open Sans z serwerów Google przez `PdfGoogleFonts`, a pakiet `printing` trzyma je tylko w pamięci (`PdfMemoryCache`). Po każdym uruchomieniu aplikacji pierwszy wydruk potrzebował internetu — **bez zasięgu na miejscu zdarzenia nie drukował się ani raport, ani przekazanie mienia**. Teraz te same pliki czcionek (identyczny wygląd wydruków) są w `assets/fonts`, ładowane raz przez `PdfOutput.theme()`. Licencja SIL OFL jedzie w paczce i jest zarejestrowana w `LicenseRegistry` — tego wymaga przy rozpowszechnianiu czcionki
+- [x] **Drukarka Bluetooth dostaje każdą stronę**, nie tylko pierwszą — karta drogowa ma co najmniej dwie, więc rozliczenie paliwa nigdy nie wychodziło, choć aplikacja mówiła „Wysłano". Strony renderowane po kolei (jedna strona to kilkadziesiąt MB pamięci), wysyłane jako osobne zadania z krótką przerwą
+- [x] **Karta drogowa w trybie debug się nie generowała** — suma szerokości kolumn tabel rozliczenia wychodziła o 5,7·10⁻¹⁴ pt większa niż przydział `Expanded` (błąd zaokrąglenia przy marginesach 18 pt), a biblioteka `pdf` sprawdza to asercją. Niewidoczny zapas 0,05 pt. Na papierze w wersji release różnicy nie było
+- [x] **Testy generowania wszystkich czterech dokumentów** — dotąd żaden nie miał testu. Przechodzą bez sieci, więc pilnują też czcionek w paczce; sprawdzają liczbę stron (pusta karta: 2, pełny miesiąc: co najmniej 3)
+- [ ] Druk przez Bluetooth wielu stron **do sprawdzenia na prawdziwej drukarce** — przerwa 0,8 s między stronami dobrana na wyczucie, protokół drukarki nie opisuje kolejnych zadań
+
+### Synchronizacja
+- [x] **Usunięcia jeżdżą jako znaczniki** — usunięty raport, przekazanie, przejazd, ratownik czy pojazd zostaje w telefonie jako znacznik (ostatnia treść + `deleted`), który trafia na Dysk w miejsce rekordu. Wygrywa nowsze: usunięcie ze starszą kopią, późniejsza edycja z usunięciem. Znacznik blokuje też odtworzenie przejazdu przez uzupełnianie ewidencji i kreator. Pełna treść w znaczniku, żeby starsza wersja aplikacji nie wywracała się na brakujących polach
+- [x] **Stempel `updatedAt` dla ratownika i pojazdu** (Hive 8 i 13) i scalanie list wpis po wpisie — dawniej lista z Dysku zastępowała lokalną w całości i wygrywał telefon, który wysłał ostatni. Dane jednostki (nazwa, adres remizy) też ze stemplem ostatniej zmiany na telefonie. Słownik zagrożeń scalany sumą zbiorów (podtypów nie da się usuwać)
+- [x] **Najpierw pobieramy, potem wysyłamy — i tylko to, co się różni.** Pliki dokumentów rozpoznawane po identyfikatorze w treści, a nie po nazwie: to kończy duplikaty po zmianach reguł nazw i szukanie legacy-nazw. Pamięć plików (chwila modyfikacji + skrót treści) sprawia, że plik niezmieniony od poprzedniej synchronizacji nie jest nawet czytany. Synchronizacja bez zmian: **0 zapisów, 4 odczyty** (małe pliki konfiguracji) zamiast odczytu i zapisu wszystkiego co 5 minut
+- [x] **Token Google odświeżany przed każdą synchronizacją**, a po odmowie (401) jeszcze jedna próba z tokenem wymuszonym na nowo. Klient Dysku czyta nagłówki przy każdym zapytaniu
+- [x] **Uszkodzony plik jest pomijany**, zamiast przerywać synchronizację całej jednostki — liczba pominiętych w Ustawieniach
+- [x] **`syncFormat` w `unit_config.json`** — jednostka z nowszym formatem danych blokuje synchronizację starszej wersji z komunikatem „zaktualizuj", zamiast pozwolić jej nadpisać dane, których nie rozumie. Ta wersja zapisuje format 2
+- [x] Komunikat o błędzie synchronizacji znika po udanej synchronizacji (`copyWith` nie potrafił wyczyścić pola)
+- [x] Zmiana jednostki (założenie, dołączenie, odłączenie) czyści pamięć plików poprzedniej — inaczej zapis mógłby trafić do plików starej jednostki
+- [x] **Test „dwa telefony, jeden Dysk"** — atrapa Dysku w pamięci i dwie bazy Hive przełączane w jednym teście. 12 scenariuszy: usunięty raport i ratownik nie wracają, edycja po usunięciu przywraca, starsza kopia nie nadpisuje nowszej, synchronizacja bez zmian niczego nie wysyła, zmiana jednego raportu wysyła jeden plik, uszkodzony plik pominięty, dane jednostki nie nadpisane przed wysłaniem, nowszy format blokuje, usunięty przejazd nie wraca z ewidencji, z dwóch plików tego samego rekordu brany nowszy
+- [x] Mapowania JSON przeniesione do `sync_json.dart` — korzysta z nich też baza przy usuwaniu
+- [x] Testy: **255** (było 237), w tym pilnujący, że stempel ratownika i pojazdu przetrwa ponowne otwarcie bazy — bez pola w adapterze Hive znikał po restarcie, a w obrębie jednej sesji tego nie widać
+
+### Czego pilnować
+- **Stare wersje (≤ 1.6.1) nie znają znaczników usunięcia** — dopóki ktoś ich używa, potrafią odesłać usunięty dokument; nowa wersja nadpisze go z powrotem znacznikiem. Koledzy i tak muszą przeinstalować aplikację (nowy klucz podpisu), więc okres przejściowy powinien być krótki
+- Znaczniki usunięcia nie wygasają — to kilka kilobajtów rocznie, a dzięki temu telefon, który był długo offline, nie wskrzesi usuniętych wpisów
+- [ ] **Test na dwóch prawdziwych telefonach z różnymi kontami Google** — zostaje; atrapa nie sprawdzi uprawnień Dysku między kontami

@@ -9,6 +9,7 @@ import '../../services/bluetooth_print_service.dart';
 import '../../widgets/admin_only_notice.dart';
 import '../../widgets/bluetooth_printer_picker.dart';
 import 'unit_members_section.dart';
+import '../../core/utils/polish_text.dart';
 import '../../core/theme/osp_theme.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -324,6 +325,15 @@ class _GoogleSyncSection extends ConsumerWidget {
                 'Błąd: ${syncState.errorMessage}',
                 style: const TextStyle(color: Colors.red, fontSize: 12),
               ),
+            ),
+          ],
+          if (syncState.skippedFiles > 0) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Pominięto ${syncState.skippedFiles} '
+              '${PolishText.plural(syncState.skippedFiles, one: 'uszkodzony plik', few: 'uszkodzone pliki', many: 'uszkodzonych plików')} '
+              'na Dysku — reszta danych zsynchronizowana.',
+              style: TextStyle(fontSize: 12, color: Colors.orange[900]),
             ),
           ],
           const SizedBox(height: 12),

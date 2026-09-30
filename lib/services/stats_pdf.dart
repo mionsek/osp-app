@@ -1,6 +1,7 @@
+import 'dart:typed_data';
+
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 import 'package:intl/intl.dart';
 import '../models/models.dart';
 import '../providers/statistics_provider.dart';
@@ -29,6 +30,13 @@ class StatsPdf {
     await PdfOutput.sharePdf(pdf, _fileName(stats));
   }
 
+  /// Surowe bajty PDF — jak `ReportPdf.bytes`, żeby wydruk dało się
+  /// wygenerować w teście bez okna druku.
+  static Future<Uint8List> bytes(YearStats stats, UnitConfig config) async {
+    final pdf = await _build(stats, config);
+    return Uint8List.fromList(await pdf.save());
+  }
+
   static String _fileName(YearStats stats) =>
       'statystyki_${stats.year}.pdf';
 
@@ -36,14 +44,7 @@ class StatsPdf {
     YearStats stats,
     UnitConfig config,
   ) async {
-    final baseFont = await PdfGoogleFonts.openSansRegular();
-    final boldFont = await PdfGoogleFonts.openSansBold();
-    final italicFont = await PdfGoogleFonts.openSansItalic();
-    final pageTheme = pw.ThemeData.withFont(
-      base: baseFont,
-      bold: boldFont,
-      italic: italicFont,
-    );
+    final pageTheme = await PdfOutput.theme();
 
     final pdf = pw.Document(
       title: 'Statystyki wyjazdów ${stats.year}',

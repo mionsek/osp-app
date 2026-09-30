@@ -25,6 +25,10 @@ class SyncState {
   /// (`config/admins.json`).
   final List<String> adminEmails;
 
+  /// Pliki z Dysku pominięte przy ostatniej synchronizacji, bo nie dało się
+  /// ich odczytać. Dawniej jeden taki plik przerywał całą synchronizację.
+  final int skippedFiles;
+
   const SyncState({
     this.status = SyncStatus.disconnected,
     this.lastSyncTime,
@@ -35,6 +39,7 @@ class SyncState {
     this.duplicateReportNumbers = const [],
     this.founderEmail,
     this.adminEmails = const [],
+    this.skippedFiles = 0,
   });
 
   SyncState copyWith({
@@ -47,11 +52,13 @@ class SyncState {
     List<String>? duplicateReportNumbers,
     String? founderEmail,
     List<String>? adminEmails,
+    int? skippedFiles,
+    bool clearError = false,
   }) {
     return SyncState(
       status: status ?? this.status,
       lastSyncTime: lastSyncTime ?? this.lastSyncTime,
-      errorMessage: errorMessage ?? this.errorMessage,
+      errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
       userEmail: userEmail ?? this.userEmail,
       unitFolderId: unitFolderId ?? this.unitFolderId,
       unitInviteCode: unitInviteCode ?? this.unitInviteCode,
@@ -59,6 +66,7 @@ class SyncState {
           duplicateReportNumbers ?? this.duplicateReportNumbers,
       founderEmail: founderEmail ?? this.founderEmail,
       adminEmails: adminEmails ?? this.adminEmails,
+      skippedFiles: skippedFiles ?? this.skippedFiles,
     );
   }
 

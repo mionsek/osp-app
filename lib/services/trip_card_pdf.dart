@@ -2,7 +2,6 @@ import 'dart:typed_data';
 
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 import 'package:intl/intl.dart';
 import '../core/utils/file_names.dart';
 import '../core/utils/polish_text.dart';
@@ -70,6 +69,19 @@ class TripCardPdf {
   /// Minimalna liczba wierszy tabeli przejazdów.
   static const int minRows = 16;
 
+  /// Niewidoczny zapas szerokości dla tabel w `Expanded`.
+  ///
+  /// Tabela z kolumnami elastycznymi dzieli miejsce co do punktu, ale suma
+  /// szerokości kolumn potrafi wyjść o ułamek rzędu 1e-13 pt większa niż
+  /// przydział `Expanded` — błąd zaokrąglenia. Biblioteka `pdf` sprawdza to
+  /// asercją, więc w trybie debug karta w ogóle się nie generowała.
+  static const double _floatSlack = 0.05;
+
+  static pw.Widget _withFloatSlack(pw.Widget child) => pw.Padding(
+        padding: const pw.EdgeInsets.only(right: _floatSlack),
+        child: child,
+      );
+
   /// Liczba pustych wierszy w tabeli „Pobrano (w litrach)".
   static const int fuelIntakeRows = 6;
 
@@ -98,10 +110,7 @@ class TripCardPdf {
     int year,
     int month,
   ) async {
-    final base = await PdfGoogleFonts.openSansRegular();
-    final bold = await PdfGoogleFonts.openSansBold();
-    final italic = await PdfGoogleFonts.openSansItalic();
-    final theme = pw.ThemeData.withFont(base: base, bold: bold, italic: italic);
+    final theme = await PdfOutput.theme();
 
     final monthLabel = PolishText.monthLabel(month, year);
     final pdf = pw.Document(
@@ -348,7 +357,7 @@ class TripCardPdf {
               // Lewa: pobrano paliwo (z kwitów — aplikacja tego nie zna)
               pw.Expanded(
                 flex: 5,
-                child: pw.Column(
+                child: _withFloatSlack(pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
                     pw.Text('Pobrano (w litrach)',
@@ -389,13 +398,13 @@ class TripCardPdf {
                       ],
                     ),
                   ],
-                ),
+                )),
               ),
               pw.SizedBox(width: 10),
               // Prawa: 12 pozycji rozliczenia
               pw.Expanded(
                 flex: 7,
-                child: pw.Table(
+                child: _withFloatSlack(pw.Table(
                   border: pw.TableBorder.all(width: 0.5),
                   columnWidths: const {
                     0: pw.FixedColumnWidth(16),
@@ -433,7 +442,7 @@ class TripCardPdf {
                     _settle(11, 'Pozostało na miesiąc następny', '', cell),
                     _settle(12, 'Oszczędzono - przechowano', '', cell),
                   ],
-                ),
+                )),
               ),
             ],
           ),

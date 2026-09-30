@@ -60,6 +60,11 @@ class Vehicle extends HiveObject {
   @HiveField(12)
   double? startupFuelPerMonth;
 
+  /// Ostatnia zmiana wpisu — rozstrzyga przy synchronizacji, czyja wersja
+  /// wygrywa. Pusta w wpisach sprzed stempli.
+  @HiveField(13)
+  DateTime? updatedAt;
+
   Vehicle({
     required this.id,
     required this.name,
@@ -74,6 +79,7 @@ class Vehicle extends HiveObject {
     this.pumpFuelPerHour,
     this.idleFuelPerMinute,
     this.startupFuelPerMonth,
+    this.updatedAt,
   });
 
   @override
@@ -100,6 +106,7 @@ class Vehicle extends HiveObject {
     double? pumpFuelPerHour,
     double? idleFuelPerMinute,
     double? startupFuelPerMonth,
+    DateTime? updatedAt,
   }) {
     return Vehicle(
       id: id ?? this.id,
@@ -115,6 +122,7 @@ class Vehicle extends HiveObject {
       pumpFuelPerHour: pumpFuelPerHour ?? this.pumpFuelPerHour,
       idleFuelPerMinute: idleFuelPerMinute ?? this.idleFuelPerMinute,
       startupFuelPerMonth: startupFuelPerMonth ?? this.startupFuelPerMonth,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 }

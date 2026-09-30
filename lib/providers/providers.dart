@@ -132,6 +132,14 @@ class UnitConfigNotifier extends StateNotifier<UnitConfig> {
   UnitConfigNotifier(this._db) : super(_db.getConfig());
 
   Future<void> save(UnitConfig config) async {
+    // Porównanie z zapisaną konfiguracją, nie ze stanem ekranu: po dołączeniu
+    // do jednostki zapis ma już dane z Dysku i nie jest to edycja.
+    final before = _db.getConfig();
+    if (before.fullName != config.fullName ||
+        before.locality != config.locality ||
+        before.unitStreet != config.unitStreet) {
+      await _db.markUnitConfigEdited();
+    }
     await _db.saveConfig(config);
     state = config;
   }
@@ -173,11 +181,14 @@ class VehiclesNotifier extends StateNotifier<List<Vehicle>> {
   VehiclesNotifier(this._db) : super(_db.getAllVehicles());
 
   Future<void> add(Vehicle vehicle) async {
+    vehicle.updatedAt = DateTime.now();
     await _db.addVehicle(vehicle);
     state = _db.getAllVehicles();
   }
 
   Future<void> update(Vehicle vehicle) async {
+    // Stempel rozstrzyga przy synchronizacji, czyja wersja wygrywa.
+    vehicle.updatedAt = DateTime.now();
     await _db.updateVehicle(vehicle);
     state = _db.getAllVehicles();
   }
@@ -204,11 +215,14 @@ class FirefightersNotifier extends StateNotifier<List<Firefighter>> {
   FirefightersNotifier(this._db) : super(_db.getAllFirefighters());
 
   Future<void> add(Firefighter firefighter) async {
+    firefighter.updatedAt = DateTime.now();
     await _db.addFirefighter(firefighter);
     state = _db.getAllFirefighters();
   }
 
   Future<void> update(Firefighter firefighter) async {
+    // Stempel rozstrzyga przy synchronizacji, czyja wersja wygrywa.
+    firefighter.updatedAt = DateTime.now();
     await _db.updateFirefighter(firefighter);
     state = _db.getAllFirefighters();
   }

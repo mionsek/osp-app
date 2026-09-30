@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:osp_app/core/constants/handover_recipient_types.dart';
 import 'package:osp_app/models/models.dart';
+import 'package:osp_app/services/sync_json.dart';
 import 'package:osp_app/services/sync_service.dart';
 
 /// Testy serializacji na Dysk Google.
@@ -36,10 +37,18 @@ void main() {
         pumpFuelPerHour: 12,
         idleFuelPerMinute: 0.05,
         startupFuelPerMonth: 1,
+        updatedAt: DateTime(2026, 8, 20, 12),
       );
 
-      final back = SyncService.vehicleFromJson(
-          roundTrip(SyncService.vehicleToJson(v)));
+      final back = SyncJson.vehicleFromJson(
+          roundTrip(SyncJson.vehicleToJson(v)));
+      expect(back.updatedAt, v.updatedAt,
+          reason: 'stempel rozstrzyga przy scalaniu list');
+      expect(SyncJson.vehicleToJson(v).keys.toSet(), {
+        'id', 'name', 'seats', 'make', 'model', 'kind', 'plate',
+        'operationalNumber', 'fuelType', 'fuelPer100Km', 'pumpFuelPerHour',
+        'idleFuelPerMinute', 'startupFuelPerMonth', 'updatedAt',
+      });
 
       expect(back.id, v.id);
       expect(back.name, v.name);
@@ -61,7 +70,7 @@ void main() {
       // nowych pól. Odczyt nie może się na tym wywrócić.
       final old = {'id': 'v1', 'name': 'GBA', 'seats': 6};
 
-      final back = SyncService.vehicleFromJson(old);
+      final back = SyncJson.vehicleFromJson(old);
 
       expect(back.name, 'GBA');
       expect(back.make, '');
@@ -104,7 +113,7 @@ void main() {
       final t = sample();
 
       final back =
-          SyncService.tripFromJson(roundTrip(SyncService.tripToJson(t)));
+          SyncJson.tripFromJson(roundTrip(SyncJson.tripToJson(t)));
 
       expect(back.id, t.id);
       expect(back.vehicleId, t.vehicleId);
@@ -143,7 +152,7 @@ void main() {
         ..reportId = null;
 
       final back =
-          SyncService.tripFromJson(roundTrip(SyncService.tripToJson(t)));
+          SyncJson.tripFromJson(roundTrip(SyncJson.tripToJson(t)));
 
       expect(back.returnTime, isNull);
       expect(back.odometerEnd, isNull);
@@ -163,7 +172,7 @@ void main() {
         'updatedAt': DateTime(2026, 8, 10).toIso8601String(),
       };
 
-      final back = SyncService.tripFromJson(old);
+      final back = SyncJson.tripFromJson(old);
 
       expect(back.id, 'trip_1');
       expect(back.extras, '');
@@ -175,7 +184,7 @@ void main() {
       // Strażnik przed najczęstszym błędem: dodaniem pola do modelu
       // i zapomnieniem o mapowaniu. Lista jest ręczna, ale zmiana modelu
       // bez zmiany tej listy oznacza świadomą decyzję, a nie przeoczenie.
-      final json = SyncService.tripToJson(sample());
+      final json = SyncJson.tripToJson(sample());
 
       expect(
         json.keys.toSet(),
@@ -224,7 +233,7 @@ void main() {
     test('komplet danych przezywa zapis i odczyt', () {
       final r = sample();
       final back =
-          SyncService.reportFromJson(roundTrip(SyncService.reportToJson(r)));
+          SyncJson.reportFromJson(roundTrip(SyncJson.reportToJson(r)));
 
       expect(back.id, r.id);
       expect(back.reportNumber, r.reportNumber);
@@ -247,8 +256,8 @@ void main() {
     test('sklad zastepow przezywa razem z raportem', () {
       // Zastępy to zagnieżdżona lista z własnym mapowaniem, więc mają własny
       // sposób na ciche zgubienie danych — np. przy dopisaniu miejsca w wozie.
-      final back = SyncService.reportFromJson(
-          roundTrip(SyncService.reportToJson(sample())));
+      final back = SyncJson.reportFromJson(
+          roundTrip(SyncJson.reportToJson(sample())));
 
       expect(back.crewAssignments, hasLength(2));
       expect(back.crewAssignments[0].vehicleName, 'GBA 2.5/16');
@@ -271,7 +280,7 @@ void main() {
         ..notes = null;
 
       final back =
-          SyncService.reportFromJson(roundTrip(SyncService.reportToJson(r)));
+          SyncJson.reportFromJson(roundTrip(SyncJson.reportToJson(r)));
 
       expect(back.returnTime, isNull);
       expect(back.threatSubtype, isNull);
@@ -295,7 +304,7 @@ void main() {
         'updatedAt': DateTime(2025, 3, 4).toIso8601String(),
       };
 
-      final back = SyncService.reportFromJson(old);
+      final back = SyncJson.reportFromJson(old);
 
       expect(back.id, 'r_old');
       expect(back.addressStreet, '');
@@ -306,7 +315,7 @@ void main() {
     });
 
     test('zapisany JSON zawiera wszystkie pola modelu', () {
-      final json = SyncService.reportToJson(sample());
+      final json = SyncJson.reportToJson(sample());
 
       expect(
         json.keys.toSet(),
@@ -324,7 +333,7 @@ void main() {
       // Plik leżący na Dysku jest z definicji zsynchronizowany, niezależnie
       // od tego, w jakim stanie był lokalnie w chwili wysyłki.
       final r = sample()..syncStatus = 'local';
-      expect(SyncService.reportToJson(r)['syncStatus'], 'synced');
+      expect(SyncJson.reportToJson(r)['syncStatus'], 'synced');
     });
   });
 
@@ -352,8 +361,8 @@ void main() {
 
     test('komplet danych przezywa zapis i odczyt', () {
       final h = sample();
-      final back = SyncService.handoverFromJson(
-          roundTrip(SyncService.handoverToJson(h)));
+      final back = SyncJson.handoverFromJson(
+          roundTrip(SyncJson.handoverToJson(h)));
 
       expect(back.id, h.id);
       expect(back.reportId, h.reportId);
@@ -382,8 +391,8 @@ void main() {
         ..recipientType = HandoverRecipientTypes.other
         ..recipientTypeOther = 'zarządca drogi powiatowej';
 
-      final back = SyncService.handoverFromJson(
-          roundTrip(SyncService.handoverToJson(h)));
+      final back = SyncJson.handoverFromJson(
+          roundTrip(SyncJson.handoverToJson(h)));
 
       expect(back.recipientType, HandoverRecipientTypes.other);
       expect(back.recipientTypeOther, 'zarządca drogi powiatowej');
@@ -396,8 +405,8 @@ void main() {
         ..propertyKind = null
         ..handoverFirefighterId = null;
 
-      final back = SyncService.handoverFromJson(
-          roundTrip(SyncService.handoverToJson(h)));
+      final back = SyncJson.handoverFromJson(
+          roundTrip(SyncJson.handoverToJson(h)));
 
       expect(back.reportId, isNull);
       expect(back.notes, isNull);
@@ -416,7 +425,7 @@ void main() {
         'updatedAt': DateTime(2025, 5, 1).toIso8601String(),
       };
 
-      final back = SyncService.handoverFromJson(old);
+      final back = SyncJson.handoverFromJson(old);
 
       expect(back.id, 'h_old');
       expect(back.eventLocation, '');
@@ -428,7 +437,7 @@ void main() {
     });
 
     test('zapisany JSON zawiera wszystkie pola modelu', () {
-      final json = SyncService.handoverToJson(sample());
+      final json = SyncJson.handoverToJson(sample());
 
       expect(
         json.keys.toSet(),
@@ -445,7 +454,7 @@ void main() {
 
   group('CrewAssignment', () {
     test('zapisany JSON zawiera wszystkie pola modelu', () {
-      final json = SyncService.crewToJson(CrewAssignment(
+      final json = SyncJson.crewToJson(CrewAssignment(
         vehicleId: 'v1',
         vehicleName: 'GBA 2.5/16',
         driverId: 'ff1',
@@ -463,7 +472,7 @@ void main() {
     });
 
     test('zastep ze starszej wersji bez listy zalogi', () {
-      final back = SyncService.crewFromJson({
+      final back = SyncJson.crewFromJson({
         'vehicleId': 'v1',
         'vehicleName': 'GLM 8',
       });
@@ -488,8 +497,8 @@ void main() {
 
     test('data badan przezywa zapis i odczyt (dawniej ginela przy kazdej '
         'synchronizacji)', () {
-      final back = SyncService.firefighterFromJson(
-          roundTrip(SyncService.firefighterToJson(sample())));
+      final back = SyncJson.firefighterFromJson(
+          roundTrip(SyncJson.firefighterToJson(sample())));
 
       expect(back.medicalExamExpiry, DateTime(2027, 3, 31));
       expect(back.lastNameFirst, 'Kowalski Jan');
@@ -497,29 +506,29 @@ void main() {
     });
 
     test('plik starej wersji bez klucza nie kasuje daty lokalnej', () {
-      final old = SyncService.firefighterToJson(sample())
+      final old = SyncJson.firefighterToJson(sample())
         ..remove('medicalExamExpiry');
 
-      final back = SyncService.firefighterFromJson(old, local: sample());
+      final back = SyncJson.firefighterFromJson(old, local: sample());
 
       expect(back.medicalExamExpiry, DateTime(2027, 3, 31));
     });
 
     test('swiadomie wyczyszczona data zostaje wyczyszczona', () {
-      final cleared = SyncService.firefighterToJson(sample())
+      final cleared = SyncJson.firefighterToJson(sample())
         ..['medicalExamExpiry'] = null;
 
-      final back = SyncService.firefighterFromJson(cleared, local: sample());
+      final back = SyncJson.firefighterFromJson(cleared, local: sample());
 
       expect(back.medicalExamExpiry, isNull);
     });
 
     test('lista kluczy — nowe pole modelu wymaga decyzji o synchronizacji', () {
       expect(
-        SyncService.firefighterToJson(sample()).keys.toSet(),
+        SyncJson.firefighterToJson(sample()).keys.toSet(),
         {
           'id', 'firstName', 'lastName', 'rank', 'isDriver', 'isCommander',
-          'isKPP', 'medicalExamExpiry',
+          'isKPP', 'medicalExamExpiry', 'updatedAt',
         },
       );
     });

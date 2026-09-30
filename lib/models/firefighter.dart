@@ -28,6 +28,11 @@ class Firefighter extends HiveObject {
   @HiveField(7)
   DateTime? medicalExamExpiry;
 
+  /// Ostatnia zmiana wpisu — rozstrzyga przy synchronizacji, czyja wersja
+  /// wygrywa. Pusta w wpisach sprzed stempli.
+  @HiveField(8)
+  DateTime? updatedAt;
+
   Firefighter({
     required this.id,
     required this.firstName,
@@ -37,6 +42,7 @@ class Firefighter extends HiveObject {
     this.isCommander = false,
     this.isKPP = false,
     this.medicalExamExpiry,
+    this.updatedAt,
   });
 
   /// „Imię Nazwisko" — kolejność naturalna w mowie.
@@ -107,6 +113,7 @@ class Firefighter extends HiveObject {
     bool? isKPP,
     DateTime? medicalExamExpiry,
     bool clearMedicalExamExpiry = false,
+    DateTime? updatedAt,
   }) {
     return Firefighter(
       id: id ?? this.id,
@@ -119,6 +126,7 @@ class Firefighter extends HiveObject {
       medicalExamExpiry: clearMedicalExamExpiry
           ? null
           : (medicalExamExpiry ?? this.medicalExamExpiry),
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 }

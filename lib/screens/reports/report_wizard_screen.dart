@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
 import '../../models/models.dart';
 import '../../providers/providers.dart';
+import '../../services/sync_json.dart';
 import '../../services/trip_from_report.dart';
 import 'steps/step_basic_info.dart';
 import 'steps/step_crew.dart';
@@ -343,6 +344,8 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
       // przepięty na inny wóz w starszej wersji — nadpisanie skasowałoby
       // wpisane w nim dane.
       if (db.getTrip(trip.id) != null) continue;
+      // Przejazd usunięty ręcznie nie wraca przy kolejnym zapisie raportu.
+      if (db.tombstoneOf(SyncKind.trip, trip.id) != null) continue;
       await notifier.add(trip);
       added++;
     }

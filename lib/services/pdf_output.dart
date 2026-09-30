@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -12,6 +13,27 @@ import 'package:printing/printing.dart';
 /// co naprawdę wspólne, i osobny plik na każdy dokument.
 class PdfOutput {
   PdfOutput._();
+
+  static pw.ThemeData? _theme;
+
+  /// Motyw z czcionką Open Sans — z polskimi znakami, których wbudowana
+  /// Helvetica biblioteki `pdf` nie ma.
+  ///
+  /// Czcionki są w paczce aplikacji. Wcześniej pobierał je `PdfGoogleFonts`,
+  /// który trzyma je tylko w pamięci, więc po każdym uruchomieniu aplikacji
+  /// pierwszy wydruk potrzebował internetu — bez zasięgu na miejscu zdarzenia
+  /// nie drukował się żaden dokument.
+  static Future<pw.ThemeData> theme() async {
+    final cached = _theme;
+    if (cached != null) return cached;
+    Future<pw.Font> load(String name) async =>
+        pw.Font.ttf(await rootBundle.load('assets/fonts/OpenSans-$name.ttf'));
+    return _theme = pw.ThemeData.withFont(
+      base: await load('Regular'),
+      bold: await load('Bold'),
+      italic: await load('Italic'),
+    );
+  }
 
   /// Otwiera systemowe okno druku.
   ///

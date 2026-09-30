@@ -229,56 +229,65 @@ class GoogleDriveService {
 
   // ── JSON file operations ───────────────────────────────────────
 
-  /// Write a JSON map to a file in the given folder.
-  /// If the file already exists (by name), it's updated. Otherwise created.
-  /// Zapisuje dane pod nazwą [fileName], nadpisując istniejący plik.
+  /// Zapisuje plik konfiguracji jednostki pod stałą nazwą — nadpisuje
+  /// istniejący albo tworzy nowy.
   ///
-  /// [legacyFileNames] to nazwy, jakie ten sam dokument miał w starszych
-  /// wersjach aplikacji — od najnowszej. Gdy pliku nie ma pod nazwą bieżącą,
-  /// szukamy go pod starymi i — jeśli jest — **aktualizujemy go razem ze
-  /// zmianą nazwy**, bo `files.update` przyjmuje nazwę w tym samym wywołaniu.
-  /// Bez tego zmiana reguły nazywania zostawiłaby na Dysku stary plik
-  /// i utworzyła obok drugi z tą samą treścią, a jednostka zobaczyłaby
-  /// duplikaty każdego raportu.
+  /// Tylko dla plików o stałych nazwach (`firefighters.json`, `admins.json`
+  /// itp.). Raporty, przekazania i przejazdy idą przez [createJsonFile]
+  /// i [updateJsonFile] — rozpoznawane po identyfikatorze w treści, a nie po
+  /// nazwie, która zmieniała się między wersjami aplikacji i dawała duplikaty.
   Future<String> writeJsonFile(
     String folderId,
     String fileName,
-    Map<String, dynamic> data, {
-    Iterable<String> legacyFileNames = const [],
-  }) async {
-    final content = utf8.encode(const JsonEncoder.withIndent('  ').convert(data));
-    final media = drive.Media(Stream.value(content), content.length);
-
-    // Check if file exists
-    var existingId = await _findFileId(folderId, fileName);
-    for (final legacy in legacyFileNames) {
-      if (existingId != null) break;
-      if (legacy == fileName) continue;
-      final legacyId = await _findFileId(folderId, legacy);
-      if (legacyId == null) continue;
-      // Stara nazwa bywała wspólna dla kilku dokumentów (np. dwa przejazdy
-      // wozu z jednego dnia). Przejmujemy plik tylko wtedy, gdy leży w nim
-      // ten sam dokument — inaczej nadpisalibyśmy jedyną kopię cudzego.
-      final legacyData = await readJsonFile(legacyId);
-      if (legacyData != null && legacyData['id'] == data['id']) {
-        existingId = legacyId;
-      }
-    }
-
+    Map<String, dynamic> data,
+  ) async {
+    final existingId = await _findFileId(folderId, fileName);
     if (existingId != null) {
-      // Update existing
-      final file = drive.File()..name = fileName;
-      final updated = await _api.files.update(file, existingId,
-          uploadMedia: media);
-      return updated.id!;
-    } else {
-      // Create new
-      final file = drive.File()
-        ..name = fileName
-        ..parents = [folderId];
-      final created = await _api.files.create(file, uploadMedia: media);
-      return created.id!;
+      return (await updateJsonFile(existingId, data)).id;
     }
+    return (await createJsonFile(folderId, fileName, data)).id;
+  }
+
+  /// Tworzy nowy plik JSON. Zwraca jego identyfikator i chwilę modyfikacji —
+  /// po niej synchronizacja poznaje, że pliku nie trzeba czytać ponownie.
+  Future<({String id, DateTime? modifiedTime})> createJsonFile(
+    String folderId,
+    String fileName,
+    Map<String, dynamic> data,
+  ) async {
+    final file = drive.File()
+      ..name = fileName
+      ..parents = [folderId];
+    final created = await _api.files.create(
+      file,
+      uploadMedia: _media(data),
+      $fields: 'id, modifiedTime',
+    );
+    return (id: created.id!, modifiedTime: created.modifiedTime);
+  }
+
+  /// Nadpisuje treść pliku o znanym identyfikatorze; [fileName] — nową nazwę,
+  /// gdy się zmieniła (np. po zmianie reguły nazywania).
+  Future<({String id, DateTime? modifiedTime})> updateJsonFile(
+    String fileId,
+    Map<String, dynamic> data, {
+    String? fileName,
+  }) async {
+    final file = drive.File();
+    if (fileName != null) file.name = fileName;
+    final updated = await _api.files.update(
+      file,
+      fileId,
+      uploadMedia: _media(data),
+      $fields: 'id, modifiedTime',
+    );
+    return (id: updated.id!, modifiedTime: updated.modifiedTime);
+  }
+
+  static drive.Media _media(Map<String, dynamic> data) {
+    final content =
+        utf8.encode(const JsonEncoder.withIndent('  ').convert(data));
+    return drive.Media(Stream.value(content), content.length);
   }
 
   /// Read a JSON file by its file ID.
