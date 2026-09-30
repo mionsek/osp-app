@@ -21,11 +21,21 @@ final googleDriveServiceProvider = Provider<GoogleDriveService>((ref) {
 });
 
 final syncServiceProvider = Provider<SyncService>((ref) {
-  return SyncService(
+  final service = SyncService(
     ref.watch(databaseServiceProvider),
     ref.watch(googleAuthServiceProvider),
     ref.watch(googleDriveServiceProvider),
   );
+  service.onDataPulled = () {
+    ref.read(reportsProvider.notifier).refresh();
+    ref.read(handoversProvider.notifier).refresh();
+    ref.read(vehicleTripsProvider.notifier).refresh();
+    ref.read(firefightersProvider.notifier).refresh();
+    ref.read(vehiclesProvider.notifier).refresh();
+    ref.read(threatsProvider.notifier).refresh();
+    ref.read(unitConfigProvider.notifier).refresh();
+  };
+  return service;
 });
 
 final syncStateProvider = StateNotifierProvider<SyncStateNotifier, SyncState>((
@@ -124,6 +134,10 @@ class UnitConfigNotifier extends StateNotifier<UnitConfig> {
   Future<void> save(UnitConfig config) async {
     await _db.saveConfig(config);
     state = config;
+  }
+
+  void refresh() {
+    state = _db.getConfig();
   }
 
   /// [fullName] to pełna nazwa wpisana przez użytkownika, np.

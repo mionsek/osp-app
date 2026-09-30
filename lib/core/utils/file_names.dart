@@ -60,4 +60,18 @@ class FileNames {
   /// Rok i miesiąc: `2026-08`.
   static String yearMonth(int year, int month) =>
       '${year.toString().padLeft(4, '0')}-${month.toString().padLeft(2, '0')}';
+
+  /// Krótki, stały skrót tekstu: 8 znaków szesnastkowych (FNV-1a, 32 bity).
+  ///
+  /// Nie `String.hashCode` — ten nie ma gwarancji, że da ten sam wynik na
+  /// innym telefonie czy w innej wersji Darta, a nazwa pliku na Dysku musi
+  /// wyjść identycznie na każdym urządzeniu.
+  static String shortHash(String s) {
+    var hash = 0x811c9dc5;
+    for (final unit in s.codeUnits) {
+      hash ^= unit;
+      hash = (hash * 0x01000193).toUnsigned(32);
+    }
+    return hash.toRadixString(16).padLeft(8, '0');
+  }
 }

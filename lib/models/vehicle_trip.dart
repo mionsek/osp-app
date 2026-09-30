@@ -27,6 +27,19 @@ class TripPurposes {
   ];
 }
 
+/// Grupy kolumn przejazdu, których źródłem jest raport z wyjazdu alarmowego.
+///
+/// Grupy, a nie pojedyncze pola, bo niektóre pola zmieniają się tylko razem:
+/// data i godzina odjazdu to jedna chwila, a kierowca to para id + nazwisko.
+class ReportLinkedField {
+  static const String departure = 'departure';
+  static const String returnTime = 'return';
+  static const String routeTo = 'routeTo';
+  static const String driver = 'driver';
+
+  static const List<String> all = [departure, returnTime, routeTo, driver];
+}
+
 /// Jeden przejazd pojazdu — jeden wiersz miesięcznej karty drogowej.
 ///
 /// Karta to nie osobny byt, tylko widok: para *pojazd + miesiąc* nad zbiorem
@@ -155,6 +168,15 @@ class VehicleTrip extends HiveObject {
   @HiveField(23, defaultValue: <TripEquipmentUse>[])
   List<TripEquipmentUse> equipmentUse;
 
+  /// Pola pochodzące z raportu, które ktoś poprawił ręcznie w ewidencji —
+  /// wartości z [ReportLinkedField].
+  ///
+  /// Uzgadnianie z raportem (przy starcie i po każdym pobraniu z Dysku) ich
+  /// nie nadpisuje. Bez tego godzina czy kierowca poprawione w przejeździe
+  /// wracały po cichu do wartości z raportu przy następnym uruchomieniu.
+  @HiveField(24, defaultValue: <String>[])
+  List<String> overriddenFields;
+
   VehicleTrip({
     required this.id,
     required this.vehicleId,
@@ -180,7 +202,9 @@ class VehicleTrip extends HiveObject {
     this.extras = '',
     this.idleMinutes,
     List<TripEquipmentUse>? equipmentUse,
-  }) : equipmentUse = equipmentUse ?? <TripEquipmentUse>[];
+    List<String>? overriddenFields,
+  })  : equipmentUse = equipmentUse ?? <TripEquipmentUse>[],
+        overriddenFields = overriddenFields ?? <String>[];
 
   /// Rok i miesiąc, do którego przejazd należy — klucz karty.
   int get year => date.year;

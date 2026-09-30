@@ -39,3 +39,27 @@ class TimeFormat {
 
   static final DateFormat _date = DateFormat('dd.MM.yyyy');
 }
+
+/// Powrót wpisany jako sama godzina, gdy akcja przeszła przez północ.
+///
+/// Jedna reguła dla kreatora wyjazdu, formularza przejazdu i migracji
+/// starych danych — wcześniej każde z tych miejsc liczyło to po swojemu.
+class OvernightReturn {
+  OvernightReturn._();
+
+  /// Dłuższa „nocna akcja" to raczej literówka w godzinie (14:50 → 14:05)
+  /// niż prawdziwa akcja. Taki raport zostaje z powrotem przed wyjazdem, żeby
+  /// statystyki pokazały go jako do poprawki, zamiast doliczać mu dobę.
+  static const Duration maxNightAction = Duration(hours: 12);
+
+  /// [returnTime] przesunięty na następny dzień, jeśli wypada przed
+  /// [departure], a po przesunięciu akcja trwałaby nie dłużej niż
+  /// [maxNightAction]. W pozostałych przypadkach bez zmian.
+  static DateTime adjust(DateTime departure, DateTime returnTime) {
+    if (!returnTime.isBefore(departure)) return returnTime;
+    final nextDay = returnTime.add(const Duration(days: 1));
+    return nextDay.difference(departure) <= maxNightAction
+        ? nextDay
+        : returnTime;
+  }
+}

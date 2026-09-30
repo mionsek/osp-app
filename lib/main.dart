@@ -32,6 +32,11 @@ Future<void> _runMigrations(WidgetRef ref) async {
 
   final stationAddress = db.getConfig().stationAddress;
 
+  // Powrót po północy zapisany na dzień wyjazdu — musi zostać naprawiony
+  // przed uzgadnianiem, żeby do ewidencji trafiła już poprawna godzina.
+  final overnight = await db.fixOvernightReturnTimes();
+  if (overnight > 0) ref.read(reportsProvider.notifier).refresh();
+
   // Wyjazdy zapisane, zanim istniała ewidencja przejazdów, nie mają swojego
   // wiersza w karcie drogowej.
   final added = await db.backfillTripsFromReports(

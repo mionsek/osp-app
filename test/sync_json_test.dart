@@ -88,6 +88,11 @@ void main() {
           specialEquipmentMinutes: 25,
           idleMinutes: 12,
           extras: 'dodatek zimowy',
+          equipmentUse: [
+            TripEquipmentUse(name: SpecialEquipment.pump, minutes: 20),
+            TripEquipmentUse(name: 'Pompa szlamowa', minutes: 5),
+          ],
+          overriddenFields: [ReportLinkedField.returnTime],
           notes: 'autopompa',
           reportId: 'r1',
           createdAt: DateTime(2026, 8, 10, 9),
@@ -123,6 +128,9 @@ void main() {
       expect(back.createdAt, t.createdAt);
       expect(back.updatedAt, t.updatedAt);
       expect(back.createdBy, t.createdBy);
+      expect(back.equipmentUse.map((e) => '${e.name}:${e.minutes}'),
+          ['Autopompa:20', 'Pompa szlamowa:5']);
+      expect(back.overriddenFields, [ReportLinkedField.returnTime]);
     });
 
     test('przejazd niedokonczony: puste pola zostaja puste', () {
@@ -177,7 +185,7 @@ void main() {
           'odometerStart', 'odometerEnd', 'odometerStartManual',
           'specialEquipmentMinutes', 'idleMinutes', 'extras', 'notes',
           'reportId', 'createdAt', 'updatedAt', 'createdBy', 'syncStatus',
-          'equipmentUse',
+          'equipmentUse', 'overriddenFields',
         },
       );
     });
@@ -463,6 +471,100 @@ void main() {
       expect(back.driverId, isNull);
       expect(back.commanderId, isNull);
       expect(back.crewMemberIds, isEmpty);
+    });
+  });
+
+  group('Ratownik — JSON na Dysku', () {
+    Firefighter sample() => Firefighter(
+          id: 'f1',
+          firstName: 'Jan',
+          lastName: 'Kowalski',
+          rank: 'dh',
+          isDriver: true,
+          isCommander: true,
+          isKPP: true,
+          medicalExamExpiry: DateTime(2027, 3, 31),
+        );
+
+    test('data badan przezywa zapis i odczyt (dawniej ginela przy kazdej '
+        'synchronizacji)', () {
+      final back = SyncService.firefighterFromJson(
+          roundTrip(SyncService.firefighterToJson(sample())));
+
+      expect(back.medicalExamExpiry, DateTime(2027, 3, 31));
+      expect(back.lastNameFirst, 'Kowalski Jan');
+      expect(back.isDriver && back.isCommander && back.isKPP, isTrue);
+    });
+
+    test('plik starej wersji bez klucza nie kasuje daty lokalnej', () {
+      final old = SyncService.firefighterToJson(sample())
+        ..remove('medicalExamExpiry');
+
+      final back = SyncService.firefighterFromJson(old, local: sample());
+
+      expect(back.medicalExamExpiry, DateTime(2027, 3, 31));
+    });
+
+    test('swiadomie wyczyszczona data zostaje wyczyszczona', () {
+      final cleared = SyncService.firefighterToJson(sample())
+        ..['medicalExamExpiry'] = null;
+
+      final back = SyncService.firefighterFromJson(cleared, local: sample());
+
+      expect(back.medicalExamExpiry, isNull);
+    });
+
+    test('lista kluczy — nowe pole modelu wymaga decyzji o synchronizacji', () {
+      expect(
+        SyncService.firefighterToJson(sample()).keys.toSet(),
+        {
+          'id', 'firstName', 'lastName', 'rank', 'isDriver', 'isCommander',
+          'isKPP', 'medicalExamExpiry',
+        },
+      );
+    });
+  });
+
+  group('Przejazd ze starej wersji aplikacji', () {
+    VehicleTrip trip({
+      DateTime? ret,
+      String driver = '',
+      List<String> overrides = const [],
+    }) =>
+        VehicleTrip(
+          id: 'trip_r1_v1',
+          vehicleId: 'v1',
+          date: DateTime(2026, 8, 10),
+          departureTime: DateTime(2026, 8, 10, 8, 0),
+          returnTime: ret,
+          driverName: driver,
+          reportId: 'r1',
+          createdAt: DateTime(2026, 8, 10),
+          updatedAt: DateTime(2026, 8, 10),
+          overriddenFields: List.of(overrides),
+        );
+
+    test('cofniete przez stara wersje pola wracaja z telefonu', () {
+      final local = trip(
+        ret: DateTime(2026, 8, 10, 10, 0),
+        driver: 'Nowak Adam',
+        overrides: [ReportLinkedField.returnTime, ReportLinkedField.driver],
+      );
+      final remote = trip(ret: DateTime(2026, 8, 10, 11, 0), driver: 'Inny');
+
+      SyncService.keepLocalOverrides(remote, local);
+
+      expect(remote.returnTime, DateTime(2026, 8, 10, 10, 0));
+      expect(remote.driverName, 'Nowak Adam');
+      expect(remote.overriddenFields, local.overriddenFields);
+    });
+
+    test('bez lokalnych poprawek plik z Dysku wchodzi bez zmian', () {
+      final remote = trip(ret: DateTime(2026, 8, 10, 11, 0));
+
+      SyncService.keepLocalOverrides(remote, trip());
+
+      expect(remote.returnTime, DateTime(2026, 8, 10, 11, 0));
     });
   });
 }

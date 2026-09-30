@@ -8,6 +8,7 @@ import '../../services/trip_from_report.dart';
 import 'steps/step_basic_info.dart';
 import 'steps/step_crew.dart';
 import 'steps/step_summary.dart';
+import '../../core/utils/time_format.dart';
 import '../../core/theme/osp_theme.dart';
 
 class ReportWizardScreen extends ConsumerStatefulWidget {
@@ -47,9 +48,16 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
   void initState() {
     super.initState();
     final now = DateTime.now();
-    _date = now;
+    // Sama data, bez godziny — inaczej porównania „ten sam dzień"
+    // z ewidencją przejazdów wychodziły fałszywie.
+    _date = DateTime(now.year, now.month, now.day);
+    // Podpowiedź wyjazdu to godzina temu, ale nie przed północą: data
+    // zostaje dzisiejsza, bo numer raportu liczy się z bieżącego roku, a 1.01
+    // raport z datą 31.12 dostałby numer z innego roku niż jego pole „rok".
     final h = now.hour - 1;
-    _departureTime = TimeOfDay(hour: h < 0 ? 23 : h, minute: now.minute);
+    _departureTime = h < 0
+        ? const TimeOfDay(hour: 0, minute: 0)
+        : TimeOfDay(hour: h, minute: now.minute);
     // Godzina powrotu zostaje pusta — przy tworzeniu raportu zwykle jeszcze
     // jej nie znamy, a PSP i tak wpisuje własne godziny.
     _returnTime = null;
@@ -229,7 +237,14 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
         _returnTime!.hour,
         _returnTime!.minute,
       );
+      // Powrót nad ranem po nocnej akcji należy do następnego dnia — tak samo
+      // liczy formularz przejazdu. Bez tego akcja 23:10–1:30 trwała minus
+      // 21 godzin w statystykach.
+      returnDt = OvernightReturn.adjust(departure, returnDt);
     }
+
+    final db = ref.read(databaseServiceProvider);
+    final previous = _isEditing ? db.getReport(widget.reportId!) : null;
 
     final report = Report(
       id: _isEditing ? widget.reportId! : const Uuid().v4(),
@@ -245,10 +260,15 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
       threatSubtype: _threatSubtype,
       crewAssignments: _crewAssignments.values.toList(),
       notes: _notes.isNotEmpty ? _notes : null,
-      createdAt: _isEditing
-          ? ref.read(databaseServiceProvider).getReport(widget.reportId!)?.createdAt ?? now
-          : now,
+      createdAt: previous?.createdAt ?? now,
       updatedAt: now,
+      // Autor decyduje, kto może raport edytować i usunąć. Kreator go dotąd
+      // nie zapisywał, więc każdy raport był edytowalny dla wszystkich.
+      // Przy edycji autor zostaje ten sam — poprawka admina go nie przejmuje.
+      createdBy: previous?.createdBy ??
+          (ref.read(syncStateProvider).userEmail ?? ''),
+      // Kreator tego pola nie edytuje, więc nie może go kasować.
+      operationCommanderId: previous?.operationCommanderId,
     );
 
     if (_isEditing) {
@@ -257,7 +277,7 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
       await ref.read(reportsProvider.notifier).add(report);
     }
 
-    final addedTrips = await _addToVehicleLog(report);
+    final addedTrips = await _addToVehicleLog(report, previous: previous);
 
     if (mounted) {
       final syncState = ref.read(syncStateProvider);
@@ -283,7 +303,11 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
   ///
   /// Zwraca liczbę nowych wpisów. Przy edycji raportu pojazdy już dopisane
   /// są pomijane, żeby ponowny zapis nie mnożył wierszy w karcie.
-  Future<int> _addToVehicleLog(Report report) async {
+  ///
+  /// [previous] to raport sprzed tej edycji. Pola faktycznie zmienione teraz
+  /// w raporcie nadpisują ręczne poprawki w ewidencji — wygrywa ostatnia
+  /// edycja. Pól nietkniętych poprawki z ewidencji chronią.
+  Future<int> _addToVehicleLog(Report report, {Report? previous}) async {
     final db = ref.read(databaseServiceProvider);
     final notifier = ref.read(vehicleTripsProvider.notifier);
     String driverName(String id) => db.getFirefighter(id)?.lastNameFirst ?? '';
@@ -293,8 +317,12 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
     final linked =
         db.getAllTrips().where((t) => t.reportId == report.id).toList();
     for (final trip in linked) {
+      final force = previous == null
+          ? ReportLinkedField.all.toSet()
+          : TripFromReport.changedBetween(previous, report,
+              vehicleId: trip.vehicleId);
       if (TripFromReport.applyReportFields(trip, report,
-          resolveDriverName: driverName)) {
+          resolveDriverName: driverName, force: force)) {
         await notifier.update(trip);
       }
     }
@@ -309,10 +337,16 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
       createdBy: ref.read(syncStateProvider).userEmail ?? '',
     );
 
+    var added = 0;
     for (final trip in trips) {
+      // Identyfikator z raportu i pojazdu mógł zostać zajęty przez przejazd
+      // przepięty na inny wóz w starszej wersji — nadpisanie skasowałoby
+      // wpisane w nim dane.
+      if (db.getTrip(trip.id) != null) continue;
       await notifier.add(trip);
+      added++;
     }
-    return trips.length;
+    return added;
   }
 
   /// Przypomnienie o jedynej rzeczy, której z raportu wyczytać się nie da.

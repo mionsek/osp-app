@@ -665,3 +665,87 @@ pytanie brzmiało wprost, czy ucierpią (nie ucierpiały).
 - [x] `versionCode` **11** — ten, którego faktycznie używa Android: blokuje cofnięcie wersji i po nim Play ustawia kolejność wydań
 - Przy **tej** wymianie podbicie nie pomaga w aktualizacji — koledzy i tak muszą odinstalować starą wersję z powodu zmiany klucza podpisu (chore/039). Wartość jest inna: od teraz wiadomo, kto co ma, a kolejne wydania będą się aktualizować normalnie
 - **Do rozdania idzie `app-release.apk`** (wariant uniwersalny, wszystkie architektury w jednym pliku). Warianty per architektura mają `versionCode` podbity o tysiące (2011, 3011, 4011), więc mieszanie ich z uniwersalnym blokuje instalację jako cofnięcie wersji — rozdajemy konsekwentnie jeden wariant
+
+## Zrobione (fix/042-godziny-przejazd-raport)
+Zgłoszenie Wojtka: „w ewidencji wyjazdów uzupełniłem godzinę, a w liście
+wyjazdów ta godzina się nie zaktualizowała". Diagnoza pokazała błąd poważniejszy
+niż zgłoszony, a przegląd tej samej klasy błędów — kilka kolejnych przypadków
+cichej utraty danych.
+
+### Godziny z ewidencji do raportu — i nic nie ginie po restarcie
+- [x] **Synchronizacja szła tylko w jedną stronę** (raport → przejazd). Godzina wpisana w ewidencji nie trafiała do raportu, a co gorsza **uzgadnianie przy każdym starcie i po każdym pobraniu z Dysku cofało ją po cichu** do wartości z raportu. To samo z kierowcą i „dokąd" poprawionymi w ewidencji
+- [x] **Godziny zmienione w przejeździe wracają do raportu**: odjazd pierwszego i powrót ostatniego zastępu. Przy jednym wozie to po prostu te same godziny. Tylko dla pól faktycznie zmienionych, tylko gdy przejazd jest z dnia raportu i gdy użytkownik może edytować raport. Godzina w raporcie **nigdy** nie zmienia się na pustą
+- [x] **Ochrona ręcznych poprawek** — nowe pole `VehicleTrip.overriddenFields` (Hive 24, synchronizowane). Pole zmienione w formularzu przejazdu, a nadal różne od raportu, nie jest nadpisywane przez uzgadnianie. Zmiana tego samego pola **w raporcie** wygrywa (ostatnia edycja) i zdejmuje ochronę
+- [x] **Zmiana godzin jednego wozu nigdy nie zmienia przejazdu drugiego** — przy dwóch zastępach powrót GBA wpisywał się dotąd jako zmyślony powrót GLM, który mógł być jeszcze na akcji. Drugi przejazd dostaje zamrożenie swoich godzin
+- [x] Formularz porównuje z **migawką z chwili otwarcia**, nie z obiektem Hive — ten zmienia się w miejscu przy uzgadnianiu w tle i zmiana kolegi brała się za zmianę wpisaną tutaj
+- [x] **Uzgadnianie w tle stempluje przejazd stemplem raportu, nie „teraz"** — automatyczna zmiana z jednego telefonu przebijała prawdziwą edycję z innego
+- [x] Plik przejazdu ze **starszej wersji aplikacji** (bez ochrony) nie cofa poprawek — poprawione pola bierzemy z telefonu
+- [x] W formularzu przejazdu: notka „Powiązany z wyjazdem nr … — zmienione godziny trafią też do raportu" (albo informacja, że raport może zmienić tylko autor/admin), **komunikat po zapisie**, przycisk **wyczyszczenia godziny przyjazdu** (dotąd raz wpisanej nie dało się cofnąć do „jeszcze nie wrócił")
+- [x] **Pojazd w przejeździe z raportu jest zablokowany** — po zmianie wozu kolejny zapis raportu tworzył „brakujący" przejazd pod tym samym identyfikatorem i kasował licznik, minuty i uwagi. Kreator dodatkowo nie nadpisuje już istniejącego przejazdu
+- [x] Zweryfikowane na emulatorze: przyjazd zmieniony w ewidencji → raport pokazuje nową godzinę → po restarcie aplikacji przejazd ją zachowuje
+
+### Kreator wyjazdu
+- [x] **Autor raportu nie był zapisywany** (`createdBy` zawsze puste), więc reguła „edytuje autor albo administrator" dla raportów w praktyce nie działała — każdy mógł zmienić każdy raport. Przy edycji autor zostaje ten sam. Stare raporty zostają edytowalne dla wszystkich, bo autora nie da się odtworzyć
+- [x] Edycja raportu kasowała też `operationCommanderId`
+- [x] **Powrót po północy** — kreator składał godzinę powrotu z datą wyjazdu: akcja 23:10–1:30 trwała minus 21 godzin (statystyki), a ta godzina szła do ewidencji. Jedna reguła `OvernightReturn` dla kreatora, formularza przejazdu i migracji: przesunięcie o dobę tylko, gdy akcja trwałaby do 12 h. **Literówka** (14:50 → 14:05) zostaje, żeby statystyki dalej pokazywały raport do poprawki, zamiast doliczać mu dobę. Migracja istniejących raportów przy starcie, bez stempla (każdy telefon liczy to samo)
+- [x] Data raportu bez godziny (porównania „ten sam dzień" wychodziły fałszywie); tuż po północy podpowiedź wyjazdu 0:00 zamiast 23:xx **tego samego** dnia
+- [x] Raporty z jednego dnia układają się na liście po godzinie wyjazdu, a nie losowo
+
+### Synchronizacja — utrata danych, potwierdzona na kodzie
+- [x] **Daty badań lekarskich kasowały się przy każdej synchronizacji** — mapowanie ratownika na Dysk w ogóle ich nie zawierało. W jednostce z synchronizacją funkcja z feature/006 nie działała. Teraz są, a plik zapisany starszą wersją (bez klucza) nie kasuje daty lokalnej. Mapowanie upublicznione i objęte strażnikiem listy kluczy
+- [x] **Dokumenty: najpierw pobieramy, potem wysyłamy.** Dotąd każdy telefon przy każdej synchronizacji najpierw nadpisywał Dysk swoją — często starą — kopią wszystkich raportów i przejazdów, więc poprawki istniejących dokumentów praktycznie nie docierały do kolegów. Listy (ratownicy, pojazdy) zostają po staremu — patrz „Do zrobienia"
+- [x] **Pobieranie widziało najwyżej 100 plików na folder** (brak stronicowania). Folder przejazdów przekracza to w kilka miesięcy — reszta po cichu nie docierała na inne telefony ani na nowy telefon
+- [x] **Dwa przejazdy wozu z jednego dnia nadpisywały jeden plik na Dysku** — nazwa brała 8 pierwszych znaków id, a ręczne przejazdy mają `trip_<milisekundy>`, więc prefiks „trip_179" był wspólny dla miesięcy wpisów. Teraz stały skrót całego id (`FileNames.shortHash`, FNV-1a). Migracja nazw obejmuje obie starsze reguły i przejmuje stary plik **tylko wtedy, gdy leży w nim ten sam dokument**
+- [x] **Usunięcie ratownika z kartoteki kasowało jego nazwisko** we wszystkich dawnych przejazdach alarmowych (karty drukowały się bez kierowcy)
+- [x] **Listy nie odświeżały się po synchronizacji** — raport kolegi pojawiał się dopiero po restarcie aplikacji. Teraz wszystkie listy i dane jednostki odświeżają się po każdym pobraniu, także po częściowo udanym
+- [x] **Wylogowanie kasowało pełną nazwę jednostki, ulicę remizy i sparowaną drukarkę**, a zostawiało zapisane połączenie — po restarcie aplikacja sama łączyła się z powrotem ze starą jednostką, także na innym koncie
+- [x] Szybkie pobranie raportów przed kreatorem od razu uzgadnia ewidencję (nie w trakcie pełnej synchronizacji)
+
+### Środowisko
+- [x] **Generator adapterów Hive nie działał od fix/038** — `?normsNotice` (nowa składnia Darta) wywracał analizator w `hive_generator`, więc `build_runner` nie generował niczego dla całego projektu. Nikt tego nie zauważył, bo od tamtej pory nie zmieniano modeli. Zamienione na `if (x != null) x` z komentarzem
+- [x] **Wymagany Flutter ≥ 3.44** zapisany jawnie w `pubspec.yaml` — chore/037 podniósł go po cichu (`print_bluetooth_thermal` 1.2.4), więc na komputerze z 3.41 nie działało nawet `pub get`. Ten komputer podniesiony do 3.47.5
+- [x] Testy: **237** (było 202) — scenariusz zgłoszenia, dwa wozy i „ping-pong", brak uprawnień, nocna akcja vs literówka, raport chwilowo nieobecny, stempel zamrożenia, plik ze starej wersji, data badań, skrót nazwy pliku z wartościami wzorcowymi
+
+### Do zrobienia — znalezione przy przeglądzie, poza zakresem tej gałęzi
+Kolejność według wagi.
+
+**Przed rozdaniem kolejnej wersji**
+- [ ] **Klucz wydań jest tylko na drugim komputerze** (`C:/Users/Lenovo/.keys/`). APK zbudowany na tym komputerze podpisuje się kluczem debug **bez ostrzeżenia** — nie zaktualizuje 1.6.0 u kolegów. Wydania budować tam albo przenieść keystore i `key.properties` (bezpiecznie, nie przez repo). Rozważyć, żeby build release bez `key.properties` kończył się błędem zamiast cicho spadać na klucz debug. I potwierdzić, że keystore ma kopię poza komputerem
+- [ ] **SHA-1 klucza wydań w Google Cloud** — nadal nie dopisany (patrz „Przed publikacją"). Bez tego 1.6.x logowanie zwraca błąd 10
+- [ ] **Tryb ekranu zgody OAuth** — w „Testing" zalogują się tylko konta dopisane jako testerzy, a zgoda wygasa po 7 dniach. Do sprawdzenia razem z SHA-1
+- [ ] **Wszyscy w jednostce na tej samej wersji** — stare wersje nie znają ochrony poprawek ani daty badań. Rozważyć minimalną wersję w `unit_config.json` z komunikatem „zaktualizuj"
+
+**Synchronizacja — osobna gałąź**
+- [ ] **Usuwanie nie działa w jednostce** — usunięty raport, przejazd czy przekazanie wraca z Dysku przy najbliższej synchronizacji (plik zostaje, pobieranie dodaje go z powrotem). Nie da się też usunąć danych osoby (RODO). Potrzebne znaczniki usunięcia respektowane przy pobieraniu
+- [ ] **Listy ratowników i pojazdów bez stempli per wpis** — wygrywa telefon, który wysłał ostatni; edycja administratora może zostać losowo cofnięta. Potrzebne `updatedAt` per wpis i scalanie po id
+- [ ] **Token Google nie jest odświeżany** — `GoogleAuthService` pobiera nagłówki raz (przy logowaniu/starcie), a `GoogleDriveService` trzyma klienta z nimi na stałe. Token żyje ok. godzinę, więc aplikacja trzymana dłużej w tle dostaje 401 przy każdej automatycznej synchronizacji, aż do restartu. Potwierdzone w kodzie; poprawka (świeże `authHeaders` przed synchronizacją) wymaga testu z prawdziwym logowaniem
+- [ ] Wysyłka wszystkich dokumentów co 5 minut (ok. 3 wywołania API na rekord) — wysyłać tylko zmienione
+- [ ] Jeden uszkodzony plik na Dysku przerywa całą synchronizację — parsować każdy plik osobno
+- [ ] Duplikaty plików po zmianie reguł nazw, gdy telefony są na różnych wersjach — docelowo dopasowanie po id rekordu (`appProperties`), nie po nazwie
+- [ ] Test na **dwóch telefonach z różnymi kontami Google**
+
+**Druk**
+- [ ] **Druk BT karty drogowej drukuje tylko pierwszą stronę** — `BluetoothPrintService` rasteryzuje `.first`, a karta ma dwie strony, więc **rozliczenie paliwa nigdy nie wychodzi** na drukarce BT (komunikat mimo to mówi „Wysłano")
+- [ ] Układ rozliczenia na karcie drogowej łamie asercję biblioteki `pdf` (`childSize <= maxChildExtent`) — w trybie debug wydruk karty się wywala, w release może przycinać pole. Brak testu generowania karty
+
+**Drobne**
+- [ ] „Skąd" celowo wyczyszczone wraca przy starcie (nie da się odróżnić „puste, bo stare" od „puste celowo")
+- [ ] Przekazanie mienia: zmiana powiązanego wyjazdu nadpisuje ręcznie wpisane miejsce, datę i **godzinę** (bierze godzinę wyjazdu, nie przekazania)
+- [ ] Nocna akcja z drugim wozem wyjeżdżającym po północy — jego przejazd ma datę D+1 i nie liczy się do godzin raportu
+- [ ] Brak dziennika błędów do diagnozy zgłoszeń (błędy idą tylko do `debugPrint`)
+- [ ] `allowBackup` domyślnie włączony — kopia Androida wysyła bazę (nazwiska, telefony, daty badań) na prywatne konto Google członka. Decyzja do podjęcia i opisania w polityce prywatności
+
+### Czego brakuje funkcjonalnie — z perspektywy prezesa, naczelnika i gminy
+Nie ma tego w backlogu, uporządkowane od największej wartości:
+- [ ] **Zestawienie godzin do ekwiwalentu** (art. 15 ustawy o OSP) — per strażak, per miesiąc/kwartał, zaokrąglenie w górę do pełnej godziny, stawka z uchwały gminy, PDF/CSV. Dane już są w raportach. Warunek: poprawne godziny powrotu (ta gałąź)
+- [ ] **Ewidencja szkoleń, ćwiczeń i zbiórek z listą obecności** — ekwiwalent należy się też za nie, a dziś jedynym śladem jest cel przejazdu „Ćwiczenia"
+- [ ] **Kwalifikacje z datami ważności** (szkolenie podstawowe, KPP ważne 3 lata, RT, kierowca-konserwator) — dziś KPP to sam przełącznik bez daty
+- [ ] **Terminy pojazdów** (badanie techniczne, OC, przeglądy urządzeń) — wypełniłyby też pustą ramkę „Zapisy dotyczące obsług technicznych" na karcie
+- [ ] **Panel „Terminy" na ekranie głównym** — badania, kwalifikacje, pojazdy wygasające w 30 dni
+- [ ] **Wykaz ratowników** (PDF/CSV) do gminy i KP PSP — dane są, brak wydruku
+- [ ] **Historia udziału strażaka w działaniach** za wiele lat — do świadczenia ratowniczego
+- [ ] **Eksport i kopia zapasowa** (plik + import, CSV) — dziś w trybie offline dane są tylko w telefonie
+- [ ] **RODO**: „Usuń dane z tego telefonu" po odejściu z jednostki, okres przechowywania danych osób przejmujących mienie, klauzula dla członków
+- [ ] **Przeniesienie jednostki na konto OSP** — folder leży na prywatnym Gmailu założyciela
+- [ ] Numer zdarzenia z systemu PSP na potwierdzeniu udziału — do ustalenia z KP PSP
+- [ ] Ewidencja sprzętu i jego przeglądów (ODO, butle, pilarki) — duże, na później

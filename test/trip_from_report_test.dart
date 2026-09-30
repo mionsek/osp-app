@@ -315,4 +315,137 @@ void main() {
       expect(cfg().stationAddress, '');
     });
   });
+
+  group('Poprawki reczne w ewidencji (overriddenFields)', () {
+    VehicleTrip linkedTrip({List<String> overrides = const []}) => VehicleTrip(
+          id: 'trip_r1_v1',
+          vehicleId: 'v1',
+          date: DateTime(2026, 8, 10),
+          departureTime: DateTime(2026, 8, 10, 14, 30),
+          returnTime: DateTime(2026, 8, 10, 17, 45),
+          routeTo: 'Kielno, Oliwska 12',
+          driverId: 'f9',
+          driverName: 'Recznie Wpisany',
+          reportId: 'r1',
+          createdAt: DateTime(2026, 8, 10),
+          updatedAt: DateTime(2026, 8, 10),
+          overriddenFields: List.of(overrides),
+        );
+
+    final report = buildReport(crews: [
+      CrewAssignment(vehicleId: 'v1', vehicleName: 'GBA', driverId: 'f1'),
+    ]);
+    String names(String id) => 'Kowalski Jan';
+
+    test('bez ochrony raport nadpisuje godzine i kierowce', () {
+      final t = linkedTrip();
+      expect(TripFromReport.applyReportFields(t, report,
+          resolveDriverName: names), isTrue);
+      expect(t.returnTime, DateTime(2026, 8, 10, 16, 0));
+      expect(t.driverId, 'f1');
+    });
+
+    test('chronione pola zostaja - to byl blad cofajacy poprawki po starcie',
+        () {
+      final t = linkedTrip(overrides: [
+        ReportLinkedField.returnTime,
+        ReportLinkedField.driver,
+      ]);
+      TripFromReport.applyReportFields(t, report, resolveDriverName: names);
+      expect(t.returnTime, DateTime(2026, 8, 10, 17, 45));
+      expect(t.driverId, 'f9');
+      expect(t.driverName, 'Recznie Wpisany');
+    });
+
+    test('zmiana w raporcie (force) wygrywa i zdejmuje ochrone', () {
+      final t = linkedTrip(overrides: [
+        ReportLinkedField.returnTime,
+        ReportLinkedField.driver,
+      ]);
+      TripFromReport.applyReportFields(t, report,
+          resolveDriverName: names, force: {ReportLinkedField.returnTime});
+      expect(t.returnTime, DateTime(2026, 8, 10, 16, 0));
+      expect(t.overriddenFields, [ReportLinkedField.driver]);
+      expect(t.driverId, 'f9', reason: 'kierowcy raport nie zmienial');
+    });
+
+    test('overridesAgainst wskazuje tylko roznice', () {
+      final t = linkedTrip();
+      expect(
+        TripFromReport.overridesAgainst(t, report, resolveDriverName: names),
+        [ReportLinkedField.returnTime, ReportLinkedField.driver],
+      );
+      t.returnTime = report.returnTime;
+      t.driverId = 'f1';
+      t.driverName = 'Kowalski Jan';
+      expect(
+        TripFromReport.overridesAgainst(t, report, resolveDriverName: names),
+        isEmpty,
+        reason: 'cofniecie poprawki zdejmuje ochrone',
+      );
+    });
+
+    test('changedBetween liczy kierowce osobno dla kazdego wozu', () {
+      final before = buildReport(crews: [
+        CrewAssignment(vehicleId: 'v1', vehicleName: 'GBA', driverId: 'f1'),
+        CrewAssignment(vehicleId: 'v2', vehicleName: 'GLM', driverId: 'f2'),
+      ]);
+      final after = buildReport(crews: [
+        CrewAssignment(vehicleId: 'v1', vehicleName: 'GBA', driverId: 'f1'),
+        CrewAssignment(vehicleId: 'v2', vehicleName: 'GLM', driverId: 'f3'),
+      ])
+        ..returnTime = DateTime(2026, 8, 10, 18, 0);
+
+      expect(TripFromReport.changedBetween(before, after, vehicleId: 'v1'),
+          {ReportLinkedField.returnTime});
+      expect(TripFromReport.changedBetween(before, after, vehicleId: 'v2'),
+          {ReportLinkedField.returnTime, ReportLinkedField.driver});
+    });
+  });
+
+  group('TripFromReport.reportTimesFromTrips', () {
+    VehicleTrip t(String id, DateTime dep, DateTime? ret) => VehicleTrip(
+          id: id,
+          vehicleId: id,
+          date: DateTime(dep.year, dep.month, dep.day),
+          departureTime: dep,
+          returnTime: ret,
+          reportId: 'r1',
+          createdAt: dep,
+          updatedAt: dep,
+        );
+    final day = DateTime(2026, 8, 10);
+
+    test('odjazd pierwszego i powrot ostatniego zastepu', () {
+      final times = TripFromReport.reportTimesFromTrips([
+        t('a', DateTime(2026, 8, 10, 14, 30), DateTime(2026, 8, 10, 16, 0)),
+        t('b', DateTime(2026, 8, 10, 14, 35), DateTime(2026, 8, 10, 17, 10)),
+      ], reportDate: day)!;
+      expect(times.departure, DateTime(2026, 8, 10, 14, 30));
+      expect(times.returnTime, DateTime(2026, 8, 10, 17, 10));
+    });
+
+    test('powrot po polnocy liczy sie jako najpozniejszy', () {
+      final times = TripFromReport.reportTimesFromTrips([
+        t('a', DateTime(2026, 8, 10, 23, 10), DateTime(2026, 8, 11, 1, 30)),
+      ], reportDate: day)!;
+      expect(times.returnTime, DateTime(2026, 8, 11, 1, 30));
+    });
+
+    test('brak powrotu wszedzie daje null zamiast zmyslonej godziny', () {
+      final times = TripFromReport.reportTimesFromTrips([
+        t('a', DateTime(2026, 8, 10, 14, 30), null),
+      ], reportDate: day)!;
+      expect(times.returnTime, isNull);
+    });
+
+    test('przejazd z innego dnia nie wplywa na raport', () {
+      expect(
+        TripFromReport.reportTimesFromTrips([
+          t('a', DateTime(2026, 8, 12, 9, 0), DateTime(2026, 8, 12, 10, 0)),
+        ], reportDate: day),
+        isNull,
+      );
+    });
+  });
 }

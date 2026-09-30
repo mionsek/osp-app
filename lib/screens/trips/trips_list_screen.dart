@@ -261,7 +261,11 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
       children: [
         _selectors(vehicles),
         _summary(context, trips, km),
-        ?normsNotice,
+        // Nie `?normsNotice`: analizator w hive_generator nie zna tej
+        // składni i build_runner przestaje generować adaptery dla CAŁEGO
+        // projektu.
+        // ignore: use_null_aware_elements
+        if (normsNotice != null) normsNotice,
         const Divider(height: 1),
         Expanded(
           child: trips.isEmpty

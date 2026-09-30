@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/utils/bottom_inset.dart';
+import '../../core/utils/time_format.dart';
 import '../../models/models.dart';
 import '../../providers/providers.dart';
 import '../../core/theme/osp_theme.dart';
@@ -57,6 +58,13 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
   bool _dispatcherManual = false;
 
   VehicleTrip? _existing;
+
+  /// Kopia pól pochodzących z raportu z chwili otwarcia formularza.
+  ///
+  /// Nie [_existing]: Hive zwraca ciągle tę samą instancję, a uzgadnianie
+  /// w tle (start aplikacji, synchronizacja) zmienia ją w miejscu. Porównanie
+  /// z nią brało poprawkę kolegi za zmianę wpisaną tutaj.
+  VehicleTrip? _asLoaded;
   bool _loaded = false;
 
   @override
@@ -84,6 +92,20 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
       final trip = db.getTrip(widget.tripId!);
       if (trip != null) {
         _existing = trip;
+        _asLoaded = VehicleTrip(
+          id: trip.id,
+          vehicleId: trip.vehicleId,
+          date: trip.date,
+          departureTime: trip.departureTime,
+          returnTime: trip.returnTime,
+          routeTo: trip.routeTo,
+          driverId: trip.driverId,
+          driverName: trip.driverName,
+          reportId: trip.reportId,
+          createdAt: trip.createdAt,
+          updatedAt: trip.updatedAt,
+          overriddenFields: List.of(trip.overriddenFields),
+        );
         _vehicleId = trip.vehicleId;
         _date = trip.date;
         _departure = TimeOfDay.fromDateTime(trip.departureTime);
@@ -195,12 +217,10 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
   DateTime? get _returnDateTime {
     final t = _return;
     if (t == null) return null;
-    var dt = DateTime(_date.year, _date.month, _date.day, t.hour, t.minute);
-    // Powrót nad ranem po nocnym wyjeździe należy do następnego dnia.
-    if (dt.isBefore(_departureDateTime)) {
-      dt = dt.add(const Duration(days: 1));
-    }
-    return dt;
+    return OvernightReturn.adjust(
+      _departureDateTime,
+      DateTime(_date.year, _date.month, _date.day, t.hour, t.minute),
+    );
   }
 
   @override
@@ -303,13 +323,20 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
   }
 
   Widget _vehicleField(List<Vehicle> vehicles) {
+    // Przejazd z raportu ma identyfikator wyprowadzony z pojazdu. Po zmianie
+    // wozu tutaj kolejny zapis raportu tworzył „brakujący" przejazd pod tym
+    // samym identyfikatorem i kasował licznik, minuty i uwagi kierowcy.
+    final fromReport = _linkedReport != null;
     return DropdownButtonFormField<String>(
       initialValue: _vehicleId.isEmpty ? null : _vehicleId,
       isExpanded: true,
-      decoration: const InputDecoration(
+      decoration: InputDecoration(
         labelText: 'Pojazd',
-        border: OutlineInputBorder(),
-        prefixIcon: Icon(Icons.fire_truck),
+        border: const OutlineInputBorder(),
+        prefixIcon: const Icon(Icons.fire_truck),
+        helperText: fromReport
+            ? 'Z wyjazdu alarmowego — pojazd zmienisz w składzie zastępu'
+            : null,
       ),
       items: vehicles
           .map((v) => DropdownMenuItem(
@@ -321,7 +348,9 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
           (v == null || v.isEmpty) ? 'Wybierz pojazd' : null,
       // Zmiana pojazdu zmienia łańcuch licznika, więc podpowiedź trzeba
       // przeliczyć od nowa.
-      onChanged: (v) => setState(() => _vehicleId = v ?? ''),
+      onChanged: fromReport
+          ? null
+          : (v) => setState(() => _vehicleId = v ?? ''),
     );
   }
 
@@ -368,6 +397,16 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
                     border: const OutlineInputBorder(),
                     isDense: true,
                     helperText: _return == null ? 'jeszcze nie wrócił' : null,
+                    // Bez tego raz wpisanej godziny nie dało się cofnąć do
+                    // „jeszcze nie wrócił".
+                    suffixIcon: _return == null
+                        ? null
+                        : IconButton(
+                            icon: const Icon(Icons.close, size: 18),
+                            tooltip: 'Wyczyść godzinę przyjazdu',
+                            visualDensity: VisualDensity.compact,
+                            onPressed: () => setState(() => _return = null),
+                          ),
                   ),
                   child: Text(_return?.format(context) ?? '—'),
                 ),
@@ -375,7 +414,45 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
             ),
           ],
         ),
+        if (_linkedReport != null) _linkedReportNote(_linkedReport!),
       ],
+    );
+  }
+
+  /// Wyjazd alarmowy, z którego powstał ten przejazd.
+  Report? get _linkedReport {
+    final id = _existing?.reportId;
+    return id == null ? null : ref.read(databaseServiceProvider).getReport(id);
+  }
+
+  bool _canEditReport(Report report) =>
+      ref.read(syncStateProvider).canEditDocument(report.createdBy);
+
+  /// Mówi wprost, dokąd trafi zmiana godziny — wcześniej trafiała tylko do
+  /// ewidencji i tester szukał jej na próżno w raporcie.
+  Widget _linkedReportNote(Report report) {
+    final canWrite = _canEditReport(report);
+    return Padding(
+      padding: const EdgeInsets.only(top: 8, left: 4, right: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(canWrite ? Icons.link : Icons.link_off,
+              size: 16, color: Colors.grey[700]),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              canWrite
+                  ? 'Powiązany z wyjazdem nr ${report.reportNumber} — '
+                      'zmienione godziny trafią też do raportu.'
+                  : 'Powiązany z wyjazdem nr ${report.reportNumber}. Raport '
+                      'może poprawić jego autor lub administrator — tu '
+                      'zmienisz tylko ewidencję.',
+              style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -990,15 +1067,53 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
     );
 
     final notifier = ref.read(vehicleTripsProvider.notifier);
-    if (widget.isEdit) {
+    final linked = _linkedReport;
+    Report? updatedReport;
+    final asLoaded = _asLoaded;
+    if (widget.isEdit && asLoaded != null && asLoaded.reportId != null) {
+      trip.overriddenFields = List.of(asLoaded.overriddenFields);
+      updatedReport = await ref.read(databaseServiceProvider).saveTripEditedByUser(
+            trip,
+            touched: _touchedReportFields(asLoaded, trip),
+            canEditReport: linked != null && _canEditReport(linked),
+          );
+      notifier.refresh();
+      if (updatedReport != null) ref.read(reportsProvider.notifier).refresh();
+    } else if (widget.isEdit) {
       await notifier.update(trip);
     } else {
       await notifier.add(trip);
     }
 
     if (!mounted) return;
-    _snack(widget.isEdit ? 'Zapisano zmiany' : 'Przejazd dodany do ewidencji');
+    _snack(updatedReport != null
+        ? 'Zapisano. Godziny zaktualizowane też w wyjeździe nr '
+            '${updatedReport.reportNumber}.'
+        : widget.isEdit
+            ? 'Zapisano zmiany'
+            : 'Przejazd dodany do ewidencji');
     context.pop();
+  }
+
+  /// Pola pochodzące z raportu, które użytkownik zmienił w tej edycji.
+  ///
+  /// Liczone względem wartości wczytanych do formularza, a nie względem
+  /// raportu: przy kilku wozach przejazd może różnić się od raportu, choć
+  /// nikt go teraz nie ruszał.
+  static Set<String> _touchedReportFields(VehicleTrip before, VehicleTrip after) {
+    bool sameDay(DateTime a, DateTime b) =>
+        a.year == b.year && a.month == b.month && a.day == b.day;
+    return {
+      if (!sameDay(before.date, after.date) ||
+          before.departureTime != after.departureTime)
+        ReportLinkedField.departure,
+      if (before.returnTime != after.returnTime) ReportLinkedField.returnTime,
+      if (before.routeTo.trim() != after.routeTo.trim())
+        ReportLinkedField.routeTo,
+      if (before.driverId != after.driverId ||
+          before.driverName.trim() != after.driverName.trim())
+        ReportLinkedField.driver,
+    };
   }
 
   Future<bool?> _confirmOdometerConflict() {

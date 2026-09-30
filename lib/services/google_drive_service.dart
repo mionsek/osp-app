@@ -80,13 +80,37 @@ class GoogleDriveService {
   }
 
   /// List subfolders inside a folder.
-  Future<List<drive.File>> _listSubfolders(String parentId) async {
-    final result = await _api.files.list(
-      q: "'$parentId' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
-      spaces: 'drive',
-      $fields: 'files(id, name)',
-    );
-    return result.files ?? [];
+  Future<List<drive.File>> _listSubfolders(String parentId) => _listAll(
+        "'$parentId' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
+        fields: 'id, name',
+      );
+
+  /// Wszystkie pliki pasujące do [query], strona po stronie.
+  ///
+  /// Bez stronicowania Dysk oddaje najwyżej 100 plików naraz. Folder
+  /// przejazdów przekracza to w kilka miesięcy, a folder raportów w roku
+  /// pracowitej jednostki — reszta po cichu nie docierała do kolegów ani na
+  /// nowy telefon.
+  Future<List<drive.File>> _listAll(
+    String query, {
+    required String fields,
+    String? orderBy,
+  }) async {
+    final files = <drive.File>[];
+    String? pageToken;
+    do {
+      final result = await _api.files.list(
+        q: query,
+        spaces: 'drive',
+        pageSize: 1000,
+        pageToken: pageToken,
+        orderBy: orderBy,
+        $fields: 'nextPageToken, files($fields)',
+      );
+      files.addAll(result.files ?? const []);
+      pageToken = result.nextPageToken;
+    } while (pageToken != null);
+    return files;
   }
 
   /// Find reports subfolder inside unit folder.
@@ -209,27 +233,36 @@ class GoogleDriveService {
   /// If the file already exists (by name), it's updated. Otherwise created.
   /// Zapisuje dane pod nazwą [fileName], nadpisując istniejący plik.
   ///
-  /// [legacyFileName] to nazwa, jaką ten sam dokument miał w starszej wersji
-  /// aplikacji. Gdy pliku nie ma pod nazwą bieżącą, szukamy go pod starą i —
-  /// jeśli jest — **aktualizujemy go razem ze zmianą nazwy**, bo `files.update`
-  /// przyjmuje nazwę w tym samym wywołaniu. Bez tego zmiana reguły nazywania
-  /// zostawiłaby na Dysku stary plik i utworzyła obok drugi z tą samą treścią,
-  /// a jednostka zobaczyłaby duplikaty każdego raportu.
+  /// [legacyFileNames] to nazwy, jakie ten sam dokument miał w starszych
+  /// wersjach aplikacji — od najnowszej. Gdy pliku nie ma pod nazwą bieżącą,
+  /// szukamy go pod starymi i — jeśli jest — **aktualizujemy go razem ze
+  /// zmianą nazwy**, bo `files.update` przyjmuje nazwę w tym samym wywołaniu.
+  /// Bez tego zmiana reguły nazywania zostawiłaby na Dysku stary plik
+  /// i utworzyła obok drugi z tą samą treścią, a jednostka zobaczyłaby
+  /// duplikaty każdego raportu.
   Future<String> writeJsonFile(
     String folderId,
     String fileName,
     Map<String, dynamic> data, {
-    String? legacyFileName,
+    Iterable<String> legacyFileNames = const [],
   }) async {
     final content = utf8.encode(const JsonEncoder.withIndent('  ').convert(data));
     final media = drive.Media(Stream.value(content), content.length);
 
     // Check if file exists
     var existingId = await _findFileId(folderId, fileName);
-    if (existingId == null &&
-        legacyFileName != null &&
-        legacyFileName != fileName) {
-      existingId = await _findFileId(folderId, legacyFileName);
+    for (final legacy in legacyFileNames) {
+      if (existingId != null) break;
+      if (legacy == fileName) continue;
+      final legacyId = await _findFileId(folderId, legacy);
+      if (legacyId == null) continue;
+      // Stara nazwa bywała wspólna dla kilku dokumentów (np. dwa przejazdy
+      // wozu z jednego dnia). Przejmujemy plik tylko wtedy, gdy leży w nim
+      // ten sam dokument — inaczej nadpisalibyśmy jedyną kopię cudzego.
+      final legacyData = await readJsonFile(legacyId);
+      if (legacyData != null && legacyData['id'] == data['id']) {
+        existingId = legacyId;
+      }
     }
 
     if (existingId != null) {
@@ -277,15 +310,11 @@ class GoogleDriveService {
   }
 
   /// List all JSON files in a folder.
-  Future<List<drive.File>> listJsonFiles(String folderId) async {
-    final result = await _api.files.list(
-      q: "'$folderId' in parents and mimeType = 'application/json' and trashed = false",
-      spaces: 'drive',
-      $fields: 'files(id, name, modifiedTime)',
-      orderBy: 'modifiedTime desc',
-    );
-    return result.files ?? [];
-  }
+  Future<List<drive.File>> listJsonFiles(String folderId) => _listAll(
+        "'$folderId' in parents and mimeType = 'application/json' and trashed = false",
+        fields: 'id, name, modifiedTime',
+        orderBy: 'modifiedTime desc',
+      );
 
   /// Delete a file by ID.
   Future<void> deleteFile(String fileId) async {

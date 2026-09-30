@@ -36,6 +36,9 @@ void main() {
       Hive.registerAdapter(PropertyHandoverAdapter());
     }
     if (!Hive.isAdapterRegistered(7)) Hive.registerAdapter(VehicleTripAdapter());
+    if (!Hive.isAdapterRegistered(8)) {
+      Hive.registerAdapter(TripEquipmentUseAdapter());
+    }
 
     await Future.wait([
       Hive.openBox<Vehicle>('vehicles'),
@@ -356,6 +359,227 @@ void main() {
           k.toString(): [...db.threatsBox.get(k)!.subtypes]
       };
       expect(thrice, once);
+    });
+  });
+
+  group('saveTripEditedByUser — poprawki z ewidencji', () {
+    const ret = ReportLinkedField.returnTime;
+
+    Future<void> seed(Report r) async {
+      await db.addReport(r);
+      await db.backfillTripsFromReports(stationAddress: 'Kielno');
+    }
+
+    VehicleTrip of(String vehicleId) =>
+        db.getAllTrips().firstWhere((t) => t.vehicleId == vehicleId);
+
+    Report twoVehicles() => report()
+      ..crewAssignments = [
+        CrewAssignment(vehicleId: 'v1', vehicleName: 'GBA'),
+        CrewAssignment(vehicleId: 'v2', vehicleName: 'GLM'),
+      ];
+
+    test('zgloszenie testera: godzina z ewidencji trafia do raportu', () async {
+      await seed(report());
+      final t = of('v1')..returnTime = DateTime(2026, 8, 10, 16, 0);
+
+      final updated =
+          await db.saveTripEditedByUser(t, touched: {ret}, canEditReport: true);
+
+      expect(updated, isNotNull);
+      expect(db.getReport('r1')!.returnTime, DateTime(2026, 8, 10, 16, 0));
+      expect(db.getTrip(t.id)!.overriddenFields, isEmpty,
+          reason: 'jeden woz: zgodny z raportem, idzie za jego zmianami');
+    });
+
+    test('poprawka przezywa uzgadnianie przy starcie (dawniej ginela)',
+        () async {
+      await seed(report());
+      final t = of('v1')..returnTime = DateTime(2026, 8, 10, 16, 0);
+      await db.saveTripEditedByUser(t, touched: {ret}, canEditReport: false);
+
+      expect(db.getReport('r1')!.returnTime, isNull,
+          reason: 'bez uprawnien raport zostaje nietkniety');
+
+      await db.reconcileTripsWithReports();
+
+      expect(db.getTrip(t.id)!.returnTime, DateTime(2026, 8, 10, 16, 0));
+    });
+
+    test('recznie wpisany kierowca przezywa uzgadnianie', () async {
+      await seed(report());
+      final t = of('v1')..driverName = 'Nowak Adam';
+      await db.saveTripEditedByUser(t,
+          touched: {ReportLinkedField.driver}, canEditReport: true);
+
+      await db.reconcileTripsWithReports();
+
+      expect(db.getTrip(t.id)!.driverName, 'Nowak Adam');
+    });
+
+    test('dwa wozy: powrot jednego nie jest zmyslonym powrotem drugiego',
+        () async {
+      await seed(twoVehicles());
+
+      final a = of('v1')..returnTime = DateTime(2026, 8, 10, 10, 0);
+      await db.saveTripEditedByUser(a, touched: {ret}, canEditReport: true);
+
+      expect(db.getReport('r1')!.returnTime, DateTime(2026, 8, 10, 10, 0));
+      await db.reconcileTripsWithReports();
+      expect(of('v2').returnTime, isNull,
+          reason: 'GLM mogl byc jeszcze na akcji');
+    });
+
+    test('dwa wozy: kolejne poprawki nie skacza miedzy przejazdami', () async {
+      await seed(twoVehicles());
+
+      final a = of('v1')..returnTime = DateTime(2026, 8, 10, 10, 0);
+      await db.saveTripEditedByUser(a, touched: {ret}, canEditReport: true);
+      final b = of('v2')..returnTime = DateTime(2026, 8, 10, 11, 0);
+      await db.saveTripEditedByUser(b, touched: {ret}, canEditReport: true);
+
+      expect(db.getReport('r1')!.returnTime, DateTime(2026, 8, 10, 11, 0),
+          reason: 'raport: powrot ostatniego zastepu');
+
+      await db.reconcileTripsWithReports();
+      await db.reconcileTripsWithReports();
+      expect(of('v1').returnTime, DateTime(2026, 8, 10, 10, 0));
+      expect(of('v2').returnTime, DateTime(2026, 8, 10, 11, 0));
+    });
+
+    test('godzina w raporcie nigdy nie zmienia sie na pusta', () async {
+      await seed(report(returnTime: DateTime(2026, 8, 10, 11, 0)));
+      final t = of('v1')..returnTime = null;
+
+      await db.saveTripEditedByUser(t, touched: {ret}, canEditReport: true);
+
+      expect(db.getReport('r1')!.returnTime, DateTime(2026, 8, 10, 11, 0));
+      expect(db.getTrip(t.id)!.returnTime, isNull,
+          reason: 'wyczyszczona godzina w ewidencji zostaje wyczyszczona');
+      await db.reconcileTripsWithReports();
+      expect(db.getTrip(t.id)!.returnTime, isNull);
+    });
+
+    test('zapis samego licznika nie rusza raportu ani ochrony', () async {
+      await seed(report(returnTime: DateTime(2026, 8, 10, 11, 0)));
+      final t = of('v1')
+        ..returnTime = DateTime(2026, 8, 10, 12, 0)
+        ..overriddenFields = [ret];
+      await db.updateTrip(t);
+      final reportStamp = db.getReport('r1')!.updatedAt;
+
+      final edited = db.getTrip(t.id)!..odometerEnd = 1042;
+      expect(
+        await db.saveTripEditedByUser(edited,
+            touched: const {}, canEditReport: true),
+        isNull,
+      );
+      expect(db.getReport('r1')!.updatedAt, reportStamp);
+      expect(db.getTrip(t.id)!.overriddenFields, [ret]);
+      expect(db.getTrip(t.id)!.returnTime, DateTime(2026, 8, 10, 12, 0));
+    });
+
+    test('raport chwilowo nieobecny: poprawka dostaje ochrone na jego powrot',
+        () async {
+      await seed(report());
+      final t = of('v1')..returnTime = DateTime(2026, 8, 10, 16, 0);
+      final r = db.getReport('r1')!;
+      await db.deleteReport('r1');
+
+      await db.saveTripEditedByUser(t, touched: {ret}, canEditReport: true);
+      expect(db.getTrip(t.id)!.overriddenFields, [ret]);
+
+      await db.addReport(r);
+      await db.reconcileTripsWithReports();
+      expect(db.getTrip(t.id)!.returnTime, DateTime(2026, 8, 10, 16, 0));
+    });
+
+    test('zamrozenie drugiego wozu jest scisle nowsze od raportu', () async {
+      await seed(twoVehicles());
+      final a = of('v1')..returnTime = DateTime(2026, 8, 10, 10, 0);
+      await db.saveTripEditedByUser(a, touched: {ret}, canEditReport: true);
+
+      expect(of('v2').updatedAt.isAfter(db.getReport('r1')!.updatedAt), isTrue,
+          reason: 'przy remisie inny telefon nie przyjalby zamrozenia');
+    });
+
+    test('przejazd przeniesiony na inny dzien nie zmienia godzin raportu',
+        () async {
+      await seed(report());
+      final t = of('v1')
+        ..date = DateTime(2026, 8, 11)
+        ..departureTime = DateTime(2026, 8, 11, 9, 0)
+        ..returnTime = DateTime(2026, 8, 11, 10, 0);
+
+      expect(
+        await db.saveTripEditedByUser(t,
+            touched: {ReportLinkedField.departure, ret}, canEditReport: true),
+        isNull,
+      );
+      expect(db.getReport('r1')!.departureTime, DateTime(2026, 8, 10, 8, 0));
+      await db.reconcileTripsWithReports();
+      expect(db.getTrip(t.id)!.date, DateTime(2026, 8, 11));
+    });
+  });
+
+  group('uzgadnianie w tle', () {
+    test('przejazd dostaje stempel raportu, nie biezacy czas', () async {
+      final r = report();
+      await db.addReport(r);
+      await db.backfillTripsFromReports(stationAddress: 'Kielno');
+
+      r
+        ..returnTime = DateTime(2026, 8, 10, 16, 0)
+        ..updatedAt = DateTime(2026, 8, 10, 17, 0);
+      await db.updateReport(r);
+      await db.reconcileTripsWithReports();
+
+      expect(db.getAllTrips().single.updatedAt, DateTime(2026, 8, 10, 17, 0),
+          reason: 'stempel teraz przebijal prawdziwe edycje z innych telefonow');
+    });
+
+    test('usuniety z kartoteki kierowca zostaje w dawnych przejazdach',
+        () async {
+      final r = report()
+        ..crewAssignments = [
+          CrewAssignment(vehicleId: 'v1', vehicleName: 'GBA', driverId: 'f1'),
+        ];
+      await db.addFirefighter(
+          Firefighter(id: 'f1', firstName: 'Jan', lastName: 'Kowalski', rank: ''));
+      await db.addReport(r);
+      await db.backfillTripsFromReports(stationAddress: 'Kielno');
+      expect(db.getAllTrips().single.driverName, 'Kowalski Jan');
+
+      await db.deleteFirefighter('f1');
+      await db.reconcileTripsWithReports();
+
+      expect(db.getAllTrips().single.driverName, 'Kowalski Jan');
+    });
+  });
+
+  group('fixOvernightReturnTimes', () {
+    test('powrot po polnocy przechodzi na nastepny dzien', () async {
+      final r = report()
+        ..departureTime = DateTime(2026, 8, 10, 23, 10)
+        ..returnTime = DateTime(2026, 8, 10, 1, 30);
+      await db.addReport(r);
+
+      expect(await db.fixOvernightReturnTimes(), 1);
+      final after = db.getReport('r1')!;
+      expect(after.returnTime, DateTime(2026, 8, 11, 1, 30));
+      expect(after.updatedAt, DateTime(2026, 8, 10),
+          reason: 'bez stempla - inaczej lawina zapisow na Dysk');
+      expect(await db.fixOvernightReturnTimes(), 0, reason: 'idempotentne');
+    });
+
+    test('literowki w godzinie nie zamienia w akcje na dobe', () async {
+      final r = report()
+        ..departureTime = DateTime(2026, 8, 10, 14, 50)
+        ..returnTime = DateTime(2026, 8, 10, 14, 5);
+      await db.addReport(r);
+
+      expect(await db.fixOvernightReturnTimes(), 0);
+      expect(db.getReport('r1')!.returnTime, DateTime(2026, 8, 10, 14, 5));
     });
   });
 }

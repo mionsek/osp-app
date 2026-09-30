@@ -1,5 +1,6 @@
 import 'package:hive_flutter/hive_flutter.dart';
 import '../core/constants/threat_types.dart';
+import '../core/utils/time_format.dart';
 import '../models/models.dart';
 import 'trip_from_report.dart';
 import 'trip_odometer.dart';
@@ -143,7 +144,9 @@ class DatabaseService {
 
   List<Report> getAllReports() {
     final reports = reportsBox.values.toList();
-    reports.sort((a, b) => b.date.compareTo(a.date));
+    // Po godzinie wyjazdu, nie po samej dacie: raporty z jednego dnia
+    // układały się inaczej przy każdym odczycie.
+    reports.sort((a, b) => b.departureTime.compareTo(a.departureTime));
     return reports;
   }
 
@@ -328,7 +331,7 @@ class DatabaseService {
       final trips = TripFromReport.build(
         report: report,
         stationAddress: stationAddress,
-        resolveDriverName: (id) => getFirefighter(id)?.lastNameFirst ?? '',
+        resolveDriverName: _driverNameOf,
         existingVehicleIdsForReport: const {},
         createdBy: report.createdBy,
         // Znacznik z raportu, nie „teraz" — patrz komentarz w TripFromReport.
@@ -380,7 +383,7 @@ class DatabaseService {
       final updated = TripFromReport.applyReportFields(
         trip,
         report,
-        resolveDriverName: (id) => getFirefighter(id)?.lastNameFirst ?? '',
+        resolveDriverName: _driverNameOf,
       );
       if (!updated) continue;
 
@@ -394,6 +397,163 @@ class DatabaseService {
     }
     return changed;
   }
+
+  /// Zapis przejazdu poprawionego ręcznie w ewidencji, gdy jest powiązany
+  /// z raportem wyjazdu.
+  ///
+  /// Dotąd synchronizacja szła tylko w jedną stronę: raport → przejazd.
+  /// Godzina uzupełniona w ewidencji nie trafiała do raportu, a przy
+  /// następnym starcie aplikacji uzgadnianie cofało ją po cichu do wartości
+  /// z raportu — często pustej.
+  ///
+  /// Teraz:
+  /// * godziny, które użytkownik zmienił ([touched]), wracają do raportu —
+  ///   gdy [canEditReport] i przejazd jest z dnia raportu — jako odjazd
+  ///   pierwszego i powrót ostatniego zastępu,
+  /// * zmiana godzin jednego wozu **nigdy** nie zmienia przejazdu drugiego:
+  ///   jego dotychczasowe godziny zostają zamrożone jako poprawka ręczna.
+  ///   Inaczej powrót jednego wozu wpisywał się jako zmyślony powrót
+  ///   drugiego, który jeszcze był na akcji,
+  /// * pole dotknięte w formularzu, a nadal różne od raportu, trafia do
+  ///   [VehicleTrip.overriddenFields] i uzgadnianie już go nie ruszy.
+  ///
+  /// Godzina w raporcie nigdy nie zmienia się na pustą — brak powrotu we
+  /// wszystkich przejazdach znaczy „nie wiadomo", a nie „nie wrócił".
+  ///
+  /// Zwraca raport, jeśli jego godziny się zmieniły — żeby ekran mógł o tym
+  /// powiedzieć.
+  Future<Report?> saveTripEditedByUser(
+    VehicleTrip trip, {
+    required Set<String> touched,
+    required bool canEditReport,
+  }) async {
+    final reportId = trip.reportId;
+    final report = reportId == null ? null : getReport(reportId);
+    if (report == null) {
+      // Raportu chwilowo nie ma (np. skasowany tu, a wróci z Dysku) —
+      // poprawki muszą przetrwać do jego powrotu.
+      trip.overriddenFields = ReportLinkedField.all
+          .where((f) => trip.overriddenFields.contains(f) || touched.contains(f))
+          .toList();
+      await updateTrip(trip);
+      return null;
+    }
+
+    // Rodzeństwo mogło nie przejść uzgadniania (np. raport przyszedł przez
+    // szybkie pobranie przed kreatorem) — bez tego suma godzin liczyłaby
+    // się z nieaktualnych wartości.
+    final siblings = tripsBox.values
+        .where((t) => t.reportId == report.id && t.id != trip.id)
+        .toList();
+    final affectedVehicles = <String>{trip.vehicleId};
+    for (final s in siblings) {
+      if (TripFromReport.applyReportFields(s, report,
+          resolveDriverName: _driverNameOf)) {
+        await tripsBox.put(s.id, s);
+        affectedVehicles.add(s.vehicleId);
+      }
+    }
+
+    Report? changedReport;
+    final writeBack = touched.intersection(
+        {ReportLinkedField.departure, ReportLinkedField.returnTime});
+    if (canEditReport &&
+        writeBack.isNotEmpty &&
+        _sameDay(trip.date, report.date)) {
+      final times = TripFromReport.reportTimesFromTrips(
+        [trip, ...siblings],
+        reportDate: report.date,
+      )!;
+      final newDeparture = writeBack.contains(ReportLinkedField.departure)
+          ? times.departure
+          : report.departureTime;
+      final newReturn = writeBack.contains(ReportLinkedField.returnTime)
+          ? (times.returnTime ?? report.returnTime)
+          : report.returnTime;
+
+      if (newDeparture != report.departureTime ||
+          newReturn != report.returnTime) {
+        final now = DateTime.now();
+        // Zamrożenie musi być ściśle nowsze od raportu. Przy remisie inny
+        // telefon, który już uzgodnił przejazd z nowym raportem (ten sam
+        // stempel), nie przyjąłby zamrożenia i wpisałby cudzą godzinę.
+        final frozenStamp = now.add(const Duration(milliseconds: 1));
+        for (final s in siblings) {
+          final frozen = <String>{
+            if (newDeparture != report.departureTime &&
+                s.departureTime != newDeparture)
+              ReportLinkedField.departure,
+            if (newReturn != report.returnTime && s.returnTime != newReturn)
+              ReportLinkedField.returnTime,
+          }.difference(s.overriddenFields.toSet());
+          if (frozen.isEmpty) continue;
+          s
+            ..overriddenFields = [...s.overriddenFields, ...frozen]
+            ..updatedAt = frozenStamp;
+          await tripsBox.put(s.id, s);
+        }
+
+        report
+          ..departureTime = newDeparture
+          ..returnTime = newReturn
+          ..updatedAt = now
+          ..syncStatus = 'local';
+        await reportsBox.put(report.id, report);
+        changedReport = report;
+      }
+    }
+
+    final differing = TripFromReport.overridesAgainst(
+      trip,
+      report,
+      resolveDriverName: _driverNameOf,
+    ).toSet();
+    final flags = trip.overriddenFields.toSet()
+      ..removeAll(touched)
+      ..addAll(touched.intersection(differing));
+    trip.overriddenFields = ReportLinkedField.all.where(flags.contains).toList();
+
+    // Pola niedotknięte, a nieaktualne (formularz wczytał stare wartości),
+    // od razu wyrównujemy z raportem.
+    TripFromReport.applyReportFields(trip, report,
+        resolveDriverName: _driverNameOf);
+    await tripsBox.put(trip.id, trip);
+
+    for (final vehicleId in affectedVehicles) {
+      await _rechainVehicle(vehicleId);
+    }
+    return changedReport;
+  }
+
+  /// Naprawia raporty, w których powrót wypada przed wyjazdem.
+  ///
+  /// Kreator składał godzinę powrotu zawsze z datą wyjazdu, więc akcja od
+  /// 23:10 do 1:30 zapisywała się jako powrót 21 godzin **przed** wyjazdem —
+  /// ujemny czas w statystykach i taka sama godzina w ewidencji. Przesuwamy
+  /// o dobę według [OvernightReturn.adjust]; literówki (np. 14:50 → 14:05)
+  /// zostają, żeby statystyki dalej pokazywały je jako do poprawki.
+  ///
+  /// Bez zmiany `updatedAt`: każde urządzenie liczy to samo, więc nie ma
+  /// czego rozsyłać, a stempel „teraz" wywołałby lawinę zapisów na Dysk.
+  Future<int> fixOvernightReturnTimes() async {
+    var fixed = 0;
+    for (final report in reportsBox.values.toList()) {
+      final ret = report.returnTime;
+      if (ret == null) continue;
+      final adjusted = OvernightReturn.adjust(report.departureTime, ret);
+      if (adjusted == ret) continue;
+      report.returnTime = adjusted;
+      await reportsBox.put(report.id, report);
+      fixed++;
+    }
+    return fixed;
+  }
+
+  String _driverNameOf(String firefighterId) =>
+      getFirefighter(firefighterId)?.lastNameFirst ?? '';
+
+  static bool _sameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
 
   /// Uzupełnia „skąd" w przejazdach, które powstały, zanim jednostka miała
   /// zapisany adres remizy.

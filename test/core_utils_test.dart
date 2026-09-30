@@ -163,6 +163,51 @@ void main() {
     });
   });
 
+  group('OvernightReturn.adjust', () {
+    final dep = DateTime(2026, 8, 10, 23, 10);
+
+    test('nocna akcja: powrot nad ranem przechodzi na nastepny dzien', () {
+      expect(OvernightReturn.adjust(dep, DateTime(2026, 8, 10, 1, 30)),
+          DateTime(2026, 8, 11, 1, 30));
+    });
+
+    test('literowka w godzinie zostaje - statystyki pokaza ja do poprawki', () {
+      final d = DateTime(2026, 8, 10, 14, 50);
+      final typo = DateTime(2026, 8, 10, 14, 5);
+      expect(OvernightReturn.adjust(d, typo), typo,
+          reason: 'inaczej akcja trwalaby 23 h 15 min');
+    });
+
+    test('poprawny powrot bez zmian', () {
+      final ret = DateTime(2026, 8, 10, 23, 50);
+      expect(OvernightReturn.adjust(dep, ret), ret);
+    });
+
+    test('granica: 12 godzin to jeszcze noc', () {
+      final d = DateTime(2026, 8, 10, 20, 0);
+      expect(OvernightReturn.adjust(d, DateTime(2026, 8, 10, 8, 0)),
+          DateTime(2026, 8, 11, 8, 0));
+      expect(OvernightReturn.adjust(d, DateTime(2026, 8, 10, 8, 1)),
+          DateTime(2026, 8, 10, 8, 1));
+    });
+  });
+
+  group('FileNames.shortHash', () {
+    test('wzorcowe wartosci FNV-1a - identyczne na kazdym telefonie', () {
+      expect(FileNames.shortHash(''), '811c9dc5');
+      expect(FileNames.shortHash('a'), 'e40c292c');
+    });
+
+    test('rozroznia przejazdy o wspolnym prefiksie id', () {
+      // Stara nazwa pliku brala 8 pierwszych znakow: oba dawaly „trip_179",
+      // wiec dwa przejazdy wozu z jednego dnia trafialy do jednego pliku.
+      const a = 'trip_1790000000000_1';
+      const b = 'trip_1790000360000_7';
+      expect(FileNames.shortHash(a), isNot(FileNames.shortHash(b)));
+      expect(FileNames.shortHash(a), hasLength(8));
+    });
+  });
+
   group('TimeFormat', () {
     test('godzina zawsze dwucyfrowa', () {
       expect(TimeFormat.hhmm(DateTime(2026, 8, 9, 7, 5)), '07:05');
