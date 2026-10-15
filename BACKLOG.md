@@ -360,7 +360,7 @@ Obecnie druk startuje od razu po kliknięciu.
 
 ### Przed publikacją w Play Store
 - [x] **Własny klucz podpisu** — dziś APK jest podpisany kluczem debug. Po zmianie klucza Android potraktuje aplikację jako inną i **każdy będzie musiał odinstalować przed aktualizacją, tracąc dane lokalne**. Im więcej osób dostanie wersję na kluczu debug, tym boleśniejsze. Wymaga dopisania nowego odcisku SHA-1 do klienta OAuth w Google Cloud, inaczej przestanie działać logowanie Google (błąd 10). **Zrobione w chore/039** — patrz sekcja niżej
-- [ ] **Dopisać SHA-1 klucza wydań do Google Cloud** — nowy klient OAuth typu Android, pakiet `pl.osp.osp_app`, SHA-1 `59:9C:CA:C1:B1:E1:B1:35:5E:76:11:11:B0:53:B8:51:78:6A:FD:6D` (klucz z chore/043; poprzedni `B4:8D:…` przepadł razem z laptopem Lenovo). **Do czasu dopisania logowanie Google zwraca błąd 10** i działa tylko tryb offline
+- [ ] **Dopisać SHA-1 klucza wydań do Google Cloud** — klient OAuth typu Android „Raporty OSP – wydania" już istnieje (od 30.09.2026), trzeba w nim **podmienić odcisk**. Pakiet `pl.osp.osp_app`, SHA-1 `AC:02:42:F2:89:F3:E9:75:E1:04:9E:54:0F:4A:35:F0:40:36:35:BB` (klucz z chore/045; `59:9C:…` z chore/043 przepadł z poprzednim komputerem, a wcześniejszy `B4:8D:…` przepadł razem z laptopem Lenovo). **Do czasu dopisania logowanie Google zwraca błąd 10** i działa tylko tryb offline
 - [ ] Grafiki do sklepu: ikona 512×512, feature graphic 1024×500, min. 2 screenshoty
 - [ ] Polityka prywatności — po usunięciu reklam aplikacja nie zbiera praktycznie nic (dane leżą na Dysku Google użytkownika), więc mieści się w akapicie
 - [ ] (opcjonalnie) Ikona monochromatyczna `<monochrome>` w adaptive icon — motywy Android 13+
@@ -711,7 +711,7 @@ Kolejność według wagi.
 
 **Przed rozdaniem kolejnej wersji**
 - [x] ~~Klucz wydań jest tylko na drugim komputerze~~ — laptopa już nie ma, klucz przepadł; zastąpiony nowym w chore/043 niżej. Pierwotny opis: (`C:/Users/Lenovo/.keys/`). APK zbudowany na tym komputerze podpisuje się kluczem debug **bez ostrzeżenia** — nie zaktualizuje 1.6.0 u kolegów. Wydania budować tam albo przenieść keystore i `key.properties` (bezpiecznie, nie przez repo). Rozważyć, żeby build release bez `key.properties` kończył się błędem zamiast cicho spadać na klucz debug. I potwierdzić, że keystore ma kopię poza komputerem
-- [ ] **SHA-1 klucza wydań w Google Cloud** — nowy odcisk z chore/043 (patrz „Przed publikacją"). Bez tego 1.6.1 zwraca przy logowaniu błąd 10
+- [ ] **SHA-1 klucza wydań w Google Cloud** — odcisk klucza z chore/045 (patrz „Przed publikacją"). Bez tego wersja wydania zwraca przy logowaniu błąd 10
 - [ ] **Tryb ekranu zgody OAuth** — w „Testing" zalogują się tylko konta dopisane jako testerzy, a zgoda wygasa po 7 dniach. Do sprawdzenia razem z SHA-1
 - [x] **Wszyscy w jednostce na tej samej wersji** (fix/044: `syncFormat` w `unit_config.json`) — stare wersje nie znają ochrony poprawek ani daty badań. Rozważyć minimalną wersję w `unit_config.json` z komunikatem „zaktualizuj"
 
@@ -765,9 +765,12 @@ wymagałby kolejnej zmiany przed Sklepem Play).
 - [x] Kopia klucza z hasłem i instrukcją przygotowana w `Pobrane/OSP-klucz-KOPIA`
 
 ### Do zrobienia przez Dawida
-- [ ] **Kopia klucza w dwóch miejscach poza komputerem** (pendrive + prywatny Dysk), hasło w menedżerze haseł, potem usunąć folder z „Pobrane". Utrata klucza drugi raz = znowu wszyscy odinstalowują
-- [ ] **Nowy klient OAuth w Google Cloud** z nowym SHA-1 (patrz „Przed publikacją"). Stary klient z odciskiem `D0:EB:…` zostaje — to klucz debug tego komputera, potrzebny do testów na emulatorze
-- [ ] **Przejście kolegów na 1.6.1**: najpierw synchronizacja na starej wersji (żeby dane były na Dysku), potem odinstalowanie, instalacja 1.6.1, logowanie Google i dołączenie do jednostki kodem zaproszenia z Ustawień. Kto pracował w trybie offline (bez logowania), straci dane lokalne
+**Nieaktualne od chore/045** — ten klucz też przepadł razem z komputerem.
+Odpowiedniki tych trzech pozycji dla nowego klucza są w sekcji chore/045
+na końcu pliku.
+- [x] ~~Kopia tamtego klucza~~ — bezprzedmiotowe, klucza już nie ma. Pierwotny opis: **Kopia klucza w dwóch miejscach poza komputerem** (pendrive + prywatny Dysk), hasło w menedżerze haseł, potem usunąć folder z „Pobrane". Utrata klucza drugi raz = znowu wszyscy odinstalowują
+- [x] ~~Nowy klient OAuth~~ — klient „Raporty OSP – wydania" powstał 30.09.2026 z odciskiem `59:9C:…`; po chore/045 wymaga podmiany odcisku. Pierwotny opis: **Nowy klient OAuth w Google Cloud** z nowym SHA-1 (patrz „Przed publikacją"). Stary klient z odciskiem `D0:EB:…` zostaje — to klucz debug tego komputera, potrzebny do testów na emulatorze
+- [x] ~~Przejście kolegów na 1.6.1~~ — przeniesione do chore/045 (wersja 1.7.0, nowy klucz). Pierwotny opis: **Przejście kolegów na 1.6.1**: najpierw synchronizacja na starej wersji (żeby dane były na Dysku), potem odinstalowanie, instalacja 1.6.1, logowanie Google i dołączenie do jednostki kodem zaproszenia z Ustawień. Kto pracował w trybie offline (bez logowania), straci dane lokalne
 
 ### Czego pilnować
 - Emulator OSP_Test ma aplikację podpisaną kluczem debug. Wersji release z nowym kluczem nie da się na nim zainstalować przez `adb install -r` bez odinstalowania (i utraty danych testowych) — do sprawdzania wydań służy czysty emulator **OSP_IT**
@@ -801,3 +804,23 @@ dokument**.
 - **Stare wersje (≤ 1.6.1) nie znają znaczników usunięcia** — dopóki ktoś ich używa, potrafią odesłać usunięty dokument; nowa wersja nadpisze go z powrotem znacznikiem. Koledzy i tak muszą przeinstalować aplikację (nowy klucz podpisu), więc okres przejściowy powinien być krótki
 - Znaczniki usunięcia nie wygasają — to kilka kilobajtów rocznie, a dzięki temu telefon, który był długo offline, nie wskrzesi usuniętych wpisów
 - [ ] **Test na dwóch prawdziwych telefonach z różnymi kontami Google** — zostaje; atrapa nie sprawdzi uprawnień Dysku między kontami
+
+## Zrobione (chore/045-klucz-na-nowym-komputerze)
+Klucz z chore/043 przepadł razem z poprzednim komputerem i kopii nie ma, choć
+jej zrobienie stało w backlogu jako zadanie. To druga utrata klucza. Kto ma
+zainstalowaną wersję podpisaną którymkolwiek z poprzednich kluczy, musi ją
+odinstalować przed instalacją nowej.
+
+- [x] **Keystore `osp-app-upload.jks`** — RSA 4096, alias `upload`, ważny do 27.02.2054, `CN=Dawid Mionskowski, O=Raporty OSP, C=PL`. Leży **poza repozytorium** w `C:/Users/szymo/.keys/`
+- [x] Odciski: SHA-1 `AC:02:42:F2:89:F3:E9:75:E1:04:9E:54:0F:4A:35:F0:40:36:35:BB`, SHA-256 `7A:BD:25:42:E0:69:DA:4E:D5:81:CC:31:8C:31:E3:A7:01:8D:B4:89:E1:F7:F6:50:CD:2A:60:6E:7D:AF:EF:09`
+- [x] `android/key.properties` z losowym hasłem — ignorowany przez git (sprawdzone `git check-ignore`). Hasło jest **tylko** w tym pliku
+- [x] **Wersja `1.7.1+14`** — numer 1.7.0 (13) powstał w fix/044 na poprzednim komputerze, gdzie wydania podpisywał utracony klucz `59:9C:…`. Gdyby paczka z tamtym kluczem gdzieś krążyła, z tym samym numerem nie dałoby się ich odróżnić w „O aplikacji" inaczej niż po dacie pliku — ta sama sytuacja co w chore/041
+- [x] Podpis sprawdzony na gotowym pliku (`apksigner verify --print-certs`): `app-release.apk`, wersje 1.7.0 (13) i 1.7.1 (14), odcisk zgodny z keystore'em
+- [x] Stan w Google Cloud na 12.10.2026: klient „Raporty OSP – wydania" (Android, `pl.osp.osp_app`) istnieje od 30.09.2026, jeszcze z odciskiem `59:9C:…`; ekran zgody ma trzech użytkowników testowych
+- [x] Paczka uruchomiona na emulatorze OSP_PlayStore (Android 14) — zimny start 3,5 s do ekranu powitalnego, logcat bez błędów aplikacji (fix/025 dotyczył właśnie zawieszania się release'u na ekranie startowym). Wersja 1.7.1 zainstalowana na niej jako aktualizacja (`adb install -r`, bez odinstalowania) i również startuje bez błędów. Logowanie Google jeszcze nie sprawdzone
+
+### Do zrobienia przez Dawida
+- [x] **Podmienić SHA-1 w kliencie OAuth** na `AC:02:…:35:BB` — podmienione 15.10.2026; do tego czasu logowanie Google zwracało błąd 10
+- [ ] **Kopia klucza i `key.properties` w dwóch miejscach poza komputerem** (pendrive + prywatny Dysk), hasło w menedżerze haseł. Klucz przepadł już dwa razy, za każdym razem razem z komputerem
+- [ ] **Konta kolegów jako użytkownicy testowi** albo publikacja aplikacji na ekranie zgody — w trybie „Testowanie" loguje się tylko lista, a zgoda wygasa po 7 dniach
+- [ ] **Przejście kolegów na 1.7.1**: synchronizacja na starej wersji (żeby dane były na Dysku), odinstalowanie, instalacja, logowanie Google i dołączenie do jednostki kodem zaproszenia. Kto pracował w trybie offline, straci dane lokalne
