@@ -3,7 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 
 import '../providers/providers.dart';
+import '../services/bluetooth_pairing_service.dart';
 import '../services/bluetooth_print_service.dart';
+import 'bluetooth_pair_sheet.dart';
+
+/// Pozycja „Wyszukaj i sparuj nową drukarkę" na liście sparowanych.
+final _pairNew = BluetoothInfo(name: '', macAdress: '');
 
 /// Wynik próby wyboru drukarki — komunikat jest gotowy do pokazania
 /// użytkownikowi, bo powody niepowodzenia są tu bardzo konkretne
@@ -41,53 +46,73 @@ Future<PrinterPickResult> pickBluetoothPrinter(
     );
   }
 
-  final paired = await BluetoothPrintService.pairedPrinters();
+  // Drukarki na górze — na liście sparowanych są też słuchawki, samochód
+  // i zegarek, a szuka się zawsze drukarki.
+  final paired = [...await BluetoothPrintService.pairedPrinters()]
+    ..sort((a, b) {
+      final pa = isLikelyPrinter(a.name, false);
+      final pb = isLikelyPrinter(b.name, false);
+      if (pa != pb) return pa ? -1 : 1;
+      return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    });
   if (!context.mounted) return const PrinterPickResult.cancelled();
-  if (paired.isEmpty) {
-    return const PrinterPickResult.failed(
-      'Brak sparowanych urządzeń Bluetooth. Najpierw sparuj drukarkę '
-      'w ustawieniach Bluetooth telefonu, a potem wróć tutaj.',
-    );
-  }
 
-  final selected = await showModalBottomSheet<BluetoothInfo>(
-    context: context,
-    // Bez tego okno ma sztywną wysokość i przy dłuższej liście urządzeń
-    // treść się nie mieści — ostatnia pozycja znikała pod paskiem
-    // ostrzeżenia o przepełnieniu układu.
-    isScrollControlled: true,
-    builder: (ctx) => SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Padding(
-            padding: EdgeInsets.all(16),
-            child: Text(
-              'Wybierz sparowane urządzenie',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ),
-          Flexible(
-            child: ListView(
-              shrinkWrap: true,
+  // Bez sparowanych urządzeń od razu wyszukiwanie — wcześniej był tu tylko
+  // komunikat odsyłający do ustawień Bluetooth telefonu.
+  var selected = paired.isEmpty
+      ? _pairNew
+      : await showModalBottomSheet<BluetoothInfo>(
+          context: context,
+          // Bez tego okno ma sztywną wysokość i przy dłuższej liście urządzeń
+          // treść się nie mieści — ostatnia pozycja znikała pod paskiem
+          // ostrzeżenia o przepełnieniu układu.
+          isScrollControlled: true,
+          builder: (ctx) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                for (final info in paired)
-                  ListTile(
-                    leading: const Icon(Icons.print),
-                    title: Text(info.name),
-                    subtitle: Text(info.macAdress),
-                    onTap: () => Navigator.pop(ctx, info),
+                const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text(
+                    'Wybierz sparowane urządzenie',
+                    style: TextStyle(fontWeight: FontWeight.bold),
                   ),
+                ),
+                Flexible(
+                  child: ListView(
+                    shrinkWrap: true,
+                    children: [
+                      for (final info in paired)
+                        ListTile(
+                          leading: Icon(isLikelyPrinter(info.name, false)
+                              ? Icons.print
+                              : Icons.bluetooth),
+                          title: Text(info.name),
+                          subtitle: Text(info.macAdress),
+                          onTap: () => Navigator.pop(ctx, info),
+                        ),
+                      const Divider(),
+                      ListTile(
+                        leading: const Icon(Icons.bluetooth_searching),
+                        title: const Text('Wyszukaj i sparuj nową drukarkę'),
+                        onTap: () => Navigator.pop(ctx, _pairNew),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
               ],
             ),
           ),
-          const SizedBox(height: 8),
-        ],
-      ),
-    ),
-  );
+        );
   if (selected == null || !context.mounted) {
     return const PrinterPickResult.cancelled();
+  }
+  if (identical(selected, _pairNew)) {
+    selected = await showPairPrinterSheet(context);
+    if (selected == null || !context.mounted) {
+      return const PrinterPickResult.cancelled();
+    }
   }
 
   final config = ref.read(unitConfigProvider);

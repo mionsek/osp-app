@@ -150,7 +150,14 @@ class InfoScreen extends StatelessWidget {
                 'jednostki przez Dysk Google.\n\n'
                 'Jest darmowa, nie wyświetla reklam i nie zbiera danych — '
                 'wszystko, co wpiszesz, zostaje na Twoim telefonie i na '
-                'Dysku Google Twojej jednostki.',
+                'Dysku Google Twojej jednostki.\n\n'
+                'Przy logowaniu Google prosi o dostęp do Dysku. Jest '
+                'potrzebny, bo wspólny folder jednostki zakłada jedna osoba, '
+                'a wyjazdy dopisują inne, a Google nie ma uprawnienia „tylko '
+                'ten folder". Aplikacja korzysta wyłącznie z folderu '
+                'OSP_App_…; dostęp można cofnąć w każdej chwili na '
+                'myaccount.google.com/permissions. Kto woli, może do OSP '
+                'używać osobnego konta Gmail.',
                 style: TextStyle(height: 1.5),
               ),
               const SizedBox(height: 24),
@@ -247,7 +254,8 @@ class InfoScreen extends StatelessWidget {
                 description:
                     'Dokument możesz wysłać wprost na przenośną drukarkę '
                     'termiczną — przycisk znajdziesz przy każdym raporcie '
-                    'i przekazaniu mienia. Drukarkę wybiera się raz.',
+                    'i przekazaniu mienia. Drukarkę wybiera się raz, '
+                    'a nową można wyszukać i sparować wprost z aplikacji.',
               ),
               const SizedBox(height: 16),
 

@@ -162,14 +162,27 @@ class GoogleDriveService {
   /// Bez tego kolega nie dołączy do jednostki: sam kod zaproszenia nie
   /// wystarczy, bo [findUnitByInviteCode] przeszukuje wyłącznie pliki,
   /// do których jego konto ma już dostęp na Dysku.
-  Future<void> shareFolderWithUser(String folderId, String email) async {
+  ///
+  /// Z [message] Google wysyła na ten adres wiadomość o udostępnieniu
+  /// folderu razem z tą treścią — tak kolega dostaje kod zaproszenia.
+  /// Bez niej (np. gdy ktoś udostępnia jednostkę samemu sobie) nic nie
+  /// jest wysyłane.
+  Future<void> shareFolderWithUser(
+    String folderId,
+    String email, {
+    String? message,
+  }) async {
     final permission = drive.Permission()
       ..type = 'user'
       ..role = 'writer'
       ..emailAddress = email;
 
-    await _api.permissions.create(permission, folderId,
-        sendNotificationEmail: false);
+    await _api.permissions.create(
+      permission,
+      folderId,
+      sendNotificationEmail: message != null,
+      emailMessage: message,
+    );
   }
 
   /// Osoby mające dostęp do folderu jednostki (bez właściciela).

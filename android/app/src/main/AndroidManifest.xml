@@ -1,8 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET"/>
     <!-- Eksperymentalne drukowanie po Bluetooth do drukarek termicznych
-         bez usługi druku Androida (np. NETUM). Łączymy się tylko z już
-         sparowanym urządzeniem — nie potrzebujemy lokalizacji. -->
+         bez usługi druku Androida (np. NETUM), z wyszukaniem i sparowaniem
+         drukarki w aplikacji. Od Androida 12 wyszukiwanie nie wymaga
+         lokalizacji (neverForLocation); do Androida 11 korzysta ze zgody
+         na lokalizację zadeklarowanej niżej dla adresu z GPS. -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30"/>
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30"/>
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>

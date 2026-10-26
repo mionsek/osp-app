@@ -6,7 +6,16 @@ import 'package:http/http.dart' as http;
 /// Service handling Google Sign-In and providing authenticated HTTP client
 /// for Google Drive API access.
 class GoogleAuthService {
-  static const _scopes = [drive.DriveApi.driveFileScope];
+  /// Pełny dostęp do Dysku, a nie `drive.file`.
+  ///
+  /// `drive.file` daje aplikacji wyłącznie pliki, które sama utworzyła na
+  /// danym koncie (albo wskazane ręcznie w oknie wyboru plików Google).
+  /// Folder jednostki zakłada jedna osoba, a raporty dopisują inne — przy
+  /// `drive.file` aplikacja na koncie kolegi nie widziała ani folderu, ani
+  /// cudzych raportów, nawet po udostępnieniu, więc dołączanie kodem z innego
+  /// konta nigdy nie działało. Uprawnienia „tylko ten folder" Google nie ma;
+  /// aplikacja i tak pracuje wyłącznie w folderze `OSP_App_…`.
+  static const _scopes = [drive.DriveApi.driveScope];
 
   GoogleSignIn? _googleSignIn;
   GoogleSignInAccount? _currentUser;
@@ -58,6 +67,16 @@ class GoogleAuthService {
     _authHeaders = null;
   }
 
+  /// Pokazuje wybór konta Google od nowa.
+  ///
+  /// [signIn] przy zalogowanym koncie oddaje to samo konto bez pytania, więc
+  /// żeby wybrać inne, trzeba się najpierw wylogować. Anulowanie wyboru
+  /// zostawia aplikację wylogowaną.
+  Future<bool> switchAccount() async {
+    await signOut();
+    return signIn();
+  }
+
   /// Pobiera świeży token dostępu.
   ///
   /// Token Google żyje około godziny. Wcześniej pobierany był raz, przy
@@ -86,6 +105,9 @@ class GoogleAuthService {
 
   /// Get user email.
   String? get userEmail => _currentUser?.email;
+
+  /// Imię i nazwisko z konta Google — do pokazania obok adresu.
+  String? get displayName => _currentUser?.displayName;
 }
 
 /// Simple HTTP client that injects auth headers into every request.

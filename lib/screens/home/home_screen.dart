@@ -543,6 +543,10 @@ class _SyncIndicator extends StatelessWidget {
         tooltip = 'Brak połączenia';
     }
 
+    // Konto w podpowiedzi — po przytrzymaniu ikony widać, na czym się pracuje.
+    final email = syncState.userEmail;
+    if (email != null && email.isNotEmpty) tooltip = '$tooltip\n$email';
+
     return IconButton(
       icon: syncState.isSyncing
           ? SizedBox(

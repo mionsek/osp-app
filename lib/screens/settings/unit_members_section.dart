@@ -50,8 +50,8 @@ class _UnitMembersSectionState extends ConsumerState<UnitMembersSection> {
           children: [
             const Text(
               'Podaj adres konta Google, którym kolega loguje się '
-              'w aplikacji. Damy mu dostęp do danych jednostki, a potem '
-              'wystarczy, że wpisze kod zaproszenia.',
+              'w aplikacji. Dostanie dostęp do danych jednostki i e-mail '
+              'od Google z kodem zaproszenia i instrukcją dołączenia.',
               style: TextStyle(fontSize: 13),
             ),
             const SizedBox(height: 12),
@@ -96,8 +96,10 @@ class _UnitMembersSectionState extends ConsumerState<UnitMembersSection> {
       if (mounted) {
         final code = ref.read(syncStateProvider).unitInviteCode ?? '';
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Zaproszono $email. Przekaż mu kod: $code'),
-          duration: const Duration(seconds: 6),
+          content: Text('Wysłano zaproszenie na $email z kodem $code. '
+              'Jeśli nie dotrze, sprawdź folder Spam albo podaj kod '
+              'osobiście.'),
+          duration: const Duration(seconds: 8),
         ));
       }
     } catch (e) {
@@ -165,8 +167,9 @@ class _UnitMembersSectionState extends ConsumerState<UnitMembersSection> {
             style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 4),
         Text(
-          'Kolega musi mieć dostęp do danych jednostki, zanim dołączy '
-          'kodem zaproszenia — samo podanie kodu nie wystarczy.',
+          'Kolega musi dostać zaproszenie na swój adres, zanim dołączy '
+          'kodem — samo podanie kodu nie wystarczy. Zaproszenie wysyła mu '
+          'też e-mail z kodem.',
           style: TextStyle(fontSize: 12, color: Colors.grey[600]),
         ),
         const SizedBox(height: 12),

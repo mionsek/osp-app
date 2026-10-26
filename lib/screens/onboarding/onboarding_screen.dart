@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/providers.dart';
 import '../../core/theme/osp_theme.dart';
+import '../../widgets/unit_account_dialogs.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
@@ -85,7 +86,12 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       if (syncState.userEmail != null) {
         final code =
             await ref.read(syncStateProvider.notifier).createUnit(fullName);
-        if (mounted) await _showInviteCodeDialog(code);
+        if (!mounted) return;
+        final wantsSwitch = await showInviteCodeDialog(context, code,
+            offerPersonalSwitch: true);
+        if (wantsSwitch && mounted) {
+          await runSwitchToPersonalAccount(context, ref);
+        }
       }
 
       if (mounted) context.go('/home');
@@ -131,24 +137,11 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           await ref.read(syncStateProvider.notifier).joinUnit(code);
 
       if (success && mounted) {
-        final configNotifier = ref.read(unitConfigProvider.notifier);
-        final db = ref.read(databaseServiceProvider);
-        final config = db.getConfig();
-        // copyWith, a nie nowy obiekt — konfiguracja pobrana z Dysku
-        // zawiera m.in. pełną nazwę jednostki, której nie wolno zgubić.
-        await configNotifier.save(config.copyWith(
-          onboardingCompleted: true,
-          isAdmin: false,
-        ));
-        await db.initializeDefaultThreats();
-        ref.read(threatsProvider.notifier).refresh();
-        ref.read(vehiclesProvider.notifier).refresh();
-        ref.read(firefightersProvider.notifier).refresh();
-        ref.read(reportsProvider.notifier).refresh();
-
+        await finishJoiningUnit(ref);
         if (mounted) context.go('/home');
       } else if (mounted) {
-        setState(() => _joinError = 'Nie znaleziono jednostki z tym kodem');
+        setState(() => _joinError =
+            joinNotFoundMessage(ref.read(syncStateProvider).userEmail));
       }
     } catch (e) {
       if (mounted) setState(() => _joinError = 'Błąd: $e');
@@ -157,49 +150,52 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     }
   }
 
-  Future<void> _showInviteCodeDialog(String code) async {
-    await showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Kod zaproszenia'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Podaj ten kod innym strażakom z Twojej jednostki, '
-              'aby mogli dołączyć do wspólnych danych:',
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: OspTheme.successSurface,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: OspTheme.success),
-              ),
-              child: Text(
-                code,
-                style: const TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 8,
-                  color: OspTheme.success,
+  /// Inne konto Google przed założeniem jednostki albo dołączeniem.
+  ///
+  /// Anulowanie wyboru wylogowuje, więc wracamy wtedy do strony logowania —
+  /// inaczej „Utwórz jednostkę" po cichu założyłoby ją bez Dysku.
+  Future<void> _changeAccount() async {
+    final ok = await ref.read(syncStateProvider.notifier).switchAccount();
+    if (!mounted) return;
+    if (!ok) {
+      _goToPage(1);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Nie wybrano konta — zaloguj się ponownie.'),
+      ));
+    }
+  }
+
+  /// Na jakim koncie powstanie jednostka albo którym się do niej dołącza —
+  /// wcześniej nigdzie tego nie było widać.
+  Widget _accountRow(String label) {
+    final email = ref.watch(syncStateProvider).userEmail ?? '';
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+      decoration: BoxDecoration(
+        color: OspTheme.infoSurface,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.account_circle, color: OspTheme.info),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label,
+                    style: TextStyle(fontSize: 12, color: Colors.grey[700])),
+                Text(
+                  email,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                  overflow: TextOverflow.ellipsis,
                 ),
-                textAlign: TextAlign.center,
-              ),
+              ],
             ),
-            const SizedBox(height: 12),
-            const Text(
-              'Kod znajdziesz też w Ustawieniach.',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
-            ),
-          ],
-        ),
-        actions: [
-          ElevatedButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Rozumiem'),
+          ),
+          TextButton(
+            onPressed: _isCreating || _isJoining ? null : _changeAccount,
+            child: const Text('Zmień'),
           ),
         ],
       ),
@@ -477,7 +473,11 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                   ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 24),
+            if (isSignedIn) ...[
+              _accountRow('Jednostka powstanie na Dysku konta'),
+              const SizedBox(height: 24),
+            ],
             TextFormField(
               controller: _prefixController,
               decoration: const InputDecoration(
@@ -606,7 +606,11 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                   ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 24),
+            // Zaproszenie dostaje konkretny adres — dołączyć da się tylko
+            // tym kontem, więc musi być widać, którym się jest.
+            _accountRow('Dołączasz jako'),
+            const SizedBox(height: 24),
             TextFormField(
               controller: _codeController,
               decoration: InputDecoration(
@@ -614,6 +618,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 hintText: 'np. ABC123',
                 prefixIcon: const Icon(Icons.vpn_key),
                 errorText: _joinError,
+                errorMaxLines: 5,
               ),
               textCapitalization: TextCapitalization.characters,
               maxLength: 6,

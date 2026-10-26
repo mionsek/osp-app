@@ -8,6 +8,7 @@ import '../../models/sync_state.dart';
 import '../../services/bluetooth_print_service.dart';
 import '../../widgets/admin_only_notice.dart';
 import '../../widgets/bluetooth_printer_picker.dart';
+import '../../widgets/unit_account_dialogs.dart';
 import 'unit_members_section.dart';
 import '../../core/utils/polish_text.dart';
 import '../../core/theme/osp_theme.dart';
@@ -85,7 +86,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final config = ref.watch(unitConfigProvider);
     final isAdmin = ref.watch(isAdminProvider);
 
     return Scaffold(
@@ -188,8 +188,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     return _InfoRow('Wersja aplikacji', version);
                   },
                 ),
-                _InfoRow('Rola',
-                    config.isAdmin ? 'Administrator' : 'Użytkownik'),
+                // Z uprawnień jednostki, a nie z pola zapisanego przy
+                // pierwszym uruchomieniu — inaczej osoba, której
+                // administrator nadał uprawnienia, widziała tu „Użytkownik".
+                _InfoRow('Rola', isAdmin ? 'Administrator' : 'Użytkownik'),
                 const SizedBox(height: 8),
                 TextButton.icon(
                   onPressed: () => context.push('/info'),
@@ -221,9 +223,159 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 }
 
-class _GoogleSyncSection extends ConsumerWidget {
+/// Konto Google i połączenie z jednostką.
+///
+/// Trzy stany: niezalogowany, zalogowany bez jednostki i w jednostce.
+/// Wcześniej ekran rozróżniał tylko „w jednostce" i „poza nią", więc po
+/// zalogowaniu z Ustawień nadal pokazywał „Zaloguj się" — bez adresu konta,
+/// bez wylogowania i bez możliwości dołączenia do jednostki.
+class _GoogleSyncSection extends ConsumerStatefulWidget {
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_GoogleSyncSection> createState() => _GoogleSyncSectionState();
+}
+
+class _GoogleSyncSectionState extends ConsumerState<_GoogleSyncSection> {
+  bool _busy = false;
+
+  void _snack(String text) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(text),
+      duration: const Duration(seconds: 6),
+    ));
+  }
+
+  Future<void> _run(Future<void> Function() action) async {
+    setState(() => _busy = true);
+    try {
+      await action();
+    } catch (e) {
+      _snack('Błąd: $e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _signIn() => _run(() async {
+        final ok = await ref.read(syncStateProvider.notifier).signIn();
+        _snack(ok
+            ? 'Zalogowano jako ${ref.read(syncStateProvider).userEmail}'
+            : 'Logowanie nie powiodło się');
+      });
+
+  Future<void> _switchAccount(SyncState s) async {
+    if (s.unitFolderId != null) {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Zmień konto'),
+          content: const Text(
+            'Wybierzesz inne konto Google. Jednostka zostaje ta sama, ale '
+            'nowe konto musi mieć do niej dostęp — zaproszenie od '
+            'administratora. Nowe wyjazdy podpiszą się nowym kontem.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Anuluj'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Wybierz konto'),
+            ),
+          ],
+        ),
+      );
+      if (confirm != true) return;
+    }
+    await _run(() async {
+      final ok = await ref.read(syncStateProvider.notifier).switchAccount();
+      final now = ref.read(syncStateProvider);
+      if (!ok) {
+        _snack('Nie wybrano konta — jesteś wylogowany.');
+      } else if (now.status == SyncStatus.error) {
+        _snack('Zalogowano jako ${now.userEmail}, ale to konto nie ma '
+            'dostępu do jednostki.');
+      } else {
+        _snack('Zalogowano jako ${now.userEmail}');
+      }
+    });
+  }
+
+  Future<void> _signOut(SyncState s) async {
+    final code = s.unitInviteCode;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Wyloguj'),
+        content: Text(
+          'Wylogujesz się i odłączysz telefon od jednostki. Dane na '
+          'telefonie zostaną.'
+          '${code != null ? '\n\nŻeby wrócić, zaloguj się i dołącz kodem $code.' : ''}',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Anuluj'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Wyloguj'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    await _run(() => ref.read(syncStateProvider.notifier).signOut());
+  }
+
+  Future<void> _join() async {
+    final joined = await showJoinUnitDialog(context);
+    if (joined) {
+      _snack('Dołączono do jednostki ${ref.read(unitConfigProvider).fullName}');
+    }
+  }
+
+  Future<void> _createUnit(String email) async {
+    final name = ref.read(unitConfigProvider).fullName.trim();
+    if (name.isEmpty) {
+      _snack('Najpierw wpisz nazwę jednostki powyżej i zapisz ustawienia.');
+      return;
+    }
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Utwórz jednostkę na Dysku'),
+        content: Text(
+          'Na Dysku konta $email powstanie folder jednostki „$name", '
+          'a dane z tego telefonu trafią do niego. Potem zaprosisz kolegów.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Anuluj'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Utwórz'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    await _run(() async {
+      final code = await ref.read(syncStateProvider.notifier).createUnit(name);
+      if (!mounted) return;
+      final wantsSwitch =
+          await showInviteCodeDialog(context, code, offerPersonalSwitch: true);
+      if (wantsSwitch && mounted) {
+        await runSwitchToPersonalAccount(context, ref);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final SyncState syncState;
     try {
       syncState = ref.watch(syncStateProvider);
@@ -231,155 +383,174 @@ class _GoogleSyncSection extends ConsumerWidget {
       debugPrint('syncStateProvider error: $e');
       return const Text('Nie udało się załadować danych synchronizacji.');
     }
+    final email = syncState.userEmail ?? '';
+    final signedIn = email.isNotEmpty;
+    final hasUnit = syncState.unitFolderId != null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('Google Drive Sync',
+        Text('Konto Google i synchronizacja',
             style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 12),
-
-        if (!syncState.isConnected) ...[
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.orange[50],
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Row(
-              children: [
-                Icon(Icons.cloud_off, color: Colors.orange),
-                SizedBox(width: 8),
-                Expanded(
-                  child: Text('Synchronizacja wyłączona. '
-                      'Zaloguj się, aby współdzielić dane.'),
-                ),
-              ],
-            ),
+        if (!signedIn) ...[
+          _Notice(
+            icon: Icons.cloud_off,
+            color: Colors.orange,
+            background: Colors.orange[50]!,
+            text: 'Nie zalogowano. Zaloguj się kontem Google, żeby '
+                'współdzielić dane z jednostką.',
           ),
           const SizedBox(height: 12),
           OutlinedButton.icon(
-            onPressed: () async {
-              final success =
-                  await ref.read(syncStateProvider.notifier).signIn();
-              if (success && context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Zalogowano')),
-                );
-              }
-            },
+            onPressed: _busy ? null : _signIn,
             icon: const Icon(Icons.login),
             label: const Text('Zaloguj się kontem Google'),
           ),
         ] else ...[
-          _InfoRow('Konto', syncState.userEmail ?? '—'),
-          if (syncState.unitInviteCode != null) ...[
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: Text('Kod zaproszenia',
-                      style: TextStyle(color: Colors.grey[600])),
-                ),
-                Text(
-                  syncState.unitInviteCode!,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                    letterSpacing: 2,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                IconButton(
-                  icon: const Icon(Icons.copy, size: 18),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                  onPressed: () {
-                    Clipboard.setData(
-                        ClipboardData(text: syncState.unitInviteCode!));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content: Text('Kod skopiowany do schowka')),
-                    );
-                  },
-                  tooltip: 'Kopiuj kod',
-                ),
-              ],
-            ),
-          ],
-          if (syncState.lastSyncTime != null) ...[
-            const SizedBox(height: 4),
-            _InfoRow('Ostatnia synchronizacja',
-                _formatTime(syncState.lastSyncTime!)),
-          ],
-          if (syncState.status == SyncStatus.error &&
-              syncState.errorMessage != null) ...[
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.red[50],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                'Błąd: ${syncState.errorMessage}',
-                style: const TextStyle(color: Colors.red, fontSize: 12),
-              ),
-            ),
-          ],
-          if (syncState.skippedFiles > 0) ...[
-            const SizedBox(height: 8),
-            Text(
-              'Pominięto ${syncState.skippedFiles} '
-              '${PolishText.plural(syncState.skippedFiles, one: 'uszkodzony plik', few: 'uszkodzone pliki', many: 'uszkodzonych plików')} '
-              'na Dysku — reszta danych zsynchronizowana.',
-              style: TextStyle(fontSize: 12, color: Colors.orange[900]),
-            ),
-          ],
-          const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: syncState.isSyncing
-                ? null
-                : () => ref.read(syncStateProvider.notifier).syncNow(),
-            icon: syncState.isSyncing
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.sync),
-            label: Text(
-                syncState.isSyncing ? 'Synchronizacja...' : 'Synchronizuj teraz'),
+          _AccountCard(
+            email: email,
+            name: ref.read(syncStateProvider.notifier).displayName,
           ),
           const SizedBox(height: 8),
-          OutlinedButton.icon(
-            onPressed: () async {
-              final confirm = await showDialog<bool>(
-                context: context,
-                builder: (ctx) => AlertDialog(
-                  title: const Text('Wyloguj'),
-                  content:
-                      const Text('Czy na pewno chcesz się wylogować? '
-                          'Dane lokalne zostaną zachowane.'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(ctx, false),
-                      child: const Text('Anuluj'),
-                    ),
-                    ElevatedButton(
-                      onPressed: () => Navigator.pop(ctx, true),
-                      child: const Text('Wyloguj'),
-                    ),
-                  ],
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _busy ? null : () => _switchAccount(syncState),
+                  icon: const Icon(Icons.switch_account),
+                  label: const Text('Zmień konto'),
                 ),
-              );
-              if (confirm == true) {
-                await ref.read(syncStateProvider.notifier).signOut();
-              }
-            },
-            icon: const Icon(Icons.logout, color: Colors.red),
-            label: const Text('Wyloguj'),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _busy ? null : () => _signOut(syncState),
+                  icon: const Icon(Icons.logout, color: Colors.red),
+                  label: const Text('Wyloguj'),
+                ),
+              ),
+            ],
           ),
+          const SizedBox(height: 16),
+          if (!hasUnit) ...[
+            _Notice(
+              icon: Icons.info_outline,
+              color: OspTheme.info,
+              background: OspTheme.infoSurface,
+              text: 'Telefon nie jest połączony z jednostką — dane są tylko '
+                  'tutaj. Dołącz kodem z zaproszenia albo załóż jednostkę na '
+                  'Dysku tego konta.',
+            ),
+            const SizedBox(height: 12),
+            ElevatedButton.icon(
+              onPressed: _busy ? null : _join,
+              icon: const Icon(Icons.group_add),
+              label: const Text('Dołącz do jednostki kodem'),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: _busy ? null : () => _createUnit(email),
+              icon: const Icon(Icons.create_new_folder_outlined),
+              label: const Text('Utwórz jednostkę na Dysku'),
+            ),
+          ] else ...[
+            if (syncState.unitInviteCode != null)
+              Row(
+                children: [
+                  Expanded(
+                    child: Text('Kod zaproszenia',
+                        style: TextStyle(color: Colors.grey[600])),
+                  ),
+                  Text(
+                    syncState.unitInviteCode!,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      letterSpacing: 2,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  IconButton(
+                    icon: const Icon(Icons.copy, size: 18),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    onPressed: () {
+                      Clipboard.setData(
+                          ClipboardData(text: syncState.unitInviteCode!));
+                      _snack('Kod skopiowany do schowka');
+                    },
+                    tooltip: 'Kopiuj kod',
+                  ),
+                ],
+              ),
+            if (syncState.lastSyncTime != null) ...[
+              const SizedBox(height: 4),
+              _InfoRow('Ostatnia synchronizacja',
+                  _formatTime(syncState.lastSyncTime!)),
+            ],
+            if (syncState.status == SyncStatus.error &&
+                syncState.errorMessage != null) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.red[50],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  'Błąd: ${syncState.errorMessage}',
+                  style: const TextStyle(color: Colors.red, fontSize: 12),
+                ),
+              ),
+            ],
+            if (syncState.skippedFiles > 0) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Pominięto ${syncState.skippedFiles} '
+                '${PolishText.plural(syncState.skippedFiles, one: 'uszkodzony plik', few: 'uszkodzone pliki', many: 'uszkodzonych plików')} '
+                'na Dysku — reszta danych zsynchronizowana.',
+                style: TextStyle(fontSize: 12, color: Colors.orange[900]),
+              ),
+            ],
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: syncState.isSyncing
+                  ? null
+                  : () => ref.read(syncStateProvider.notifier).syncNow(),
+              icon: syncState.isSyncing
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.sync),
+              label: Text(syncState.isSyncing
+                  ? 'Synchronizacja...'
+                  : 'Synchronizuj teraz'),
+            ),
+            // Jednostkę często zakłada się na wspólnym koncie jednostki,
+            // a wyjazdy podpisują się kontem, na którym się jest.
+            if (syncState.isFounder(email)) ...[
+              const SizedBox(height: 16),
+              _Notice(
+                icon: Icons.person_outline,
+                color: OspTheme.info,
+                background: OspTheme.infoSurface,
+                text: 'Jednostka jest założona na tym koncie. Jeśli to '
+                    'wspólne konto jednostki, przełącz się na swoje — wtedy '
+                    'wyjazdy dodasz jako Ty, a nie jako jednostka.',
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: _busy
+                    ? null
+                    : () => runSwitchToPersonalAccount(context, ref),
+                icon: const Icon(Icons.person),
+                label: const Text('Przełącz na swoje konto'),
+              ),
+            ],
+          ],
         ],
       ],
     );
@@ -392,6 +563,81 @@ class _GoogleSyncSection extends ConsumerWidget {
     if (diff.inMinutes < 60) return '${diff.inMinutes} min temu';
     if (diff.inHours < 24) return '${diff.inHours} godz. temu';
     return '${time.day}.${time.month.toString().padLeft(2, '0')}.${time.year}';
+  }
+}
+
+/// Zalogowane konto Google — widoczne zawsze, a nie tylko w jednostce.
+class _AccountCard extends StatelessWidget {
+  final String email;
+  final String? name;
+
+  const _AccountCard({required this.email, this.name});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.account_circle, size: 40, color: OspTheme.info),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Zalogowano jako',
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                Text(
+                  email,
+                  style: const TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.w600),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (name != null && name!.isNotEmpty)
+                  Text(name!,
+                      style: TextStyle(fontSize: 12, color: Colors.grey[700])),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Notice extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final Color background;
+  final String text;
+
+  const _Notice({
+    required this.icon,
+    required this.color,
+    required this.background,
+    required this.text,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color),
+          const SizedBox(width: 8),
+          Expanded(child: Text(text, style: const TextStyle(fontSize: 13))),
+        ],
+      ),
+    );
   }
 }
 
@@ -512,8 +758,8 @@ class _BluetoothPrinterSectionState
         const SizedBox(height: 4),
         Text(
           'Dla drukarek termicznych (np. NETUM), których Android nie widzi '
-          'jako zwykłej drukarki. Wymaga wcześniejszego sparowania '
-          'urządzenia w ustawieniach Bluetooth telefonu.',
+          'jako zwykłej drukarki. Nową drukarkę sparujesz tutaj: '
+          '„Wybierz drukarkę" → „Wyszukaj i sparuj nową drukarkę".',
           style: TextStyle(fontSize: 12, color: Colors.grey[600]),
         ),
         const SizedBox(height: 12),

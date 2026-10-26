@@ -214,7 +214,7 @@ narzędzia, a nie jako zadanie w tle. Do odczytu ekranów i tak lepszy jest
 
 ### Do rozważenia
 - Zgłoszenia poprawek jako obieg w aplikacji (lista u administratora, zatwierdzanie, historia) zamiast wiadomości — jeśli po testach okaże się, że zgłoszenia giną
-- Powiadomienie kolegi po zaproszeniu (obecnie trzeba mu przekazać kod osobno)
+- ~~Powiadomienie kolegi po zaproszeniu (obecnie trzeba mu przekazać kod osobno)~~ — **zrobione w fix/046**: zaproszenie wysyła e-mail od Google z kodem i instrukcją
 
 ## Zrobione (feature/021-wybor-ratownika)
 - [x] **Naprawiono: lista podpowiedzi w kreatorze zastępów pokazywała „Imię Nazwisko"** — przeoczenie z feature/020: zmieniona była kolejność w polu tekstowym i po wyborze, ale nie w samej liście
@@ -361,6 +361,7 @@ Obecnie druk startuje od razu po kliknięciu.
 ### Przed publikacją w Play Store
 - [x] **Własny klucz podpisu** — dziś APK jest podpisany kluczem debug. Po zmianie klucza Android potraktuje aplikację jako inną i **każdy będzie musiał odinstalować przed aktualizacją, tracąc dane lokalne**. Im więcej osób dostanie wersję na kluczu debug, tym boleśniejsze. Wymaga dopisania nowego odcisku SHA-1 do klienta OAuth w Google Cloud, inaczej przestanie działać logowanie Google (błąd 10). **Zrobione w chore/039** — patrz sekcja niżej
 - [ ] **Dopisać SHA-1 klucza wydań do Google Cloud** — klient OAuth typu Android „Raporty OSP – wydania" już istnieje (od 30.09.2026), trzeba w nim **podmienić odcisk**. Pakiet `pl.osp.osp_app`, SHA-1 `AC:02:42:F2:89:F3:E9:75:E1:04:9E:54:0F:4A:35:F0:40:36:35:BB` (klucz z chore/045; `59:9C:…` z chore/043 przepadł z poprzednim komputerem, a wcześniejszy `B4:8D:…` przepadł razem z laptopem Lenovo). **Do czasu dopisania logowanie Google zwraca błąd 10** i działa tylko tryb offline
+- [ ] **Weryfikacja uprawnienia `drive` przez Google** — od fix/046 aplikacja prosi o pełny dostęp do Dysku, a to uprawnienie z grupy zastrzeżonych. W trybie testowym działa dla najwyżej 100 testerów (z ostrzeżeniem o niezweryfikowanej aplikacji); publikacja dla wszystkich wymaga weryfikacji Google z płatną oceną bezpieczeństwa. Węższe `drive.file` odpada — przy nim koledzy nie widzą nawzajem swoich plików (opis w fix/046)
 - [ ] Grafiki do sklepu: ikona 512×512, feature graphic 1024×500, min. 2 screenshoty
 - [ ] Polityka prywatności — po usunięciu reklam aplikacja nie zbiera praktycznie nic (dane leżą na Dysku Google użytkownika), więc mieści się w akapicie
 - [ ] (opcjonalnie) Ikona monochromatyczna `<monochrome>` w adaptive icon — motywy Android 13+
@@ -722,7 +723,7 @@ Kolejność według wagi.
 - [x] Wysyłka wszystkich dokumentów co 5 minut (ok. 3 wywołania API na rekord) — wysyłać tylko zmienione
 - [x] Jeden uszkodzony plik na Dysku przerywa całą synchronizację — parsować każdy plik osobno
 - [x] Duplikaty plików po zmianie reguł nazw, gdy telefony są na różnych wersjach — docelowo dopasowanie po id rekordu (`appProperties`), nie po nazwie
-- [ ] Test na **dwóch telefonach z różnymi kontami Google**
+- [ ] Test na **dwóch telefonach z różnymi kontami Google** — wykonany przy 1.7.1 i **nie przeszedł** (dołączenie kodem z innego konta niemożliwe); przyczyna i naprawa w fix/046, test do powtórzenia
 
 **Druk** — zrobione w fix/044, szczegóły niżej
 - [x] **Druk BT karty drogowej drukuje tylko pierwszą stronę** — `BluetoothPrintService` rasteryzuje `.first`, a karta ma dwie strony, więc **rozliczenie paliwa nigdy nie wychodzi** na drukarce BT (komunikat mimo to mówi „Wysłano")
@@ -824,3 +825,48 @@ odinstalować przed instalacją nowej.
 - [ ] **Kopia klucza i `key.properties` w dwóch miejscach poza komputerem** (pendrive + prywatny Dysk), hasło w menedżerze haseł. Klucz przepadł już dwa razy, za każdym razem razem z komputerem
 - [ ] **Konta kolegów jako użytkownicy testowi** albo publikacja aplikacji na ekranie zgody — w trybie „Testowanie" loguje się tylko lista, a zgoda wygasa po 7 dniach
 - [ ] **Przejście kolegów na 1.7.1**: synchronizacja na starej wersji (żeby dane były na Dysku), odinstalowanie, instalacja, logowanie Google i dołączenie do jednostki kodem zaproszenia. Kto pracował w trybie offline, straci dane lokalne
+
+## Zrobione (fix/046-dolaczanie-konta-drukarka)
+Zgłoszenia Dawida po testach 1.7.1 na dwóch telefonach.
+
+### Dołączanie kodem z innego konta — nie mogło działać
+- [x] **Przyczyna: uprawnienie `drive.file`.** Aplikacja widziała wyłącznie pliki, które sama utworzyła na danym koncie. Folder jednostki zakłada jedna osoba, raporty dopisują inne — na koncie kolegi aplikacja nie widziała ani folderu, ani `unit_config.json`, nawet po udostępnieniu, więc wyszukiwanie po kodzie zawsze kończyło się „Nie znaleziono jednostki". Atrapa Dysku w testach nie zna kont ani uprawnień, stąd test „dwa telefony, jeden Dysk" tego nie złapał
+- [x] Sprawdzona alternatywa „dostęp tylko do wybranych folderów": Google takiego uprawnienia nie ma. Okno wyboru plików przy `drive.file` daje według dostępnych źródeł dostęp do wskazanego folderu, ale nie do plików w środku — a raporty kolegów to nowe pliki tworzone na ich kontach
+- [x] **Decyzja Dawida: pełny dostęp do Dysku (`drive`).** Koszt: przy logowaniu Google pokazuje prośbę o dostęp do całego Dysku i ostrzeżenie o niezweryfikowanej aplikacji, a publikacja dla wszystkich wymaga weryfikacji (patrz „Przed publikacją"). Aplikacja pracuje wyłącznie w folderze `OSP_App_…`; „O aplikacji" mówi to wprost, z adresem do cofnięcia dostępu i podpowiedzią osobnego konta Gmail do OSP
+- [x] Komunikat przy nieudanym dołączeniu podaje adres zalogowanego konta i mówi, że administrator musi zaprosić właśnie ten adres — najczęstszą przyczyną jest brak zaproszenia, a nie literówka w kodzie
+- Telefony z 1.7.1 po aktualizacji poproszą o ponowne zalogowanie — nowe uprawnienie wymaga nowej zgody
+
+### Konto Google w Ustawieniach
+- [x] **Po zalogowaniu w Ustawieniach nie było widać konta, wylogowania ani zmiany konta** — ekran znał tylko dwa stany, „w jednostce" i „poza nią", a zalogowany bez jednostki wyglądał jak niezalogowany. Teraz trzy stany, a konto („Zalogowano jako" z adresem i imieniem z Google) jest widoczne zawsze po zalogowaniu
+- [x] **„Zmień konto"** — wybór konta Google od nowa. W jednostce zmienia się konto, a jednostka zostaje; gdy nowe konto nie ma dostępu do folderu, ekran mówi, kogo trzeba zaprosić, zamiast ponawiać ten sam błąd co 5 minut
+- [x] **Dołączenie kodem i założenie jednostki z Ustawień** — dotąd tylko przy pierwszym uruchomieniu, więc kto wybrał tryb offline, nie miał już jak dołączyć. Okno dołączania uprzedza, że wyjazdy z telefonu trafią do jednostki
+- [x] Logowanie z Ustawień przywraca jednostkę zapisaną na telefonie (np. po wygaśnięciu zgody) — wcześniej zmieniał się tylko adres w pamięci
+- [x] Wylogowanie przypomina kod potrzebny do powrotu
+- [x] Wiersz „Rola" liczony z uprawnień jednostki — dotąd z pola zapisanego przy pierwszym uruchomieniu, więc osoba, której nadano administratora, widziała „Użytkownik"
+- [x] Wprowadzenie pokazuje konto przy zakładaniu jednostki („Jednostka powstanie na Dysku konta…") i przy dołączaniu, z przyciskiem zmiany; adres konta jest też w podpowiedzi ikony synchronizacji na ekranie głównym
+
+### Zaproszenie e-mailem
+- [x] **„Zaproś strażaka" wysyła e-mail** — Google dołącza do powiadomienia o udostępnieniu folderu treść z nazwą jednostki, kodem i instrukcją („zaloguj się kontem … i wpisz kod"). Wcześniej udostępnienie szło po cichu, a kod trzeba było przekazać osobno
+
+### Wyjazdy jako „ja", a nie jako jednostka
+- [x] Po założeniu jednostki okno z kodem proponuje **przejście na własne konto**; ta sama opcja jest w Ustawieniach dla założyciela. Przepływ: adres prywatnego konta → udostępnienie jednostki (bez e-maila) i uprawnienia administratora → wybór konta Google → ta sama jednostka, bez kodu. Udostępnić może tylko konto, które ma dostęp, więc dzieje się to przed zmianą konta. Konto jednostki zostaje założycielem
+- [x] Wynik opisany dla każdego przypadku: wybrano inne konto niż podane, zamknięto wybór (aplikacja wylogowana, dostęp już nadany), podano konto, na którym się już jest
+
+### Drukarka Bluetooth
+- [x] **Wyszukiwanie i parowanie w aplikacji** — wtyczka do druku widzi tylko urządzenia sparowane w telefonie, więc wyszukiwanie (klasyczny Bluetooth — NETUM nie jest urządzeniem BLE) i prośba o sparowanie są w `MainActivity.kt`. Okno PIN-u pokazuje system, aplikacja podpowiada „0000 albo 1234". Drukarki na górze listy — rozpoznawane po klasie urządzenia i po nazwie, bo tanie drukarki podają się jako „nieznane"
+- [x] Bez sparowanych urządzeń „Wybierz drukarkę" od razu wyszukuje, zamiast odsyłać do ustawień telefonu; skrót do ustawień Bluetooth zostaje w oknie
+- [x] Do Androida 11 wyszukiwanie wymaga zgody na lokalizację — aplikacja prosi o nią tylko wtedy
+- [ ] **Do sprawdzenia na prawdziwej drukarce** — emulator nie ma Bluetooth, więc parowanie jest sprawdzone tylko kompilacją i testami rozpoznawania nazw
+
+### Przekazanie mienia
+- [x] **Numer telefonu przejmującego opcjonalny** — „(opcjonalnie)" w etykiecie i podpowiedź, że można go pominąć; jego brak nie trafia już na listę „Niepełne dane" przy zapisie. Wydruk bez numeru był poprawny już wcześniej
+
+### Testy i wersja
+- [x] 17 nowych testów (łącznie **272**): treść zaproszenia i jej wysłanie z kodem jednostki, przejście na własne konto (powodzenie, to samo konto, inne konto, zamknięty wybór i powrót jednostki po zalogowaniu), konto bez dostępu, rozpoznawanie drukarek, trzy stany sekcji konta w Ustawieniach i kod w oknie wylogowania
+- [x] Wersja **1.7.2+15**
+- [x] Sprawdzone na emulatorze (Android 14): 1.7.2 instaluje się jako aktualizacja 1.7.1 bez odinstalowania; Ustawienia pokazują nową sekcję konta (stan niezalogowany); „Wybierz drukarkę" bez sparowanych urządzeń od razu otwiera wyszukiwanie, które startuje i kończy się na wirtualnym Bluetooth emulatora (bez urządzeń w pobliżu); pole telefonu w przekazaniu ma „(opcjonalnie)". Podpowiedź pod polem urywała się przy liczniku znaków — dostała drugą linię. **Logowania Google nie sprawdzono** — na emulatorze nie ma konta
+
+### Do zrobienia przez Dawida
+- [ ] **Google Cloud → Dostęp do danych:** dopisać zakres `https://www.googleapis.com/auth/drive`. Testerom logowanie zadziała i bez tego, ale ekran zgody pokaże wtedy właściwy opis
+- [ ] **Test na dwóch telefonach z różnymi kontami** (oba na liście testerów): zaproszenie z Ustawień → e-mail z kodem → dołączenie na drugim telefonie → wyjazd z jednego widoczny na drugim
+- [ ] Parowanie drukarki NETUM z poziomu aplikacji

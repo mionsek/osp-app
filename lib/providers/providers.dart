@@ -72,12 +72,38 @@ class SyncStateNotifier extends StateNotifier<SyncState> {
   }
 
   Future<bool> signIn() async {
-    final success = await _syncService.authService.signIn();
-    if (success) {
-      state = state.copyWith(userEmail: _syncService.authService.userEmail);
-    }
+    final success = await _syncService.signIn();
+    state = _syncService.state;
+    if (state.isConnected) _syncService.startAutoSync();
     return success;
   }
+
+  /// Wybór innego konta Google. `false` — nie wybrano żadnego.
+  Future<bool> switchAccount() async {
+    final success = await _syncService.switchAccount();
+    _afterAccountChange();
+    return success;
+  }
+
+  /// Przejście z konta jednostki na prywatne konto tej samej osoby.
+  Future<AccountSwitchResult> switchToPersonalAccount(String email) async {
+    final result = await _syncService.switchToPersonalAccount(email);
+    _afterAccountChange();
+    return result;
+  }
+
+  /// Nowe konto z dostępem do jednostki synchronizuje od razu; bez dostępu
+  /// nie ponawiamy co 5 minut tego samego błędu.
+  void _afterAccountChange() {
+    state = _syncService.state;
+    if (state.status == SyncStatus.idle && state.unitFolderId != null) {
+      _syncService.startAutoSync();
+      syncNow();
+    }
+  }
+
+  /// Imię i nazwisko z zalogowanego konta Google.
+  String? get displayName => _syncService.authService.displayName;
 
   Future<String> createUnit(String unitName) async {
     final code = await _syncService.createUnit(unitName);

@@ -190,6 +190,25 @@ class FakeDrive implements GoogleDriveService {
   @override
   void resetClient() {}
 
+  /// Udostępnienia folderów — z treścią e-maila albo bez (`null`).
+  final shares = <({String folderId, String email, String? message})>[];
+
+  @override
+  Future<void> shareFolderWithUser(
+    String folderId,
+    String email, {
+    String? message,
+  }) async =>
+      shares.add((folderId: folderId, email: email, message: message));
+
+  /// Foldery, których „nie widzi" zalogowane konto. Atrapa nie zna kont,
+  /// więc test wskazuje je wprost.
+  final inaccessible = <String>{};
+
+  @override
+  Future<bool> isFolderAccessible(String folderId) async =>
+      files[folderId]?.isFolder == true && !inaccessible.contains(folderId);
+
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
@@ -208,12 +227,28 @@ class FakeFile {
 /// Zalogowane konto bez prawdziwego Google.
 class FakeAuth implements GoogleAuthService {
   @override
-  final String? userEmail;
+  String? userEmail;
+
+  /// Konto, które „wybierze" użytkownik przy logowaniu albo zmianie konta;
+  /// `null` — zamknie okno wyboru bez wybrania.
+  String? nextAccount;
 
   FakeAuth(this.userEmail);
 
   @override
-  bool get isSignedIn => true;
+  bool get isSignedIn => userEmail != null;
+
+  @override
+  String? get displayName => null;
+
+  @override
+  Future<bool> signIn() async {
+    userEmail = nextAccount;
+    return userEmail != null;
+  }
+
+  @override
+  Future<bool> switchAccount() => signIn();
 
   @override
   Future<void> refreshAuth({bool force = false}) async {}

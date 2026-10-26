@@ -82,10 +82,15 @@ FakeSyncService fakeSync() {
 /// Opakowuje badany ekran w to samo, co daje mu aplikacja: motyw, polskie
 /// tłumaczenia widżetów Material (używane przez wybór daty i godziny)
 /// i `ProviderScope` z podmienioną synchronizacją.
-Widget testApp(Widget child, {FakeSyncService? sync}) {
+Widget testApp(
+  Widget child, {
+  FakeSyncService? sync,
+  List<Override> overrides = const [],
+}) {
   return ProviderScope(
     overrides: [
       syncServiceProvider.overrideWithValue(sync ?? fakeSync()),
+      ...overrides,
     ],
     child: MaterialApp(
       theme: OspTheme.lightTheme,

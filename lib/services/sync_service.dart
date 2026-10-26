@@ -153,13 +153,114 @@ class SyncService {
   // kod.
 
   /// Udostępnia folder jednostki koledze — po tym może dołączyć kodem.
+  ///
+  /// Google wysyła mu przy tym e-mail z kodem zaproszenia i instrukcją.
+  /// Wcześniej udostępnienie szło po cichu, a kod trzeba było przekazać
+  /// osobno, więc kolega nie wiedział, że w ogóle został zaproszony.
   Future<void> inviteMember(String email) async {
     final folderId = _state.unitFolderId;
     if (folderId == null) {
       throw StateError('Brak połączenia z jednostką.');
     }
-    await _driveService.shareFolderWithUser(folderId, email.trim());
+    final address = email.trim();
+    await _driveService.shareFolderWithUser(
+      folderId,
+      address,
+      message: inviteMessage(
+        unitName: _db.getConfig().fullName,
+        code: _state.unitInviteCode ?? '',
+        email: address,
+      ),
+    );
   }
+
+  /// Treść e-maila z zaproszeniem — Google dokleja ją do powiadomienia
+  /// o udostępnieniu folderu jednostki.
+  @visibleForTesting
+  static String inviteMessage({
+    required String unitName,
+    required String code,
+    required String email,
+  }) =>
+      'Zaproszenie do jednostki „$unitName" w aplikacji Raporty OSP.\n\n'
+      'Kod zaproszenia: $code\n\n'
+      'Jak dołączyć: zainstaluj aplikację Raporty OSP, wybierz „Dołącz do '
+      'jednostki", zaloguj się kontem $email i wpisz kod. Jeśli aplikację '
+      'już masz: Ustawienia → Dołącz do jednostki kodem.';
+
+  // ── Konto Google ───────────────────────────────────────────────────
+
+  /// Logowanie z ekranu aplikacji.
+  ///
+  /// Jednostka zapisana na telefonie wraca od razu. Wcześniej po zalogowaniu
+  /// z Ustawień zmieniał się tylko adres w pamięci, a ekran dalej pokazywał
+  /// „Zaloguj się" — bez adresu konta i bez wylogowania.
+  ///
+  /// Automatyczną synchronizację uruchamia potem [SyncStateNotifier], tak
+  /// jak po założeniu jednostki i dołączeniu do niej.
+  Future<bool> signIn() async {
+    final ok = await authService.signIn();
+    if (!ok) return false;
+    _driveService.resetClient();
+    await restoreState();
+    return true;
+  }
+
+  /// Zmienia konto Google, zostając w tej samej jednostce.
+  ///
+  /// Zwraca `false`, gdy nie wybrano żadnego konta — aplikacja zostaje wtedy
+  /// wylogowana. Gdy nowe konto nie ma dostępu do folderu jednostki,
+  /// połączenie zostaje zapisane, a stan pokazuje, kogo trzeba zaprosić; po
+  /// powrocie na poprzednie konto wszystko działa jak wcześniej.
+  Future<bool> switchAccount() async {
+    stopAutoSync();
+    final ok = await authService.switchAccount();
+    _driveService.resetClient();
+    await restoreState();
+    if (!ok) return false;
+
+    final folderId = _state.unitFolderId;
+    if (folderId != null && !await _driveService.isFolderAccessible(folderId)) {
+      _updateState(_state.copyWith(
+        status: SyncStatus.error,
+        errorMessage: 'Konto ${authService.userEmail} nie ma dostępu do tej '
+            'jednostki. Poproś administratora o zaproszenie na ten adres '
+            'albo wróć do poprzedniego konta.',
+      ));
+    }
+    return true;
+  }
+
+  /// Przenosi pracę w jednostce z konta, na którym ją założono — zwykle
+  /// wspólnego konta jednostki — na prywatne konto tej samej osoby, żeby
+  /// raporty podpisywały się nią, a nie jednostką.
+  ///
+  /// Kolejność ma znaczenie: udostępnić folder i nadać uprawnienia
+  /// administratora może tylko konto, które już ma dostęp, więc robimy to
+  /// na obecnym koncie, a dopiero potem je zmieniamy.
+  Future<AccountSwitchResult> switchToPersonalAccount(String email) async {
+    final folderId = _state.unitFolderId;
+    if (folderId == null) {
+      throw StateError('Brak połączenia z jednostką.');
+    }
+    final address = email.trim();
+    if (_normalizeEmail(address) == _normalizeEmail(_state.userEmail ?? '')) {
+      return AccountSwitchResult.sameAccount;
+    }
+    await _driveService.shareFolderWithUser(folderId, address);
+    await grantAdmin(address);
+
+    if (!await switchAccount()) return AccountSwitchResult.cancelled;
+    if (_normalizeEmail(authService.userEmail ?? '') !=
+        _normalizeEmail(address)) {
+      return AccountSwitchResult.otherAccount;
+    }
+    return _state.status == SyncStatus.error
+        ? AccountSwitchResult.noAccess
+        : AccountSwitchResult.done;
+  }
+
+  static String _normalizeEmail(String email) => email.trim().toLowerCase();
 
   /// Osoby mające dostęp do folderu jednostki.
   Future<List<UnitMemberAccess>> listMembers() async {
@@ -1105,6 +1206,24 @@ class SyncService {
 /// Jednostka zapisała dane w formacie nowszym, niż ta wersja aplikacji
 /// rozumie.
 class SyncFormatTooNewException implements Exception {}
+
+/// Wynik [SyncService.switchToPersonalAccount].
+enum AccountSwitchResult {
+  /// Zalogowano na podane konto i ma ono dostęp do jednostki.
+  done,
+
+  /// Podano adres konta, na którym już jesteśmy.
+  sameAccount,
+
+  /// Nie wybrano konta — aplikacja została wylogowana.
+  cancelled,
+
+  /// Wybrano inne konto niż podane; ono nie dostało dostępu.
+  otherAccount,
+
+  /// Podane konto nadal nie widzi folderu jednostki.
+  noAccess,
+}
 
 /// Plik dokumentu na Dysku, zebrany przy pobieraniu.
 class _RemoteDoc {

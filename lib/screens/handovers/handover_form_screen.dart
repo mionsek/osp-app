@@ -173,11 +173,11 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
   Future<void> _onSave() async {
     if (!_formKey.currentState!.validate()) return;
 
+    // Bez numeru telefonu: przejmujący ma prawo go nie podać (dane osobowe),
+    // więc jego brak nie jest niedopatrzeniem do zgłaszania przy zapisie.
     final missing = <String>[
       if (_recipientNameController.text.trim().isEmpty)
         'imię i nazwisko przejmującego',
-      if (_recipientPhoneController.text.trim().isEmpty)
-        'numer telefonu przejmującego',
       if (_recipientType == null) 'rodzaj podmiotu przejmującego',
       if (_propertyKind == null) 'rodzaj przekazywanego (teren/obiekt/mienie)',
       if (_handoverFirefighterId == null) 'przekazujący strażak',
@@ -488,8 +488,11 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
               TextFormField(
                 controller: _recipientPhoneController,
                 decoration: const InputDecoration(
-                  labelText: 'Numer telefonu',
+                  labelText: 'Numer telefonu (opcjonalnie)',
                   prefixIcon: Icon(Icons.phone),
+                  helperText: 'Można pominąć, jeśli przejmujący nie chce '
+                      'go podać',
+                  helperMaxLines: 2,
                 ),
                 keyboardType: TextInputType.phone,
                 maxLength: 20,
