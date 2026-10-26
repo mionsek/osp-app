@@ -311,6 +311,21 @@ narzędzia, a nie jako zadanie w tle. Do odczytu ekranów i tak lepszy jest
 
 ## Do zrobienia — Kolejne branche
 
+### Ochrona danych i dysk współdzielony
+Wynik analizy z 26.10.2026: czy trzymanie danych na Dysku założyciela jest
+bezpieczne. Wniosek: model z Dyskiem zostaje, ale z poprawkami. Dwa plany:
+- [ ] **fix/046-ochrona-danych** — [PLAN_OCHRONA_DANYCH.md](PLAN_OCHRONA_DANYCH.md):
+  blokada dalszego udostępniania folderu, wyłączona kopia zapasowa Androida,
+  usuwanie danych jednostki z telefonu (+ wykrywanie odebranego dostępu),
+  szyfrowanie bazy — opcjonalne, rekomendacja: odłożyć. Zamyka „Drobne →
+  `allowBackup`” i „RODO → Usuń dane z tego telefonu” z sekcji fix/031 niżej
+- [ ] **feature/047-dysk-wspoldzielony** — [PLAN_DYSK_WSPOLDZIELONY.md](PLAN_DYSK_WSPOLDZIELONY.md):
+  folder jednostki na dysku współdzielonym Google Workspace — pliki należą do
+  jednostki, a nie do prywatnych kont, jest umowa powierzenia danych.
+  Zaczyna się od decyzji zarządu (konto Workspace, domena) i od weryfikacji,
+  czy zakres `drive.file` działa między kontami. Zastępuje „Przeniesienie
+  jednostki na konto OSP” z sekcji fix/031 niżej
+
 ### Urządzenia specjalne per pojazd + rozbicie minut pracy
 Dziś minuty pracy urządzeń specjalnych to **jedna liczba** (`VehicleTrip.specialEquipmentMinutes`)
 — tyle, ile ma kolumna 10 papierowej karty. Propozycja: rozbić na pozycje,
