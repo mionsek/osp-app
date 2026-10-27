@@ -19,123 +19,14 @@ import '../../screens/trips/trip_form_screen.dart';
 import '../../screens/settings/settings_screen.dart';
 import '../../screens/info/info_screen.dart';
 import '../../screens/statistics/statistics_screen.dart';
+import '../../widgets/navigation.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final config = ref.read(unitConfigProvider);
 
   return GoRouter(
-    initialLocation: config.onboardingCompleted ? '/home' : '/onboarding',
-    routes: [
-      GoRoute(
-        path: '/onboarding',
-        builder: (context, state) => const OnboardingScreen(),
-      ),
-      GoRoute(
-        path: '/home',
-        builder: (context, state) => const HomeScreen(),
-      ),
-      GoRoute(
-        path: '/vehicles',
-        builder: (context, state) => const VehiclesScreen(),
-      ),
-      GoRoute(
-        path: '/vehicles/add',
-        builder: (context, state) => const VehicleFormScreen(),
-      ),
-      GoRoute(
-        path: '/vehicles/edit/:id',
-        builder: (context, state) {
-          final id = state.pathParameters['id']!;
-          return VehicleFormScreen(vehicleId: id);
-        },
-      ),
-      GoRoute(
-        path: '/firefighters',
-        builder: (context, state) => const FirefightersScreen(),
-      ),
-      GoRoute(
-        path: '/firefighters/add',
-        builder: (context, state) => const FirefighterFormScreen(),
-      ),
-      GoRoute(
-        path: '/firefighters/edit/:id',
-        builder: (context, state) {
-          final id = state.pathParameters['id']!;
-          return FirefighterFormScreen(firefighterId: id);
-        },
-      ),
-      GoRoute(
-        path: '/reports',
-        builder: (context, state) => const ReportsListScreen(),
-      ),
-      GoRoute(
-        path: '/reports/new',
-        builder: (context, state) => const ReportWizardScreen(),
-      ),
-      GoRoute(
-        path: '/reports/edit/:id',
-        builder: (context, state) {
-          final id = state.pathParameters['id']!;
-          return ReportWizardScreen(reportId: id);
-        },
-      ),
-      GoRoute(
-        path: '/reports/view/:id',
-        builder: (context, state) {
-          final id = state.pathParameters['id']!;
-          return ReportDetailScreen(reportId: id);
-        },
-      ),
-      GoRoute(
-        path: '/handovers',
-        builder: (context, state) => const HandoversListScreen(),
-      ),
-      GoRoute(
-        path: '/handovers/new',
-        builder: (context, state) => const HandoverFormScreen(),
-      ),
-      GoRoute(
-        path: '/handovers/edit/:id',
-        builder: (context, state) {
-          final id = state.pathParameters['id']!;
-          return HandoverFormScreen(handoverId: id);
-        },
-      ),
-      GoRoute(
-        path: '/handovers/view/:id',
-        builder: (context, state) {
-          final id = state.pathParameters['id']!;
-          return HandoverDetailScreen(handoverId: id);
-        },
-      ),
-      GoRoute(
-        path: '/trips',
-        builder: (context, state) => const TripsListScreen(),
-      ),
-      GoRoute(
-        path: '/trips/new',
-        builder: (context, state) => TripFormScreen(
-          initialVehicleId: state.uri.queryParameters['vehicleId'],
-        ),
-      ),
-      GoRoute(
-        path: '/trips/edit/:id',
-        builder: (context, state) =>
-            TripFormScreen(tripId: state.pathParameters['id']!),
-      ),
-      GoRoute(
-        path: '/statistics',
-        builder: (context, state) => const StatisticsScreen(),
-      ),
-      GoRoute(
-        path: '/settings',
-        builder: (context, state) => const SettingsScreen(),
-      ),
-      GoRoute(
-        path: '/info',
-        builder: (context, state) => const InfoScreen(),
-      ),
-    ],
+    initialLocation: config.onboardingCompleted ? homeLocation : '/onboarding',
+    routes: appRoutes,
     errorBuilder: (context, state) => Scaffold(
       body: Center(
         child: Text('Nie znaleziono strony: ${state.uri}'),
@@ -143,3 +34,125 @@ final routerProvider = Provider<GoRouter>((ref) {
     ),
   );
 });
+
+/// Trasy jako drzewo pod ekranem głównym: lista jest rodzicem swojego
+/// formularza i podglądu.
+///
+/// Wcześniej każda trasa leżała osobno, więc `context.go` (po zapisie
+/// wyjazdu i przekazania, „Lista wyjazdów", usunięcie) zostawiał na stosie
+/// jeden ekran — bez strzałki wstecz, a systemowe „wstecz" zamykało
+/// aplikację (zgłoszenie z testu 1.7.6). Z drzewem `go('/handovers/view/x')`
+/// buduje stos: ekran główny → lista przekazań → przekazanie.
+final List<RouteBase> appRoutes = [
+  GoRoute(
+    path: '/onboarding',
+    builder: (context, state) => const OnboardingScreen(),
+  ),
+  // Dawny adres ekranu głównego.
+  GoRoute(path: '/home', redirect: (context, state) => homeLocation),
+  GoRoute(
+    path: homeLocation,
+    builder: (context, state) => const HomeScreen(),
+    routes: [
+      GoRoute(
+        path: 'vehicles',
+        builder: (context, state) => const VehiclesScreen(),
+        routes: [
+          GoRoute(
+            path: 'add',
+            builder: (context, state) => const VehicleFormScreen(),
+          ),
+          GoRoute(
+            path: 'edit/:id',
+            builder: (context, state) =>
+                VehicleFormScreen(vehicleId: state.pathParameters['id']!),
+          ),
+        ],
+      ),
+      GoRoute(
+        path: 'firefighters',
+        builder: (context, state) => const FirefightersScreen(),
+        routes: [
+          GoRoute(
+            path: 'add',
+            builder: (context, state) => const FirefighterFormScreen(),
+          ),
+          GoRoute(
+            path: 'edit/:id',
+            builder: (context, state) => FirefighterFormScreen(
+                firefighterId: state.pathParameters['id']!),
+          ),
+        ],
+      ),
+      GoRoute(
+        path: 'reports',
+        builder: (context, state) => const ReportsListScreen(),
+        routes: [
+          GoRoute(
+            path: 'new',
+            builder: (context, state) => const ReportWizardScreen(),
+          ),
+          GoRoute(
+            path: 'edit/:id',
+            builder: (context, state) =>
+                ReportWizardScreen(reportId: state.pathParameters['id']!),
+          ),
+          GoRoute(
+            path: 'view/:id',
+            builder: (context, state) =>
+                ReportDetailScreen(reportId: state.pathParameters['id']!),
+          ),
+        ],
+      ),
+      GoRoute(
+        path: 'handovers',
+        builder: (context, state) => const HandoversListScreen(),
+        routes: [
+          GoRoute(
+            path: 'new',
+            builder: (context, state) => const HandoverFormScreen(),
+          ),
+          GoRoute(
+            path: 'edit/:id',
+            builder: (context, state) =>
+                HandoverFormScreen(handoverId: state.pathParameters['id']!),
+          ),
+          GoRoute(
+            path: 'view/:id',
+            builder: (context, state) =>
+                HandoverDetailScreen(handoverId: state.pathParameters['id']!),
+          ),
+        ],
+      ),
+      GoRoute(
+        path: 'trips',
+        builder: (context, state) => const TripsListScreen(),
+        routes: [
+          GoRoute(
+            path: 'new',
+            builder: (context, state) => TripFormScreen(
+              initialVehicleId: state.uri.queryParameters['vehicleId'],
+            ),
+          ),
+          GoRoute(
+            path: 'edit/:id',
+            builder: (context, state) =>
+                TripFormScreen(tripId: state.pathParameters['id']!),
+          ),
+        ],
+      ),
+      GoRoute(
+        path: 'statistics',
+        builder: (context, state) => const StatisticsScreen(),
+      ),
+      GoRoute(
+        path: 'settings',
+        builder: (context, state) => const SettingsScreen(),
+      ),
+      GoRoute(
+        path: 'info',
+        builder: (context, state) => const InfoScreen(),
+      ),
+    ],
+  ),
+];

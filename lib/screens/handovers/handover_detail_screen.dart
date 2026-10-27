@@ -10,6 +10,7 @@ import '../../widgets/bluetooth_printer_picker.dart';
 import '../../widgets/upload_status.dart';
 import '../../core/theme/osp_theme.dart';
 import '../../core/utils/time_format.dart';
+import '../../widgets/navigation.dart';
 
 class HandoverDetailScreen extends ConsumerWidget {
   final String handoverId;
@@ -95,11 +96,6 @@ class HandoverDetailScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.home),
-          onPressed: () => context.go('/home'),
-          tooltip: 'Menu główne',
-        ),
         title: const Text('Przekazanie mienia'),
         actions: [
           // Cudze przekazania poprawia i usuwa tylko administrator.
@@ -117,6 +113,7 @@ class HandoverDetailScreen extends ConsumerWidget {
               tooltip: 'Usuń',
             ),
           ],
+          const HomeButton(),
         ],
       ),
       body: SingleChildScrollView(
@@ -249,7 +246,7 @@ class HandoverDetailScreen extends ConsumerWidget {
               label: const Text('Lista przekazań mienia'),
             ),
             TextButton.icon(
-              onPressed: () => context.go('/home'),
+              onPressed: () => goHome(context),
               icon: const Icon(Icons.home),
               label: const Text('Wróć do menu głównego'),
             ),

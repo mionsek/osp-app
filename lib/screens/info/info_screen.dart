@@ -3,6 +3,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/constants/constants.dart';
 import '../../core/theme/osp_theme.dart';
+import '../../widgets/navigation.dart';
 
 class InfoScreen extends StatelessWidget {
   const InfoScreen({super.key});
@@ -57,11 +58,8 @@ class InfoScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
         title: const Text('O aplikacji'),
+        actions: const [HomeButton()],
       ),
       body: SafeArea(
         child: SingleChildScrollView(

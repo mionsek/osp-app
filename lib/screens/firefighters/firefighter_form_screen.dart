@@ -7,6 +7,7 @@ import '../../models/models.dart';
 import '../../providers/providers.dart';
 import '../../core/theme/osp_theme.dart';
 import '../../core/utils/time_format.dart';
+import '../../widgets/navigation.dart';
 
 class FirefighterFormScreen extends ConsumerStatefulWidget {
   final String? firefighterId;
@@ -19,6 +20,13 @@ class FirefighterFormScreen extends ConsumerStatefulWidget {
 
 class _FirefighterFormScreenState extends ConsumerState<FirefighterFormScreen> {
   final _formKey = GlobalKey<FormState>();
+
+  /// Wpisano coś, czego jeszcze nie zapisano — wyjście pyta o zgodę.
+  bool _dirty = false;
+
+  void _markDirty() {
+    if (!_dirty) setState(() => _dirty = true);
+  }
   final _firstNameController = TextEditingController();
   final _lastNameController = TextEditingController();
   bool _isDriver = false;
@@ -167,14 +175,16 @@ class _FirefighterFormScreenState extends ConsumerState<FirefighterFormScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return LeaveGuard(dirty: _dirty, child: Scaffold(
       appBar: AppBar(
         title: Text(_isEditing ? 'Edytuj ratownika' : 'Nowy ratownik'),
+        actions: [HomeButton(confirmLeave: _dirty)],
       ),
       body: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + context.bottomInset()),
         child: Form(
           key: _formKey,
+          onChanged: _markDirty,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -277,6 +287,6 @@ class _FirefighterFormScreenState extends ConsumerState<FirefighterFormScreen> {
           ),
         ),
       ),
-    );
+    ));
   }
 }

@@ -11,6 +11,7 @@ import '../../services/location_service.dart';
 import '../../widgets/firefighter_picker.dart';
 import '../../core/theme/osp_theme.dart';
 import '../../core/utils/time_format.dart';
+import '../../widgets/navigation.dart';
 
 /// Formularz „Potwierdzenie przekazania terenu, obiektu lub mienia".
 /// Jeden ekran (nie kreator) — pola są prostsze niż w wyjeździe.
@@ -25,6 +26,13 @@ class HandoverFormScreen extends ConsumerStatefulWidget {
 
 class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
   final _formKey = GlobalKey<FormState>();
+
+  /// Wpisano coś, czego jeszcze nie zapisano — wyjście pyta o zgodę.
+  bool _dirty = false;
+
+  void _markDirty() {
+    if (!_dirty) setState(() => _dirty = true);
+  }
 
   final _eventLocationController = TextEditingController();
   final _recipientTypeOtherController = TextEditingController();
@@ -308,16 +316,18 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
             .where((f) => f.id == _handoverFirefighterId)
             .firstOrNull;
 
-    return Scaffold(
+    return LeaveGuard(dirty: _dirty, child: Scaffold(
       appBar: AppBar(
         title: Text(
           _isEditing ? 'Edytuj przekazanie mienia' : 'Nowe przekazanie mienia',
         ),
+        actions: [HomeButton(confirmLeave: _dirty)],
       ),
       body: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + context.bottomInset()),
         child: Form(
           key: _formKey,
+          onChanged: _markDirty,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -661,7 +671,7 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
           ),
         ),
       ),
-    );
+    ));
   }
 }
 

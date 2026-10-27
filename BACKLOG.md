@@ -991,3 +991,23 @@ niczego nie pobierało.
 ### Do sprawdzenia na telefonach
 - [ ] Na telefonie Wojciecha (1.7.7): czy jego przekazanie pokazuje „Czeka na wysłanie" — wtedy „Wyślij teraz"; czerwony komunikat pokaże powód, jeśli jest inny
 - [ ] Na Dysku ospkielno, w folderze jednostki: czy jest jeden folder `handovers` i jeden `trips`
+
+## Zrobione (fix/050-nawigacja)
+Zgłoszenie z testu 1.7.6: po dodaniu przekazania lista przekazań nie miała
+żadnej nawigacji, a systemowe „wstecz" zamykało aplikację. Zasada Dawida:
+z każdego miejsca wstecz albo do menu głównego; w operacji z kilku kroków —
+przechodzenie między krokami.
+
+**Przyczyna.** Wszystkie trasy leżały obok siebie, więc każde `context.go`
+zostawiało na stosie jeden ekran: zapis wyjazdu i przekazania, przyciski
+„Lista wyjazdów" / „Lista przekazań", usunięcie wyjazdu i przekazania. Bez
+ekranu pod spodem nie było strzałki wstecz, a „wstecz" zamykało aplikację.
+Ekrany wyjazdu i przekazania miały domek zamiast strzałki, reszta ekranów —
+żadnego przejścia do menu.
+
+- [x] **Trasy jako drzewo pod ekranem głównym** — lista jest rodzicem formularza i podglądu, np. `/handovers/view/x` to menu → lista przekazań → przekazanie. Po zapisie „wstecz" prowadzi do listy, z listy do menu; aplikację zamyka dopiero „wstecz" na ekranie głównym. Stary adres `/home` przekierowuje na ekran główny
+- [x] **Na każdym ekranie** (19) strzałka wstecz po lewej i „Menu główne" (domek) po prawej. Ustawienia i „O aplikacji" miały własną strzałkę, która przy innym stosie nie miałaby dokąd wrócić — teraz standardowa
+- [x] **Kreator wyjazdu**: systemowe „wstecz" i strzałka cofają o krok, jak przyciski „Wróć do…"; na pierwszym kroku — wyjście z kreatora
+- [x] **Niezapisane dane**: kreator wyjazdu, formularze (przekazanie, przejazd, pojazd, ratownik) i dane jednostki w Ustawieniach z wpisanymi zmianami pytają „Wyjść bez zapisywania?" przy wstecz i przy domku. Pusty formularz zamyka się bez pytania, po zapisie też
+- [x] 10 nowych testów na prawdziwym drzewie tras: po zapisie przekazania wstecz do listy i do menu (aplikacja się nie zamyka), po „Lista wyjazdów" wstecz do menu, strzałka i domek na każdym z 19 ekranów, kreator cofa o krok i pyta na pierwszym, bez wpisanych danych bez pytania, „Zostań" zostawia, formularz pyta domkiem i wstecz, zapis zamyka bez pytania, Ustawienia pytają przed zapisem, a po nim nie. Łącznie **364**
+- [x] Wersja **1.7.8+21**

@@ -15,6 +15,7 @@ import '../../widgets/unit_account_dialogs.dart';
 import 'unit_members_section.dart';
 import '../../core/utils/polish_text.dart';
 import '../../core/theme/osp_theme.dart';
+import '../../widgets/navigation.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -28,6 +29,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   late TextEditingController _localityController;
   late TextEditingController _streetController;
   final _formKey = GlobalKey<FormState>();
+
+  /// Zmienione dane jednostki, jeszcze nie zapisane — wyjście pyta o zgodę.
+  bool _dirty = false;
+
+  void _markDirty() {
+    if (!_dirty) setState(() => _dirty = true);
+  }
 
   @override
   void initState() {
@@ -68,6 +76,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       onboardingCompleted: true,
     );
     await ref.read(unitConfigProvider.notifier).save(newConfig);
+    if (mounted) setState(() => _dirty = false);
 
     // Adres remizy przepisuje się do przejazdu przy jego tworzeniu, więc
     // wpisanie go dopiero teraz zostawiłoby puste „skąd" we wszystkim, co
@@ -91,19 +100,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget build(BuildContext context) {
     final isAdmin = ref.watch(isAdminProvider);
 
-    return Scaffold(
+    return LeaveGuard(dirty: _dirty, child: Scaffold(
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
         title: const Text('Ustawienia'),
+        actions: [HomeButton(confirmLeave: _dirty)],
       ),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Form(
             key: _formKey,
+            onChanged: _markDirty,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -222,7 +229,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
         ),
       ),
-    );
+    ));
   }
 }
 

@@ -7,6 +7,7 @@ import '../../widgets/sync_feedback.dart';
 import '../../widgets/upload_status.dart';
 import '../../core/theme/osp_theme.dart';
 import '../../core/utils/time_format.dart';
+import '../../widgets/navigation.dart';
 
 class HandoversListScreen extends ConsumerWidget {
   const HandoversListScreen({super.key});
@@ -19,6 +20,7 @@ class HandoversListScreen extends ConsumerWidget {
     return SyncOnOpen(child: Scaffold(
       appBar: AppBar(
         title: const Text('Przekazania mienia'),
+        actions: const [HomeButton()],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {

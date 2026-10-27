@@ -7,6 +7,7 @@ import '../../models/models.dart';
 import '../../providers/providers.dart';
 import '../../widgets/admin_only_notice.dart';
 import '../../core/theme/osp_theme.dart';
+import '../../widgets/navigation.dart';
 
 class VehiclesScreen extends ConsumerWidget {
   const VehiclesScreen({super.key});
@@ -20,6 +21,7 @@ class VehiclesScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Pojazdy'),
+        actions: const [HomeButton()],
       ),
       // Bez uprawnień administratora nie ma czego dodawać — zamiast
       // wyłączonego przycisku pokazujemy wyjaśnienie nad listą.

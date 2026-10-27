@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../../providers/providers.dart';
 import '../../core/theme/osp_theme.dart';
 import '../../services/sync_service.dart';
 import '../../widgets/unit_account_dialogs.dart';
+import '../../widgets/navigation.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
@@ -78,7 +78,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         final choice = await confirmCreateOrJoinOwnUnit(context, ref);
         if (!mounted || choice == CreateUnitChoice.cancelled) return;
         if (choice == CreateUnitChoice.joined) {
-          context.go('/home');
+          goHome(context);
           return;
         }
       }
@@ -104,7 +104,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         }
       }
 
-      if (mounted) context.go('/home');
+      if (mounted) goHome(context);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -131,7 +131,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     await db.initializeDefaultThreats();
     ref.read(threatsProvider.notifier).refresh();
 
-    if (mounted) context.go('/home');
+    if (mounted) goHome(context);
   }
 
   Future<void> _handleJoinUnit() async {
@@ -146,7 +146,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       final attempt = await joinUnitWithConfirmation(context, ref, code);
       if (!mounted) return;
       if (attempt.joined) {
-        context.go('/home');
+        goHome(context);
       } else if (attempt.error != null) {
         setState(() => _joinError = attempt.error);
       }

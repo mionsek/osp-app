@@ -10,6 +10,7 @@ import '../../services/bluetooth_print_service.dart';
 import '../../widgets/bluetooth_printer_picker.dart';
 import '../../services/trip_card_pdf.dart';
 import '../../core/theme/osp_theme.dart';
+import '../../widgets/navigation.dart';
 
 /// Ewidencja przejazdów pojazdu — odpowiednik miesięcznej karty drogowej.
 ///
@@ -70,6 +71,7 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
               onPressed: () => _printCard(vehicles, _CardOutput.share),
             ),
           ],
+          const HomeButton(),
         ],
       ),
       floatingActionButton: vehicles.isEmpty

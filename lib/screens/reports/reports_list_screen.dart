@@ -7,6 +7,7 @@ import '../../widgets/sync_feedback.dart';
 import '../../widgets/upload_status.dart';
 import '../../core/theme/osp_theme.dart';
 import '../../core/utils/time_format.dart';
+import '../../widgets/navigation.dart';
 
 class ReportsListScreen extends ConsumerWidget {
   const ReportsListScreen({super.key});
@@ -25,6 +26,7 @@ class ReportsListScreen extends ConsumerWidget {
     return SyncOnOpen(child: Scaffold(
       appBar: AppBar(
         title: const Text('Lista wyjazdów'),
+        actions: const [HomeButton()],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {

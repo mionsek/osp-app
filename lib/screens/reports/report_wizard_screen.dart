@@ -11,6 +11,7 @@ import 'steps/step_crew.dart';
 import 'steps/step_summary.dart';
 import '../../core/utils/time_format.dart';
 import '../../core/theme/osp_theme.dart';
+import '../../widgets/navigation.dart';
 
 class ReportWizardScreen extends ConsumerStatefulWidget {
   final String? reportId;
@@ -35,6 +36,17 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
 
   /// Zapis w toku — przed zapisem kreator jeszcze raz sprawdza numer.
   bool _saving = false;
+
+  /// Coś wpisano albo wybrano — wyjście z kreatora pyta o zgodę.
+  bool _touched = false;
+
+  /// Systemowe „wstecz" i strzałka na pasku cofają o krok, jak przyciski
+  /// „Wróć do…" w krokach. Na pierwszym kroku — wyjście z kreatora.
+  bool _stepBack() {
+    if (_currentStep == 0) return false;
+    _prevPage();
+    return true;
+  }
 
   /// Najdłużej tyle czekamy przy zapisie na wyjazdy z Dysku. Przy słabym
   /// zasięgu zapis nie może wisieć — wyjazd musi się zapisać na telefonie.
@@ -480,9 +492,13 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return LeaveGuard(
+      dirty: _touched,
+      onBack: _stepBack,
+      child: Scaffold(
       appBar: AppBar(
         title: Text(_isEditing ? 'Edycja wyjazdu' : 'Nowy wyjazd'),
+        actions: [HomeButton(confirmLeave: _touched)],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(4),
           child: LinearProgressIndicator(
@@ -523,6 +539,7 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
               String? notes,
             }) {
               setState(() {
+                _touched = true;
                 if (reportNumber != null) _reportNumber = reportNumber;
                 if (date != null) _date = date;
                 if (departureTime != null) _departureTime = departureTime;
@@ -550,7 +567,7 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
             crewAssignments: _crewAssignments,
             selectedVehicleIds: _selectedVehicleIds,
             getAllAssignedIds: _getAllAssignedFirefighterIds,
-            onChanged: () => setState(() {}),
+            onChanged: () => setState(() => _touched = true),
             onNext: _nextPage,
             onBack: _prevPage,
           ),
@@ -572,6 +589,6 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
           ),
         ],
       ),
-    );
+    ));
   }
 }

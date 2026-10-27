@@ -5,6 +5,7 @@ import '../../providers/providers.dart';
 import '../../providers/statistics_provider.dart';
 import '../../services/stats_pdf.dart';
 import '../../core/theme/osp_theme.dart';
+import '../../widgets/navigation.dart';
 
 class StatisticsScreen extends ConsumerWidget {
   const StatisticsScreen({super.key});
@@ -19,6 +20,7 @@ class StatisticsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Statystyki'),
+        actions: const [HomeButton()],
       ),
       body: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + context.bottomInset()),

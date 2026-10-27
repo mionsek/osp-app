@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 import '../../core/utils/polish_text.dart';
 import '../../models/models.dart';
 import '../../providers/providers.dart';
+import '../../widgets/navigation.dart';
 
 class VehicleFormScreen extends ConsumerStatefulWidget {
   final String? vehicleId;
@@ -17,6 +18,13 @@ class VehicleFormScreen extends ConsumerStatefulWidget {
 
 class _VehicleFormScreenState extends ConsumerState<VehicleFormScreen> {
   final _formKey = GlobalKey<FormState>();
+
+  /// Wpisano coś, czego jeszcze nie zapisano — wyjście pyta o zgodę.
+  bool _dirty = false;
+
+  void _markDirty() {
+    if (!_dirty) setState(() => _dirty = true);
+  }
   final _nameController = TextEditingController();
   int _seats = 6;
   bool get _isEditing => widget.vehicleId != null;
@@ -134,14 +142,16 @@ class _VehicleFormScreenState extends ConsumerState<VehicleFormScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return LeaveGuard(dirty: _dirty, child: Scaffold(
       appBar: AppBar(
         title: Text(_isEditing ? 'Edytuj pojazd' : 'Nowy pojazd'),
+        actions: [HomeButton(confirmLeave: _dirty)],
       ),
       body: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + context.bottomInset()),
         child: Form(
           key: _formKey,
+          onChanged: _markDirty,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -197,7 +207,7 @@ class _VehicleFormScreenState extends ConsumerState<VehicleFormScreen> {
           ),
         ),
       ),
-    );
+    ));
   }
 
   /// Dane, które trafiają do nagłówka i rozliczenia miesięcznej karty

@@ -7,6 +7,7 @@ import '../../core/utils/time_format.dart';
 import '../../models/models.dart';
 import '../../providers/providers.dart';
 import '../../core/theme/osp_theme.dart';
+import '../../widgets/navigation.dart';
 
 /// Dodawanie i edycja jednego przejazdu — jednego wiersza karty drogowej.
 ///
@@ -28,6 +29,13 @@ class TripFormScreen extends ConsumerStatefulWidget {
 
 class _TripFormScreenState extends ConsumerState<TripFormScreen> {
   final _formKey = GlobalKey<FormState>();
+
+  /// Wpisano coś, czego jeszcze nie zapisano — wyjście pyta o zgodę.
+  bool _dirty = false;
+
+  void _markDirty() {
+    if (!_dirty) setState(() => _dirty = true);
+  }
 
   late String _vehicleId;
   late DateTime _date;
@@ -232,7 +240,7 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
     final canEdit =
         !widget.isEdit || syncState.canEditDocument(_existing?.createdBy);
 
-    return Scaffold(
+    return LeaveGuard(dirty: _dirty, child: Scaffold(
       appBar: AppBar(
         title: Text(widget.isEdit ? 'Edytuj przejazd' : 'Nowy przejazd'),
         actions: [
@@ -242,10 +250,12 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
               tooltip: 'Usuń',
               onPressed: _confirmDelete,
             ),
+          HomeButton(confirmLeave: _dirty),
         ],
       ),
       body: Form(
         key: _formKey,
+        onChanged: _markDirty,
         child: ListView(
           padding: context.scrollPadding(),
           children: [
@@ -294,7 +304,7 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
           ],
         ),
       ),
-    );
+    ));
   }
 
   Widget _readOnlyNotice(String? adminEmail) {

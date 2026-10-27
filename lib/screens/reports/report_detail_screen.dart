@@ -11,6 +11,7 @@ import '../../widgets/bluetooth_printer_picker.dart';
 import '../../widgets/upload_status.dart';
 import '../../core/theme/osp_theme.dart';
 import '../../core/utils/time_format.dart';
+import '../../widgets/navigation.dart';
 
 class ReportDetailScreen extends ConsumerWidget {
   final String reportId;
@@ -90,11 +91,6 @@ class ReportDetailScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.home),
-          onPressed: () => context.go('/home'),
-          tooltip: 'Menu główne',
-        ),
         title: Text('Wyjazd ${report.reportNumber}'),
         actions: [
           // Cudze raporty poprawia i usuwa tylko administrator — autor
@@ -111,6 +107,7 @@ class ReportDetailScreen extends ConsumerWidget {
               tooltip: 'Usuń',
             ),
           ],
+          const HomeButton(),
         ],
       ),
       body: SingleChildScrollView(
@@ -228,7 +225,7 @@ class ReportDetailScreen extends ConsumerWidget {
               label: const Text('Lista wyjazdów'),
             ),
             TextButton.icon(
-              onPressed: () => context.go('/home'),
+              onPressed: () => goHome(context),
               icon: const Icon(Icons.home),
               label: const Text('Wróć do menu głównego'),
             ),
