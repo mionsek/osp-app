@@ -10,6 +10,16 @@ class SyncState {
   final SyncStatus status;
   final DateTime? lastSyncTime;
   final String? errorMessage;
+
+  /// Kiedy wystąpił [errorMessage]. Błąd zostaje widoczny aż do następnej
+  /// udanej synchronizacji, a bez godziny stary wyglądał jak świeży.
+  final DateTime? errorTime;
+
+  /// Ile zmian ostatnia synchronizacja wysłała na Dysk i ile z niego
+  /// pobrała — do potwierdzenia po ręcznym „Synchronizuj teraz".
+  final int lastSyncSent;
+  final int lastSyncReceived;
+
   final String? userEmail;
   final String? unitFolderId;
   final String? unitInviteCode;
@@ -29,10 +39,18 @@ class SyncState {
   /// ich odczytać. Dawniej jeden taki plik przerywał całą synchronizację.
   final int skippedFiles;
 
+  /// Wyjazdy, którym synchronizacja nadała nowy numer (powtórzony numer
+  /// z dwóch telefonów) — do pokazania, aż ktoś je przeczyta. Następna
+  /// synchronizacja bez zmian numerów ich nie kasuje.
+  final List<String> renumberNotes;
+
   const SyncState({
     this.status = SyncStatus.disconnected,
     this.lastSyncTime,
     this.errorMessage,
+    this.errorTime,
+    this.lastSyncSent = 0,
+    this.lastSyncReceived = 0,
     this.userEmail,
     this.unitFolderId,
     this.unitInviteCode,
@@ -40,12 +58,16 @@ class SyncState {
     this.founderEmail,
     this.adminEmails = const [],
     this.skippedFiles = 0,
+    this.renumberNotes = const [],
   });
 
   SyncState copyWith({
     SyncStatus? status,
     DateTime? lastSyncTime,
     String? errorMessage,
+    DateTime? errorTime,
+    int? lastSyncSent,
+    int? lastSyncReceived,
     String? userEmail,
     String? unitFolderId,
     String? unitInviteCode,
@@ -53,12 +75,16 @@ class SyncState {
     String? founderEmail,
     List<String>? adminEmails,
     int? skippedFiles,
+    List<String>? renumberNotes,
     bool clearError = false,
   }) {
     return SyncState(
       status: status ?? this.status,
       lastSyncTime: lastSyncTime ?? this.lastSyncTime,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
+      errorTime: clearError ? null : (errorTime ?? this.errorTime),
+      lastSyncSent: lastSyncSent ?? this.lastSyncSent,
+      lastSyncReceived: lastSyncReceived ?? this.lastSyncReceived,
       userEmail: userEmail ?? this.userEmail,
       unitFolderId: unitFolderId ?? this.unitFolderId,
       unitInviteCode: unitInviteCode ?? this.unitInviteCode,
@@ -67,6 +93,7 @@ class SyncState {
       founderEmail: founderEmail ?? this.founderEmail,
       adminEmails: adminEmails ?? this.adminEmails,
       skippedFiles: skippedFiles ?? this.skippedFiles,
+      renumberNotes: renumberNotes ?? this.renumberNotes,
     );
   }
 
@@ -105,8 +132,13 @@ class SyncState {
     if (isCurrentUserAdmin) return true;
     final author = createdBy?.trim() ?? '';
     if (author.isEmpty) return true;
+    return isAuthor(author);
+  }
+
+  /// Czy [createdBy] to zalogowane konto.
+  bool isAuthor(String createdBy) {
     final me = userEmail;
-    if (me == null || me.isEmpty) return false;
-    return _normalize(author) == _normalize(me);
+    if (me == null || me.trim().isEmpty) return false;
+    return _normalize(createdBy) == _normalize(me);
   }
 }

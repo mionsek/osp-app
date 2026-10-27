@@ -83,6 +83,18 @@ class _StepBasicInfoState extends ConsumerState<StepBasicInfo>
     _notesController = TextEditingController(text: widget.notes);
   }
 
+  /// Kreator podmienia numer po pobraniu wyjazdów z Dysku. Pole trzymało
+  /// numer z chwili otwarcia, więc pokazywało inny niż ten, z którym
+  /// wyjazd się zapisywał.
+  @override
+  void didUpdateWidget(StepBasicInfo oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Pole przekazuje numer bez spacji — wpisywanie nie może go nadpisać.
+    if (widget.reportNumber != _reportNumberController.text.trim()) {
+      _reportNumberController.text = widget.reportNumber;
+    }
+  }
+
   @override
   void dispose() {
     _reportNumberController.dispose();

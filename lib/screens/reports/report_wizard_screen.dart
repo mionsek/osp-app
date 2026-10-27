@@ -28,6 +28,18 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
 
   // Step 1 data
   late String _reportNumber;
+
+  /// Numer nadany przez aplikację. Dopóki [_reportNumber] jest mu równy,
+  /// wolno go podmienić na świeższy; wpisanego ręcznie nie ruszamy.
+  String? _autoNumber;
+
+  /// Zapis w toku — przed zapisem kreator jeszcze raz sprawdza numer.
+  bool _saving = false;
+
+  /// Najdłużej tyle czekamy przy zapisie na wyjazdy z Dysku. Przy słabym
+  /// zasięgu zapis nie może wisieć — wyjazd musi się zapisać na telefonie.
+  /// Całkiem bez sieci pobranie wraca od razu.
+  static const _numberCheckTimeout = Duration(seconds: 6);
   late DateTime _date;
   late TimeOfDay _departureTime;
   TimeOfDay? _returnTime;
@@ -68,6 +80,7 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
     } else {
       // Ustaw tymczasowy numer lokalny — zostanie nadpisany po pull z Drive
       _reportNumber = ref.read(reportsProvider.notifier).getNextNumber();
+      _autoNumber = _reportNumber;
       final config = ref.read(unitConfigProvider);
       _addressLocality = config.locality;
       // Pull raportów z Drive, żeby numer był oparty na aktualnych danych
@@ -79,10 +92,89 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
   Future<void> _pullAndRefreshNumber() async {
     await ref.read(syncStateProvider.notifier).pullReportsOnly();
     if (!mounted) return;
+    // Numer wpisany w tym czasie ręcznie zostaje.
+    if (_reportNumber != _autoNumber) return;
     final freshNumber = ref.read(reportsProvider.notifier).getNextNumber();
     setState(() {
       _reportNumber = freshNumber;
+      _autoNumber = freshNumber;
     });
+  }
+
+  /// Ostatnie sprawdzenie numeru, tuż przed zapisem.
+  ///
+  /// Numer liczy się z wyjazdów znanych telefonowi w chwili otwarcia
+  /// kreatora. W teście 1.7.4 dwa telefony dodały wyjazd w tych samych
+  /// minutach i oba nadały 0002/2026 — żaden nie widział jeszcze wyjazdu
+  /// drugiego. Dlatego nowy wyjazd przed zapisem pobiera wyjazdy z Dysku
+  /// jeszcze raz.
+  ///
+  /// Numer nadany przez aplikację przesuwamy na pierwszy wolny, wpisany
+  /// ręcznie — tylko za zgodą. `proceed: false` przerywa zapis, `note`
+  /// mówi o zmianie numeru.
+  Future<({bool proceed, String? note})> _settleReportNumber() async {
+    const ({bool proceed, String? note}) go = (proceed: true, note: null);
+    final db = ref.read(databaseServiceProvider);
+    final previous = _isEditing ? db.getReport(widget.reportId!) : null;
+    if (previous != null && previous.reportNumber == _reportNumber) return go;
+
+    if (!_isEditing) {
+      await ref
+          .read(syncStateProvider.notifier)
+          .pullReportsOnly()
+          .timeout(_numberCheckTimeout, onTimeout: () {});
+      if (!mounted) return (proceed: false, note: null);
+    }
+
+    final taken = db.reportsWithNumber(_reportNumber, exceptId: widget.reportId);
+    if (taken.isEmpty) return go;
+
+    final notifier = ref.read(reportsProvider.notifier);
+    final old = _reportNumber;
+    if (!_isEditing && _reportNumber == _autoNumber) {
+      final next = notifier.getNextNumber();
+      setState(() {
+        _reportNumber = next;
+        _autoNumber = next;
+      });
+      return (
+        proceed: true,
+        note: 'Numer $old ma już wyjazd dodany w międzyczasie na innym '
+            'telefonie — ten wyjazd zapisano jako $next.',
+      );
+    }
+
+    final next = db.nextReportNumberFor(old);
+    final other = taken.first;
+    // Okno i tak blokuje ekran — bez kręcącego się przycisku za nim.
+    setState(() => _saving = false);
+    final change = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Numer $old jest zajęty'),
+        content: Text(
+          'Ma go już wyjazd z ${TimeFormat.date(other.date)}: '
+          '${[other.addressLocality, other.threatCategory].where((s) => s.isNotEmpty).join(' — ')}.\n\n'
+          'Numery w roku nie powinny się powtarzać.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Wróć'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Zapisz jako $next'),
+          ),
+        ],
+      ),
+    );
+    if (change != true || !mounted) return (proceed: false, note: null);
+    setState(() {
+      _reportNumber = next;
+      _saving = true;
+    });
+    return go;
   }
 
   void _loadExistingReport() {
@@ -221,6 +313,18 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
       return;
     }
 
+    if (_saving) return;
+    setState(() => _saving = true);
+    try {
+      final settled = await _settleReportNumber();
+      if (!settled.proceed || !mounted) return;
+      await _writeReport(numberNote: settled.note);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _writeReport({String? numberNote}) async {
     final now = DateTime.now();
     final departure = DateTime(
       _date.year,
@@ -282,13 +386,16 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
 
     if (mounted) {
       final syncState = ref.read(syncStateProvider);
+      final inUnit = syncState.isConnected && syncState.unitFolderId != null;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(syncState.isConnected
-              ? 'Raport zapisany. Synchronizacja z Google Drive w toku...'
-              : 'Raport zapisany lokalnie.'),
-          backgroundColor: OspTheme.success,
-          duration: const Duration(seconds: 3),
+          content: Text(numberNote ??
+              (inUnit
+                  ? 'Raport zapisany. Wysyłanie na Dysk jednostki…'
+                  : 'Raport zapisany lokalnie.')),
+          backgroundColor:
+              numberNote != null ? OspTheme.attention : OspTheme.success,
+          duration: Duration(seconds: numberNote != null ? 8 : 3),
         ),
       );
       // Router pobrany, zanim opuścimy ten ekran. Przycisk „Otwórz" w pasku
@@ -461,6 +568,7 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
             notes: _notes,
             onSave: _saveReport,
             onBack: _prevPage,
+            saving: _saving,
           ),
         ],
       ),

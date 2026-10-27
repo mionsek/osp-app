@@ -24,32 +24,9 @@ void main() {
     tempDir = await Directory.systemTemp.createTemp('osp_db_test');
     Hive.init(tempDir.path);
 
-    if (!Hive.isAdapterRegistered(0)) Hive.registerAdapter(VehicleAdapter());
-    if (!Hive.isAdapterRegistered(1)) Hive.registerAdapter(FirefighterAdapter());
-    if (!Hive.isAdapterRegistered(2)) {
-      Hive.registerAdapter(CrewAssignmentAdapter());
-    }
-    if (!Hive.isAdapterRegistered(3)) Hive.registerAdapter(ThreatEntryAdapter());
-    if (!Hive.isAdapterRegistered(4)) Hive.registerAdapter(ReportAdapter());
-    if (!Hive.isAdapterRegistered(5)) Hive.registerAdapter(UnitConfigAdapter());
-    if (!Hive.isAdapterRegistered(6)) {
-      Hive.registerAdapter(PropertyHandoverAdapter());
-    }
-    if (!Hive.isAdapterRegistered(7)) Hive.registerAdapter(VehicleTripAdapter());
-    if (!Hive.isAdapterRegistered(8)) {
-      Hive.registerAdapter(TripEquipmentUseAdapter());
-    }
+    DatabaseService.registerAdapters();
 
-    await Future.wait([
-      Hive.openBox<Vehicle>('vehicles'),
-      Hive.openBox<Firefighter>('firefighters'),
-      Hive.openBox<Report>('reports'),
-      Hive.openBox<UnitConfig>('config'),
-      Hive.openBox<ThreatEntry>('threats'),
-      Hive.openBox<dynamic>('settings'),
-      Hive.openBox<PropertyHandover>('property_handovers'),
-      Hive.openBox<VehicleTrip>('vehicle_trips'),
-    ]);
+    await DatabaseService.openBoxes();
 
     db = DatabaseService();
   });
@@ -580,6 +557,99 @@ void main() {
 
       expect(await db.fixOvernightReturnTimes(), 0);
       expect(db.getReport('r1')!.returnTime, DateTime(2026, 8, 10, 14, 5));
+    });
+  });
+
+  group('usunięcie danych jednostki z telefonu', () {
+    /// Wszystko, co telefon może trzymać o jednostce, plus ustawienia
+    /// samego telefonu.
+    Future<void> fillPhone() async {
+      await db.addVehicle(Vehicle(id: 'v1', name: 'GBA', seats: 6));
+      await db.addVehicle(Vehicle(id: 'v2', name: 'SLRt', seats: 4));
+      await db.deleteVehicle('v2'); // znacznik usunięcia
+      await db.addFirefighter(Firefighter(
+          id: 'f1', firstName: 'Jan', lastName: 'Kowalski', rank: ''));
+      await db.addReport(report());
+      await db.addHandover(PropertyHandover(
+        id: 'h1',
+        eventDate: DateTime(2026, 8, 10),
+        eventTime: DateTime(2026, 8, 10, 16, 30),
+        recipientName: 'Anna Nowak',
+        signDate: DateTime(2026, 8, 10),
+        createdAt: DateTime(2026, 8, 10),
+        updatedAt: DateTime(2026, 8, 10),
+      ));
+      await db.addTrip(trip(id: 't1', departure: DateTime(2026, 8, 10, 14)));
+      await db.addThreat(ThreatEntry(
+        category: 'Pożar',
+        subtypes: [...ThreatTypes.defaults['Pożar']!, 'Pożar stodoły'],
+      ));
+      await db.cacheAdminEmails(['jan@gmail.com']);
+      await db.markUnitConfigEdited();
+      await db.settingsBox.put(DatabaseService.driveFileCacheKey, '{}');
+      // Klucz, którego jeszcze nie ma w aplikacji — nowy klucz z danymi
+      // jednostki ma zniknąć bez dopisywania go do żadnej listy.
+      await db.settingsBox.put('kluczZPrzyszlejWersji', 'dane jednostki');
+      await db.dismissGettingStarted();
+      await db.configBox
+          .put('driveSync', UnitConfig(namePrefix: 'folder', locality: 'ABC234'));
+      await db.saveConfig(UnitConfig(
+        unitFullName: 'Ochotnicza Straż Pożarna w Kielnie',
+        locality: 'Kielno',
+        ownerEmail: 'ospkielno@gmail.com',
+        onboardingCompleted: true,
+        btPrinterMac: 'AA:BB:CC:DD:EE:FF',
+        btPrinterName: 'NETUM XL-P801',
+      ));
+    }
+
+    test('znika wszystko o jednostce, zostaje drukarka i karta '
+        '„Pierwsze kroki"', () async {
+      await fillPhone();
+
+      await db.wipeUnitData();
+
+      expect(db.getAllVehicles(), isEmpty);
+      expect(db.getAllFirefighters(), isEmpty);
+      expect(db.getAllReports(), isEmpty);
+      expect(db.getAllHandovers(), isEmpty);
+      expect(db.getAllTrips(), isEmpty);
+      expect(db.tombstoneOf('vehicle', 'v2'), isNull);
+      expect(db.cachedAdminEmails, isEmpty);
+      expect(db.unitConfigEditedAt, isNull);
+      expect(db.settingsBox.containsKey(DatabaseService.driveFileCacheKey),
+          isFalse);
+      expect(db.settingsBox.containsKey('kluczZPrzyszlejWersji'), isFalse);
+      expect(db.configBox.get('driveSync'), isNull,
+          reason: 'bez tego telefon łączyłby się z jednostką sam');
+
+      final config = db.getConfig();
+      expect(config.onboardingCompleted, isFalse,
+          reason: 'aplikacja wraca do ekranu powitalnego');
+      expect(config.unitFullName, isNull);
+      expect(config.ownerEmail, '');
+      expect(config.btPrinterMac, 'AA:BB:CC:DD:EE:FF');
+      expect(config.btPrinterName, 'NETUM XL-P801');
+      expect(db.isGettingStartedDismissed, isTrue);
+
+      expect(db.getAllThreats().map((t) => t.category),
+          unorderedEquals(ThreatTypes.defaults.keys));
+      expect(
+          db.getAllThreats().expand((t) => t.subtypes), isNot(contains('Pożar stodoły')),
+          reason: 'własne podtypy to słownik jednostki');
+    });
+
+    test('po ponownym uruchomieniu aplikacji nic nie wraca', () async {
+      await fillPhone();
+      await db.wipeUnitData();
+
+      await Hive.close();
+      await DatabaseService.openBoxes();
+
+      expect(db.getAllReports(), isEmpty);
+      expect(db.getAllFirefighters(), isEmpty);
+      expect(db.cachedAdminEmails, isEmpty);
+      expect(db.getConfig().btPrinterMac, 'AA:BB:CC:DD:EE:FF');
     });
   });
 }

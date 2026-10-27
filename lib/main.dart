@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'core/theme/osp_theme.dart';
 import 'core/router/app_router.dart';
+import 'models/sync_state.dart';
 import 'services/database_service.dart';
 import 'providers/providers.dart';
 
@@ -70,10 +71,26 @@ class OspApp extends ConsumerStatefulWidget {
   ConsumerState<OspApp> createState() => _OspAppState();
 }
 
-class _OspAppState extends ConsumerState<OspApp> {
+class _OspAppState extends ConsumerState<OspApp> with WidgetsBindingObserver {
+  /// Powrót do aplikacji z tła — synchronizacja co 5 minut stoi, gdy Android
+  /// uśpi aplikację.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      ref.read(syncStateProvider.notifier).onAppResumed();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Migracje i logowanie po pierwszej klatce — ekran główny nie potrzebuje
     // ich wyniku, żeby się narysować.
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -88,11 +105,33 @@ class _OspAppState extends ConsumerState<OspApp> {
     });
   }
 
+  final _messenger = GlobalKey<ScaffoldMessengerState>();
+
   @override
   Widget build(BuildContext context) {
     final router = ref.watch(routerProvider);
 
+    // Nowy numer wyjazdu po powtórzeniu z dwóch telefonów — na każdym
+    // ekranie, bo synchronizacja przychodzi w tle.
+    ref.listen<SyncState>(syncStateProvider, (_, next) {
+      if (next.renumberNotes.isEmpty) return;
+      _messenger.currentState?.showSnackBar(SnackBar(
+        backgroundColor: OspTheme.attention,
+        duration: const Duration(seconds: 12),
+        content: Text(next.renumberNotes.join('\n\n')),
+        action: SnackBarAction(
+          label: 'OK',
+          textColor: Colors.white,
+          onPressed: () {},
+        ),
+      ));
+      // Nie w trakcie powiadamiania o tej samej zmianie stanu.
+      Future.microtask(
+          () => ref.read(syncStateProvider.notifier).clearRenumberNotes());
+    });
+
     return MaterialApp.router(
+      scaffoldMessengerKey: _messenger,
       title: 'Raporty OSP',
       theme: OspTheme.lightTheme,
       debugShowCheckedModeBanner: false,

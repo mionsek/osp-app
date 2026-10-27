@@ -34,9 +34,6 @@ class BluetoothPrintService {
   static Future<bool> isBluetoothEnabled() =>
       PrintBluetoothThermal.bluetoothEnabled;
 
-  static Future<bool> isPermissionGranted() =>
-      PrintBluetoothThermal.isPermissionBluetoothGranted;
-
   static Future<List<BluetoothInfo>> pairedPrinters() =>
       PrintBluetoothThermal.pairedBluetooths;
 

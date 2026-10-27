@@ -10,6 +10,7 @@ import 'package:osp_app/services/sync_json.dart';
 import 'package:osp_app/services/sync_service.dart';
 
 import 'helpers/fake_drive.dart';
+import 'helpers/phone_db.dart';
 
 /// Synchronizacja „dwa telefony, jeden Dysk".
 ///
@@ -25,21 +26,7 @@ void main() {
   final db = DatabaseService();
 
   setUpAll(() {
-    if (!Hive.isAdapterRegistered(0)) Hive.registerAdapter(VehicleAdapter());
-    if (!Hive.isAdapterRegistered(1)) Hive.registerAdapter(FirefighterAdapter());
-    if (!Hive.isAdapterRegistered(2)) {
-      Hive.registerAdapter(CrewAssignmentAdapter());
-    }
-    if (!Hive.isAdapterRegistered(3)) Hive.registerAdapter(ThreatEntryAdapter());
-    if (!Hive.isAdapterRegistered(4)) Hive.registerAdapter(ReportAdapter());
-    if (!Hive.isAdapterRegistered(5)) Hive.registerAdapter(UnitConfigAdapter());
-    if (!Hive.isAdapterRegistered(6)) {
-      Hive.registerAdapter(PropertyHandoverAdapter());
-    }
-    if (!Hive.isAdapterRegistered(7)) Hive.registerAdapter(VehicleTripAdapter());
-    if (!Hive.isAdapterRegistered(8)) {
-      Hive.registerAdapter(TripEquipmentUseAdapter());
-    }
+    DatabaseService.registerAdapters();
   });
 
   setUp(() async {
@@ -54,19 +41,7 @@ void main() {
 
   /// Przełącza „telefon" i zwraca jego usługę synchronizacji.
   Future<SyncService> phone(String name) async {
-    await Hive.close();
-    final dir = Directory('${root.path}/$name')..createSync(recursive: true);
-    Hive.init(dir.path);
-    await Future.wait([
-      Hive.openBox<Vehicle>('vehicles'),
-      Hive.openBox<Firefighter>('firefighters'),
-      Hive.openBox<Report>('reports'),
-      Hive.openBox<UnitConfig>('config'),
-      Hive.openBox<ThreatEntry>('threats'),
-      Hive.openBox<dynamic>('settings'),
-      Hive.openBox<PropertyHandover>('property_handovers'),
-      Hive.openBox<VehicleTrip>('vehicle_trips'),
-    ]);
+    await openPhoneDb(root, name);
     final sync = SyncService(db, FakeAuth('$name@osp.pl'), drive);
     await sync.restoreState();
     return sync;

@@ -1072,12 +1072,11 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
     final asLoaded = _asLoaded;
     if (widget.isEdit && asLoaded != null && asLoaded.reportId != null) {
       trip.overriddenFields = List.of(asLoaded.overriddenFields);
-      updatedReport = await ref.read(databaseServiceProvider).saveTripEditedByUser(
-            trip,
-            touched: _touchedReportFields(asLoaded, trip),
-            canEditReport: linked != null && _canEditReport(linked),
-          );
-      notifier.refresh();
+      updatedReport = await notifier.saveEditedByUser(
+        trip,
+        touched: _touchedReportFields(asLoaded, trip),
+        canEditReport: linked != null && _canEditReport(linked),
+      );
       if (updatedReport != null) ref.read(reportsProvider.notifier).refresh();
     } else if (widget.isEdit) {
       await notifier.update(trip);

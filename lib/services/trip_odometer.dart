@@ -53,24 +53,6 @@ class TripOdometer {
     return inChainOrder(earlier).last.odometerEnd;
   }
 
-  /// Stan licznika, który należy pokazać jako „przed wyjazdem".
-  ///
-  /// Wpis oznaczony [VehicleTrip.odometerStartManual] wygrywa z łańcuchem —
-  /// bez tego jeden pominięty przejazd rozjeżdżałby wszystkie następne i nie
-  /// dałoby się tego odkręcić.
-  static int? resolveStart(
-    VehicleTrip trip,
-    Iterable<VehicleTrip> allTrips,
-  ) {
-    if (trip.odometerStartManual) return trip.odometerStart;
-    return previousReading(
-      allTrips,
-      vehicleId: trip.vehicleId,
-      before: trip.departureTime,
-      excludeTripId: trip.id,
-    );
-  }
-
   /// Przelicza łańcuch dla jednego pojazdu i zwraca przejazdy, które zmieniły
   /// stan początkowy — do zapisania.
   ///

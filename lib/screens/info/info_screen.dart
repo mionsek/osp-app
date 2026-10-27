@@ -157,7 +157,11 @@ class InfoScreen extends StatelessWidget {
                 'ten folder". Aplikacja korzysta wyłącznie z folderu '
                 'OSP_App_…; dostęp można cofnąć w każdej chwili na '
                 'myaccount.google.com/permissions. Kto woli, może do OSP '
-                'używać osobnego konta Gmail.',
+                'używać osobnego konta Gmail.\n\n'
+                'Dane z aplikacji nie trafiają do kopii zapasowej telefonu na '
+                'Twoim koncie Google. Kto odchodzi z jednostki albo oddaje '
+                'telefon, usunie je w Ustawieniach: „Wyloguj" → „Wyloguj '
+                'i usuń dane" — na Dysku jednostki zostają.',
                 style: TextStyle(height: 1.5),
               ),
               const SizedBox(height: 24),

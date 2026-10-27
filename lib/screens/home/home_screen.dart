@@ -1,4 +1,5 @@
 import '../../core/utils/bottom_inset.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,6 +9,7 @@ import '../../core/constants/constants.dart';
 import '../../models/sync_state.dart';
 import '../../providers/providers.dart';
 import '../../core/theme/osp_theme.dart';
+import '../../widgets/sync_feedback.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -61,21 +63,30 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final handovers = ref.watch(handoversProvider);
     final syncState = ref.watch(syncStateProvider);
 
-    // Pokaż SnackBar gdy po sync pojawią się duplikaty
+    // Pasek tylko przy nowych duplikatach. Każda synchronizacja zwraca nową
+    // listę, więc przy porównaniu samych obiektów pasek wracał po każdej —
+    // i przez 6 sekund zasłaniał wynik „Synchronizuj teraz". Na stałe
+    // duplikaty są oznaczone na liście wyjazdów.
     final duplicates = syncState.duplicateReportNumbers;
-    if (duplicates.isNotEmpty && duplicates != _lastKnownDuplicates) {
+    if (duplicates.isEmpty) _lastKnownDuplicates = const [];
+    if (duplicates.isNotEmpty &&
+        !setEquals(duplicates.toSet(), _lastKnownDuplicates.toSet())) {
       _lastKnownDuplicates = duplicates;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            backgroundColor: Colors.orange[800],
+            backgroundColor: OspTheme.attention,
             duration: const Duration(seconds: 6),
             content: Text(
-              'Wykryto ${duplicates.length} '
-              '${duplicates.length == 1 ? 'duplikat' : 'duplikaty/duplikatów'} '
-              'numerów wyjazdów: ${duplicates.join(', ')}. '
-              'Sprawdź listę raportów.',
+              'Ten sam numer mają dwa wyjazdy: ${duplicates.join(', ')}. '
+              'Późniejszy dostanie nowy numer przy synchronizacji telefonu, '
+              'z którego go dodano.',
+            ),
+            action: SnackBarAction(
+              label: 'Pokaż',
+              textColor: Colors.white,
+              onPressed: () => context.push('/reports'),
             ),
           ),
         );
@@ -92,9 +103,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           overflow: TextOverflow.ellipsis,
         ),
         actions: [
-          _SyncIndicator(syncState: syncState, onTap: () {
-            ref.read(syncStateProvider.notifier).syncNow();
-          }),
+          _SyncIndicator(
+            syncState: syncState,
+            onTap: () => runManualSync(context, ref),
+          ),
         ],
       ),
       body: SafeArea(

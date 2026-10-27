@@ -307,9 +307,22 @@ narzędzia, a nie jako zadanie w tle. Do odczytu ekranów i tak lepszy jest
 - [x] Zweryfikowane end-to-end na emulatorze OSP_Test: dodanie ratownika, utworzenie przekazania (w tym wybór „Inne" z dodatkowym polem), zapis, podgląd szczegółów, podgląd wydruku (potwierdzone: ISO A4, 2 strony, poprawny layout)
 
 ### Analiza (bez zmian kodu) — tworzenie/dołączanie do jednostki
-- **Brak zabezpieczenia przed utworzeniem drugiej jednostki na koncie, które już ma jednostkę**: `SyncService.createUnit()` zawsze tworzy nowy folder Drive niezależnie od tego, czy zalogowane konto już jest właścicielem/uczestnikiem innej jednostki — do rozważenia w przyszłości (np. sprawdzenie istniejącego `unit_config.json`/`driveSync` przed „Utwórz jednostkę" i zaproponowanie dołączenia/przełączenia zamiast cichego utworzenia drugiej, rozłącznej jednostki)
+- **Brak zabezpieczenia przed utworzeniem drugiej jednostki na koncie, które już ma jednostkę**: `SyncService.createUnit()` zawsze tworzy nowy folder Drive niezależnie od tego, czy zalogowane konto już jest właścicielem/uczestnikiem innej jednostki — do rozważenia w przyszłości (np. sprawdzenie istniejącego `unit_config.json`/`driveSync` przed „Utwórz jednostkę" i zaproponowanie dołączenia/przełączenia zamiast cichego utworzenia drugiej, rozłącznej jednostki) — **zrobione w fix/047** dla jednostek założonych na tym samym koncie (na Dysku ospkielno@gmail.com zebrały się do tego czasu cztery identyczne foldery)
 
 ## Do zrobienia — Kolejne branche
+
+### Ochrona danych i dysk współdzielony
+Analiza z 26.10.2026 (gałąź `claude/raporty-osp-analysis-1wbpj3`, na wersji
+1.7.1), poprawiona 27.10.2026 po fix/046 i fix/047. Model z Dyskiem zostaje.
+- [x] **Ochrona danych na telefonie** — [PLAN_OCHRONA_DANYCH.md](PLAN_OCHRONA_DANYCH.md): kopia zapasowa Androida wyłączona i „Wyloguj i usuń dane" — zrobione w fix/047. Blokada dalszego udostępniania folderu odrzucona (gryzie się z przejściem na własne konto), szyfrowanie bazy odłożone
+- [ ] **Wykrywanie odebranego dostępu** — odróżnianie „brak dostępu" (403/404) od „brak sieci", komunikat i propozycja usunięcia danych z telefonu. Czeka na test na dwóch telefonach: trzeba zobaczyć, co Dysk faktycznie odpowiada po odebraniu dostępu. Dziś zmiana konta przy chwilowym braku sieci mówi „to konto nie ma dostępu"
+- [ ] **Uprawnienia pilnowane przez Dysk** — dziś każdy członek ma prawo edycji całego folderu, łącznie z `config/` (listy, `admins.json`), a blokada administratora działa tylko w aplikacji. Do rozważenia: członkowie z edycją tylko `reports/`, `handovers/`, `trips/`, a `config/` do odczytu. Większa zmiana: inne udostępnianie i przestawienie obecnych członków
+- [ ] **feature/048-dysk-wspoldzielony** — [PLAN_DYSK_WSPOLDZIELONY.md](PLAN_DYSK_WSPOLDZIELONY.md): folder jednostki na dysku współdzielonym Google Workspace. Jedyny argument, którego nie załatwi kod, to umowa powierzenia danych (RODO). Zaczyna się od decyzji zarządu (konto Workspace, domena)
+
+### Zaproszenie i widoczność jednostki
+Zgłoszone po teście na dwóch telefonach 27.10.2026 (wersja 1.7.4).
+- [ ] **Zaproszenie do jednostki i do instalacji aplikacji** — dziś kolega dostaje standardowy e-mail Google „… udostępnił Ci folder" z doklejonym naszym tekstem (kod, instrukcja). Układu tego maila nie da się zmienić, to szablon Google, a w nim główny przycisk otwiera folder na Dysku, nie aplikację. Oczekiwanie: zaproszenie, które prowadzi do instalacji aplikacji i dołączenia, najlepiej z linkiem do Sklepu Play. Do rozważenia: przycisk „Wyślij zaproszenie" otwierający udostępnianie Androida (e-mail, SMS, Messenger, WhatsApp) z gotową wiadomością — nazwa jednostki, kod, link do instalacji — a folder udostępniany jak dziś. Link do Play po publikacji, do tego czasu link do APK. Później: link, który otwiera aplikację z wpisanym kodem
+- [ ] **Na ekranie głównym: kto jest zalogowany i do jakiej jednostki** — np. „Witaj, Wojciech" (imię z konta Google, a bez niego e-mail), nazwa jednostki i wyraźny stan: połączono z jednostką / dane tylko na telefonie / błąd synchronizacji. Dziś pasek pokazuje skróconą nazwę jednostki z ustawień telefonu, także wtedy, gdy telefon nie jest połączony z żadną jednostką na Dysku
 
 ### Urządzenia specjalne per pojazd + rozbicie minut pracy
 Dziś minuty pracy urządzeń specjalnych to **jedna liczba** (`VehicleTrip.specialEquipmentMinutes`)
@@ -363,7 +376,7 @@ Obecnie druk startuje od razu po kliknięciu.
 - [ ] **Dopisać SHA-1 klucza wydań do Google Cloud** — klient OAuth typu Android „Raporty OSP – wydania" już istnieje (od 30.09.2026), trzeba w nim **podmienić odcisk**. Pakiet `pl.osp.osp_app`, SHA-1 `AC:02:42:F2:89:F3:E9:75:E1:04:9E:54:0F:4A:35:F0:40:36:35:BB` (klucz z chore/045; `59:9C:…` z chore/043 przepadł z poprzednim komputerem, a wcześniejszy `B4:8D:…` przepadł razem z laptopem Lenovo). **Do czasu dopisania logowanie Google zwraca błąd 10** i działa tylko tryb offline
 - [ ] **Weryfikacja uprawnienia `drive` przez Google** — od fix/046 aplikacja prosi o pełny dostęp do Dysku, a to uprawnienie z grupy zastrzeżonych. W trybie testowym działa dla najwyżej 100 testerów (z ostrzeżeniem o niezweryfikowanej aplikacji); publikacja dla wszystkich wymaga weryfikacji Google z płatną oceną bezpieczeństwa. Węższe `drive.file` odpada — przy nim koledzy nie widzą nawzajem swoich plików (opis w fix/046)
 - [ ] Grafiki do sklepu: ikona 512×512, feature graphic 1024×500, min. 2 screenshoty
-- [ ] Polityka prywatności — po usunięciu reklam aplikacja nie zbiera praktycznie nic (dane leżą na Dysku Google użytkownika), więc mieści się w akapicie
+- [ ] Polityka prywatności — po usunięciu reklam aplikacja nie zbiera praktycznie nic (dane leżą na Dysku Google użytkownika), więc mieści się w akapicie. Opisać w niej też wyłączoną kopię zapasową Androida i „Wyloguj i usuń dane" (fix/047)
 - [ ] (opcjonalnie) Ikona monochromatyczna `<monochrome>` w adaptive icon — motywy Android 13+
 
 **Publikacja w Play daje też odpowiedź na pytanie o statystyki**: konsola pokazuje
@@ -734,7 +747,7 @@ Kolejność według wagi.
 - [ ] Przekazanie mienia: zmiana powiązanego wyjazdu nadpisuje ręcznie wpisane miejsce, datę i **godzinę** (bierze godzinę wyjazdu, nie przekazania)
 - [ ] Nocna akcja z drugim wozem wyjeżdżającym po północy — jego przejazd ma datę D+1 i nie liczy się do godzin raportu
 - [ ] Brak dziennika błędów do diagnozy zgłoszeń (błędy idą tylko do `debugPrint`)
-- [ ] `allowBackup` domyślnie włączony — kopia Androida wysyła bazę (nazwiska, telefony, daty badań) na prywatne konto Google członka. Decyzja do podjęcia i opisania w polityce prywatności
+- [x] ~~`allowBackup` domyślnie włączony — kopia Androida wysyła bazę (nazwiska, telefony, daty badań) na prywatne konto Google członka. Decyzja do podjęcia i opisania w polityce prywatności~~ — **zrobione w fix/047**: kopia wyłączona; do opisania w polityce prywatności (sekcja „Przed publikacją")
 
 ### Czego brakuje funkcjonalnie — z perspektywy prezesa, naczelnika i gminy
 Nie ma tego w backlogu, uporządkowane od największej wartości:
@@ -746,8 +759,8 @@ Nie ma tego w backlogu, uporządkowane od największej wartości:
 - [ ] **Wykaz ratowników** (PDF/CSV) do gminy i KP PSP — dane są, brak wydruku
 - [ ] **Historia udziału strażaka w działaniach** za wiele lat — do świadczenia ratowniczego
 - [ ] **Eksport i kopia zapasowa** (plik + import, CSV) — dziś w trybie offline dane są tylko w telefonie
-- [ ] **RODO**: „Usuń dane z tego telefonu" po odejściu z jednostki, okres przechowywania danych osób przejmujących mienie, klauzula dla członków
-- [ ] **Przeniesienie jednostki na konto OSP** — folder leży na prywatnym Gmailu założyciela
+- [ ] **RODO**: ~~„Usuń dane z tego telefonu" po odejściu z jednostki~~ (**zrobione w fix/047** — „Wyloguj i usuń dane"), okres przechowywania danych osób przejmujących mienie, klauzula dla członków
+- [ ] ~~**Przeniesienie jednostki na konto OSP** — folder leży na prywatnym Gmailu założyciela~~ — od fix/046 jednostkę zakłada się na koncie jednostki i przechodzi na własne konto; własność plików i umowę powierzenia danych rozwiązuje dopiero dysk współdzielony — [PLAN_DYSK_WSPOLDZIELONY.md](PLAN_DYSK_WSPOLDZIELONY.md)
 - [ ] Numer zdarzenia z systemu PSP na potwierdzeniu udziału — do ustalenia z KP PSP
 - [ ] Ewidencja sprzętu i jego przeglądów (ODO, butle, pilarki) — duże, na później
 
@@ -893,3 +906,57 @@ i na emulatorze.
 - [ ] **Google Cloud → Dostęp do danych:** dopisać zakres `https://www.googleapis.com/auth/drive`. Testerom logowanie zadziała i bez tego, ale ekran zgody pokaże wtedy właściwy opis
 - [ ] **Test na dwóch telefonach z różnymi kontami** (oba na liście testerów): zaproszenie z Ustawień → e-mail z kodem → dołączenie na drugim telefonie → wyjazd z jednego widoczny na drugim
 - [ ] Parowanie drukarki NETUM z poziomu aplikacji
+
+## Zrobione (fix/047-synchronizacja-dane-telefonu)
+Zgłoszenia Dawida z testów 1.7.3 (27.10.2026) i część planu ochrony danych
+z gałęzi `claude/raporty-osp-analysis-1wbpj3`. Format danych na Dysku bez
+zmian — 1.7.3 i 1.7.4 synchronizują się ze sobą.
+
+### Synchronizacja
+- [x] **Ponawianie przy zerwanym połączeniu** — na ekranie stało „ClientException: Software caused connection abort, uri=https://www.googleapis.com/upload/…" przy dobrym zasięgu, a ręczne ponowienie od razu przechodziło. Każde zapytanie do Dysku przy zerwanym połączeniu, przekroczonym czasie albo chwilowym przeciążeniu Google (429, 5xx, limit zapytań) próbuje łącznie 3 razy, z przerwami 2 i 5 s. Ponawiana jest pojedyncza operacja, nie cała synchronizacja. Odmowa dostępu, brak pliku i odrzucony token nie są ponawiane
+- [x] Ponowione zakładanie podfolderu najpierw sprawdza, czy nie powstał przy próbie, której odpowiedź się zgubiła; pliki konfiguracji ponawiane razem z wyszukaniem. Sam folder jednostki nie jest ponawiany (nie da się odróżnić od starszych jednostek o tej samej nazwie). Raport utworzony przy zgubionej odpowiedzi może wyjątkowo mieć na Dysku dwa pliki — synchronizacja to znosi, bierze najnowszy
+- [x] Zerwane połączenie przy odczycie pliku nie jest już liczone jako „uszkodzony plik" — synchronizacja zgłasza brak sieci; przy wyszukiwaniu jednostki po kodzie nie kończy się fałszywym „nie znaleziono"
+- [x] **Komunikaty** — błąd po polsku zamiast tekstu wyjątku („Połączenie z internetem zostało przerwane. Dane są zapisane na telefonie, synchronizacja ponowi się sama.") i z godziną. Stary błąd wisiał do następnej udanej synchronizacji i wyglądał jak świeży (zrzut z zaproszeniem Wojciecha)
+- [x] **Zielone potwierdzenie** po ręcznym „Synchronizuj teraz" (Ustawienia i ikona na ekranie głównym): „Zsynchronizowano: wysłano 2 zmiany, pobrano 1 zmianę." albo „wszystko aktualne". Automatyczna synchronizacja co 5 minut przechodzi po cichu
+
+### Jednostka i listy
+- [x] **Ostrzeżenie przed drugą jednostką na tym samym koncie** — na Dysku ospkielno@gmail.com zebrały się cztery identyczne `OSP_App_Ochotnicza Straż Pożar…`. „Utwórz jednostkę" (Ustawienia i wprowadzenie) najpierw pokazuje jednostki tego konta z kodem i datą założenia i proponuje dołączenie; „Utwórz nową" zostaje
+- [x] **„Otwórz folder jednostki na Dysku"** w Ustawieniach — żeby nie zgadywać, który folder jest właściwy
+- [x] **Listy ratowników i pojazdów prowadzi administrator — także na Dysku.** Telefon bez uprawnień nie mógł ich zmienić z ekranu, ale wysyłał swoją kopię, gdy tylko różniła się od Dysku. Przez to wpisy sprzed dołączenia (np. testowy wóz z trybu offline) dopisywały się do list całej jednostki. Teraz wysyła je tylko administrator
+- [x] **Przy dołączaniu obowiązuje lista jednostki** — ratownicy i pojazdy z telefonu, których jednostka nie ma, znikają z niego; okno potwierdzenia wymienia je z nazwy. Wyjazdy, przekazania i przejazdy z telefonu nadal trafiają do jednostki. Lista, której nie udało się przeczytać (brak albo uszkodzenie pliku), niczego nie zastępuje
+
+### Dane na telefonie
+- [x] **Kopia zapasowa Androida wyłączona** (`allowBackup="false"`) — baza nie trafia na prywatne konto Google właściciela telefonu ani do kopii przez adb. Przeniesienie na nowy telefon (kablem, Wi-Fi) od Androida 12 działa dalej. Kopii wysłanych wcześniej aktualizacja nie usuwa — każdy może je usunąć w swoim koncie Google
+- [x] **„Wyloguj i usuń dane"** — trzecia opcja przy wylogowaniu z jednostki. Najpierw synchronizacja; gdy się nie uda, drugie ostrzeżenie, że niewysłane zmiany przepadną. Usuwa ratowników, pojazdy, wyjazdy, przekazania, przejazdy, słownik i dane jednostki; zostaje sparowana drukarka i zamknięta karta „Pierwsze kroki". Nowy klucz z danymi jednostki zniknie sam — lista kluczy do zachowania, a nie do usunięcia. Dane na Dysku jednostki zostają
+
+### Po teście 1.7.4 na dwóch telefonach — wysyłka i numery wyjazdów
+Dawid i Wojciech dodali wyjazd w tych samych minutach. Oba dostały numer
+0002/2026, a wyjazd Wojciecha przez kilka minut nie trafiał na Dysk, choć jego
+ekran pisał „Zapisano na Google Drive". Na Dysku: fałszywy alarm Dawida od
+17:37, wypadek Wojciecha dopiero od 17:41.
+- [x] **Wysyłka zaraz po zapisie** — zapis wyjazdu, przekazania, przejazdu, ratownika, pojazdu, słownika i danych jednostki niczego nie wysyłał; komunikat „Synchronizacja z Google Drive w toku…" był nieprawdziwy. Synchronizacja szła co 5 minut, tylko przy aplikacji otwartej na ekranie (Android usypia ją w tle), albo po odzyskaniu sieci. Teraz rusza 2 s po zapisie (kilka zapisów naraz — wyjazd i jego przejazdy — to jeden przebieg); zapis w trakcie synchronizacji wychodzi kolejnym przebiegiem. Bez sieci zmiana czeka jak dotąd
+- [x] **Synchronizacja przy uruchomieniu i po powrocie do aplikacji** — dotąd przy starcie zależała od zdarzenia zmiany sieci, a po powrocie z tła czekała do 5 minut
+- [x] **Prawdziwy stan wyjazdu** — pasek „Zapisano na Google Drive" pokazywał się po każdej udanej synchronizacji, także przy wyjeździe, który czekał na telefonie. Teraz: „Zapisano na Dysku jednostki" tylko wtedy, gdy na Dysku leży dokładnie ta wersja; inaczej „Czeka na wysłanie" z przyciskiem „Wyślij teraz", a po błędzie — że wyjazd jest tylko na telefonie, z powodem i godziną. Na liście wyjazdów ikona chmurki przy tych, które czekają
+- [x] **Numer sprawdzany drugi raz przy zapisie** — numer liczy się z wyjazdów znanych telefonowi w chwili otwarcia kreatora. Przed zapisem nowego wyjazdu kreator pobiera wyjazdy z Dysku jeszcze raz (najdłużej 8 s, bez zasięgu zapisuje od razu). Numer nadany przez aplikację, który okazał się zajęty, przesuwa się na pierwszy wolny z komunikatem; wpisany ręcznie — tylko za zgodą („Numer … jest zajęty"). Pobranie czeka na synchronizację, która akurat trwa — wcześniej wracało od razu i numer liczył się z danych sprzed niej
+- [x] Pole numeru w kreatorze pokazywało numer z chwili otwarcia, a wyjazd zapisywał się z numerem policzonym po pobraniu z Dysku; numer wpisany ręcznie w trakcie pobierania był nadpisywany
+- [x] **Powtórzony numer na stałe przy wyjeździe** — dotąd tylko 6-sekundowy pasek na ekranie głównym, wracający po każdej synchronizacji i zasłaniający jej wynik (stąd „wyskoczyło tylko info o duplikacie"). Teraz na liście wyjazdów „Ten sam numer ma inny wyjazd", a na ekranie wyjazdu drugi wyjazd (data, miejsce, rodzaj, konto) i przycisk „Nadaj temu wyjazdowi numer …" dla autora i administratora. Pasek na ekranie głównym tylko przy nowym duplikacie, z „Pokaż"
+- [x] **Powtórzony numer rozstrzyga się sam (1.7.6)** — zostaje przypadek dwóch zapisów w odstępie kilku sekund albo bez zasięgu na obu telefonach. Zasada Dawida: wcześniejszy wyjazd (godzina wyjazdu, przy równej — chwila zapisu) zatrzymuje numer, późniejszy dostaje pierwszy wolny w swoim roku. Synchronizacja robi to zaraz po pobraniu, a nowy numer wychodzi tym samym przebiegiem. Wyjazdy bez konfliktu zostają nietknięte (np. przy zajętym 0003 późniejszy 0002 dostaje 0004), bo mogły już trafić na wydruk albo do PSP
+- [x] Numer zmienia **tylko telefon autora późniejszego wyjazdu** (przy wyjazdach bez autora — administratora). Gdyby poprawiał każdy, dwa telefony mogłyby nadać temu samemu wyjazdowi różne numery. Autor dostaje komunikat na dowolnym ekranie: „Wyjazd z 27.10, 17:10 (Kielno) ma teraz numer 0003/2026 — numer 0002/2026 ma wcześniejszy wyjazd. Jeśli był już wydrukowany, popraw numer na wydruku."
+- [x] **Wyjątek: ta sama akcja zapisana dwa razy** (dwóch strażaków z jednego wyjazdu) — wyjazd w odstępie do godziny i ten sam rodzaj zagrożenia albo ta sama miejscowość. Nowy numer dopisałby do ewidencji wyjazd, którego nie było, więc numer zostaje, a ekran wyjazdu pyta „Ten sam wyjazd zapisany dwa razy?" i podpowiada usunięcie jednego. Liczy się odstęp, nie dzień — akcja z 23:50 i 0:05 to wciąż może być ta sama
+- [x] Bez żadnej sieci (brak zasięgu, tryb samolotowy) zapis wyjazdu nie czeka na sprawdzenie numeru, a wysyłka po zapisie nie próbuje — bez czerwonego błędu po każdym zapisie w terenie. Wyśle ją powrót zasięgu
+- [x] 20 nowych testów: wysyłka po zapisie (także kilka zapisów jednym przebiegiem, zapis w trakcie synchronizacji, brak jednostki), stan wysłania (także po edycji i u kolegi), numer przy dwóch telefonach, pobranie czekające na trwającą synchronizację, nowy numer w roku wyjazdu, a w widokach: pole numeru po pobraniu, numer zajęty w międzyczasie, ręcznie wpisany zajęty numer („Zapisz jako" i „Wróć"), pasek stanu wyjazdu (czeka / na Dysku / błąd / bez jednostki), powtórzony numer u autora i u kolegi, oznaczenia na liście. Łącznie **322**
+- [x] 17 testów automatycznego rozstrzygania: zasada „wcześniejszy zatrzymuje" (kolejność na liście bez znaczenia, remis godzin, trzy wyjazdy), „ta sama akcja" (godzina, miejscowość, po północy, puste pola), na dwóch telefonach: test 1.7.4 (alarm 0002, wypadek 0003 na obu), cudzy wyjazd poprawia tylko jego autor, zajęty następny numer, ta sama akcja zostaje, wyjazd bez autora poprawia administrator; ekran wyjazdu dla obu przypadków. Łącznie **339**
+- [x] Wersja **1.7.6+19** (1.7.4 jest już na telefonach testowych)
+
+### Porządki przed scaleniem
+- [x] Usunięty nieużywany kod (żaden nie pochodził z fix/047): `GoogleDriveService.deleteFile` (aplikacja niczego na Dysku nie usuwa — usunięcie to znacznik — więc to była zbędna furtka), `GoogleAuthService.currentUser`, `DatabaseService.getTripForReport` i `isOnboardingCompleted`, `TripOdometer.resolveStart`, `VehicleTrip.equipmentLabel`, `BluetoothPrintService.isPermissionGranted`, kolory `OspTheme.darkRed` i `lightRed`, cała lista `FirefighterRanks` (formularz ratownika jej nie używa)
+- [x] Wydzielone powtórzenia w kodzie: rejestracja adapterów i otwieranie boksów Hive (`DatabaseService.registerAdapters` i `openBoxes`, z których korzysta aplikacja i testy, więc nowy boks nie zostanie w testach pominięty), „pierwszy wolny numer w roku tego numeru" (`nextReportNumberFor`, wcześniej w czterech miejscach), „czy to moje konto" (`SyncState.isAuthor`)
+- [x] Testy: rejestracja adapterów skopiowana w 7 plikach i przełączanie „telefonu" w 4 plikach zastąpione wspólnym kodem (`openPhoneDb`), wspólny stan synchronizacji ustalony z góry (`FixedSyncState`) i aplikacja testowa z routerem (`testRouterApp`)
+- [ ] Zostawione świadomie: `googleapis_auth` w zależnościach (nieużywany wprost, ale i tak potrzebny `googleapis`), `cupertino_icons` (szablon Fluttera, po odchudzeniu czcionki 848 bajtów), podobny kod startowy siedmiu providerów list (przy każdym inne metody — wspólna klasa bazowa dałaby mniej czytelny kod)
+
+### Testy i wersja
+- [x] 24 nowe testy: ponawianie i rozpoznawanie błędów przejściowych, komunikaty, liczniki zmian, błąd z godziną i jego zniknięcie po udanej synchronizacji, listy przy dołączaniu (także uszkodzona lista), telefon bez uprawnień nie wysyła list, administrator nadany przez założyciela wysyła, jednostki konta, usunięcie danych (także po ponownym otwarciu bazy) i ekrany: zielone potwierdzenie, błąd z godziną, przycisk folderu, wylogowanie z usunięciem przy nieudanej synchronizacji, ostrzeżenie o istniejącej jednostce. Łącznie **302**
+- [x] Wersja **1.7.4+17**
+
+### Nie zrobione w tej gałęzi
+- [ ] **Wykrywanie odebranego dostępu** — po teście na dwóch telefonach (patrz „Do zrobienia — Kolejne branche")

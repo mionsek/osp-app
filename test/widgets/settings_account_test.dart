@@ -15,14 +15,6 @@ import '../helpers/test_app.dart';
 
 class _MockAuth extends Mock implements GoogleAuthService {}
 
-/// Stan konta ustalony z góry — ekran dostaje dokładnie ten przypadek,
-/// który badamy, bez logowania i bez Dysku.
-class _FixedSyncState extends SyncStateNotifier {
-  _FixedSyncState(super.syncService, SyncState initial) {
-    state = initial;
-  }
-}
-
 /// Sekcja konta Google w Ustawieniach.
 ///
 /// Zgłoszenie z testów 1.7.1: „niby jest »zalogowano«, ale nie ma żadnych
@@ -73,7 +65,7 @@ void main() {
       sync: sync,
       overrides: [
         syncStateProvider.overrideWith(
-            (ref) => _FixedSyncState(ref.watch(syncServiceProvider), state)),
+            (ref) => FixedSyncState(ref.watch(syncServiceProvider), state)),
       ],
     ));
     await tester.pumpAndSettle();
@@ -169,6 +161,8 @@ void main() {
             ownerEmail: 'obcy@gmail.com',
           ),
         ));
+    when(() => sync.localOnlyListEntries(any()))
+        .thenAnswer((_) async => const LocalListEntries());
 
     await submitCode(tester, 'ABC234');
 
@@ -180,6 +174,118 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Dołączyć do tej jednostki?'), findsNothing);
     verifyNever(() => sync.joinFoundUnit(any(), any()));
+  });
+
+  testWidgets(
+      'ręczna synchronizacja kończy się zielonym potwierdzeniem z liczbą '
+      'zmian', (tester) async {
+    await pumpSettings(tester, founderInUnit);
+    when(() => sync.syncAll()).thenAnswer((_) async => 0);
+    when(() => sync.state).thenReturn(SyncState(
+      status: SyncStatus.idle,
+      userEmail: 'ospkielno@gmail.com',
+      unitFolderId: 'folder',
+      unitInviteCode: 'ABC234',
+      founderEmail: 'ospkielno@gmail.com',
+      lastSyncTime: DateTime.now(),
+      lastSyncSent: 2,
+      lastSyncReceived: 1,
+    ));
+
+    await tester.ensureVisible(find.text('Synchronizuj teraz'));
+    await tester.tap(find.text('Synchronizuj teraz'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.text('Zsynchronizowano: wysłano 2 zmiany, pobrano 1 zmianę.'),
+        findsOneWidget);
+  });
+
+  testWidgets('błąd synchronizacji pokazuje godzinę i zrozumiały komunikat',
+      (tester) async {
+    final now = DateTime.now();
+    await pumpSettings(
+      tester,
+      SyncState(
+        status: SyncStatus.error,
+        userEmail: 'ospkielno@gmail.com',
+        unitFolderId: 'folder',
+        unitInviteCode: 'ABC234',
+        founderEmail: 'ospkielno@gmail.com',
+        errorMessage: 'Połączenie z internetem zostało przerwane.',
+        errorTime: DateTime(now.year, now.month, now.day, 13, 34),
+      ),
+    );
+
+    expect(
+        find.text('Synchronizacja nie powiodła się o 13:34: Połączenie '
+            'z internetem zostało przerwane.'),
+        findsOneWidget);
+  });
+
+  testWidgets('w jednostce widać przycisk do folderu na Dysku',
+      (tester) async {
+    await pumpSettings(tester, founderInUnit);
+    expect(find.text('Otwórz folder jednostki na Dysku'), findsOneWidget);
+  });
+
+  testWidgets(
+      'wylogowanie z usunięciem danych najpierw synchronizuje, a gdy się nie '
+      'uda — ostrzega, zanim cokolwiek usunie', (tester) async {
+    await pumpSettings(tester, founderInUnit);
+    when(() => sync.syncAll()).thenAnswer((_) async => 0);
+    when(() => sync.state).thenReturn(SyncState(
+      status: SyncStatus.error,
+      userEmail: 'ospkielno@gmail.com',
+      unitFolderId: 'folder',
+      errorMessage: 'Połączenie z internetem zostało przerwane.',
+      errorTime: DateTime.now(),
+    ));
+
+    await tester.ensureVisible(find.text('Wyloguj'));
+    await tester.tap(find.text('Wyloguj'));
+    await tester.pumpAndSettle();
+    expect(find.text('Wyloguj i usuń dane'), findsOneWidget);
+
+    await tester.tap(find.text('Wyloguj i usuń dane'));
+    await tester.pumpAndSettle();
+
+    verify(() => sync.syncAll()).called(1);
+    expect(find.text('Nie wysłano zmian'), findsOneWidget);
+
+    await tester.tap(find.text('Anuluj'));
+    await tester.pumpAndSettle();
+    verifyNever(() => sync.wipeLocalUnitData());
+  });
+
+  testWidgets(
+      'zakładanie jednostki, gdy na koncie już jest — propozycja dołączenia '
+      'zamiast kolejnego folderu', (tester) async {
+    await pumpSettings(
+        tester, const SyncState(userEmail: 'ospkielno@gmail.com'));
+    when(() => sync.ownUnits()).thenAnswer((_) async => [
+          UnitCandidate(
+            folderId: 'stara',
+            unitName: 'Ochotnicza Straż Pożarna w Kielnie',
+            ownerEmail: 'ospkielno@gmail.com',
+            inviteCode: 'URZEAZ',
+            createdAt: DateTime(2026, 10, 27),
+          ),
+        ]);
+
+    await tester.ensureVisible(find.text('Utwórz jednostkę na Dysku'));
+    await tester.tap(find.text('Utwórz jednostkę na Dysku'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ElevatedButton, 'Utwórz'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Na tym koncie jest już jednostka'), findsOneWidget);
+    expect(find.text('kod URZEAZ · założona 27.10.2026'), findsOneWidget);
+    expect(find.text('Dołącz'), findsOneWidget);
+
+    await tester.tap(find.text('Anuluj'));
+    await tester.pumpAndSettle();
+    verifyNever(() => sync.createUnit(any()));
   });
 
   testWidgets('wylogowanie przypomina kod potrzebny do powrotu',

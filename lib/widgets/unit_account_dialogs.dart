@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/theme/osp_theme.dart';
+import '../core/utils/time_format.dart';
 import '../providers/providers.dart';
 import '../services/google_drive_service.dart';
 import '../services/sync_service.dart';
@@ -35,6 +36,13 @@ Future<void> finishJoiningUnit(WidgetRef ref) async {
         isAdmin: false,
       ));
   await db.initializeDefaultThreats();
+  refreshLocalDataProviders(ref);
+}
+
+/// Listy na ekranach trzymają migawkę bazy — po dołączeniu do jednostki
+/// albo usunięciu danych z telefonu trzeba je odczytać na nowo.
+void refreshLocalDataProviders(WidgetRef ref) {
+  ref.read(unitConfigProvider.notifier).refresh();
   ref.read(threatsProvider.notifier).refresh();
   ref.read(vehiclesProvider.notifier).refresh();
   ref.read(firefightersProvider.notifier).refresh();
@@ -78,9 +86,11 @@ Future<JoinAttempt> joinUnitWithConfirmation(
             'się. Nie dołączam. Poproś administratora o nowe zaproszenie.',
       );
     case UnitFound(:final unit):
+      final localOnly = await notifier.localOnlyListEntries(unit.folderId);
+      if (!context.mounted) return (joined: false, error: null);
       final confirmed = await showDialog<bool>(
         context: context,
-        builder: (ctx) => _ConfirmUnitDialog(unit: unit),
+        builder: (ctx) => _ConfirmUnitDialog(unit: unit, localOnly: localOnly),
       );
       if (confirmed != true || !context.mounted) {
         return (joined: false, error: null);
@@ -93,8 +103,9 @@ Future<JoinAttempt> joinUnitWithConfirmation(
 
 class _ConfirmUnitDialog extends StatelessWidget {
   final UnitCandidate unit;
+  final LocalListEntries localOnly;
 
-  const _ConfirmUnitDialog({required this.unit});
+  const _ConfirmUnitDialog({required this.unit, required this.localOnly});
 
   @override
   Widget build(BuildContext context) {
@@ -118,10 +129,14 @@ class _ConfirmUnitDialog extends StatelessWidget {
             const SizedBox(height: 16),
             const Text(
               'Dołącz tylko, jeśli znasz to konto — zwykle to konto jednostki '
-              'albo jej administratora. Po dołączeniu wyjazdy, ratownicy '
-              'i przekazania z tego telefonu trafią do tego folderu.',
+              'albo jej administratora. Po dołączeniu wyjazdy, przekazania '
+              'i przejazdy z tego telefonu trafią do tego folderu.',
               style: TextStyle(fontSize: 13),
             ),
+            if (!localOnly.isEmpty) ...[
+              const SizedBox(height: 12),
+              _ListReplacementNotice(localOnly),
+            ],
           ],
         ),
       ),
@@ -132,6 +147,195 @@ class _ConfirmUnitDialog extends StatelessWidget {
         ),
         ElevatedButton(
           onPressed: () => Navigator.of(context).pop(true),
+          child: const Text('Dołącz'),
+        ),
+      ],
+    );
+  }
+}
+
+/// Ostrzeżenie przed dołączeniem: ratownicy i pojazdy z telefonu, których
+/// jednostka nie ma, znikną z niego — obowiązuje lista jednostki.
+class _ListReplacementNotice extends StatelessWidget {
+  final LocalListEntries entries;
+
+  const _ListReplacementNotice(this.entries);
+
+  static String _names(List<String> names) {
+    const shown = 5;
+    if (names.length <= shown) return names.join(', ');
+    return '${names.take(shown).join(', ')} i ${names.length - shown} innych';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: OspTheme.attentionSurface,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Ratownicy i pojazdy spoza tej jednostki zostaną usunięci '
+            'z telefonu — obowiązuje lista jednostki, którą prowadzi '
+            'administrator:',
+            style: TextStyle(fontSize: 13),
+          ),
+          if (entries.firefighters.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text('Ratownicy: ${_names(entries.firefighters)}',
+                style: const TextStyle(
+                    fontSize: 13, fontWeight: FontWeight.w600)),
+          ],
+          if (entries.vehicles.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text('Pojazdy: ${_names(entries.vehicles)}',
+                style: const TextStyle(
+                    fontSize: 13, fontWeight: FontWeight.w600)),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Co zrobić, gdy na koncie jest już jednostka, a ktoś zakłada kolejną.
+enum CreateUnitChoice { create, joined, cancelled }
+
+/// Przed założeniem jednostki sprawdza, czy na zalogowanym koncie już jakaś
+/// jest, i proponuje dołączenie do niej.
+///
+/// Każde „Utwórz jednostkę" zakłada nowy folder, więc po kilku próbach na
+/// Dysku konta jednostki leżały cztery identyczne `OSP_App_…` i nie było
+/// wiadomo, który jest prawdziwy.
+Future<CreateUnitChoice> confirmCreateOrJoinOwnUnit(
+  BuildContext context,
+  WidgetRef ref,
+) async {
+  final notifier = ref.read(syncStateProvider.notifier);
+  final units = await notifier.ownUnits();
+  if (!context.mounted) return CreateUnitChoice.cancelled;
+  if (units.isEmpty) return CreateUnitChoice.create;
+
+  final picked = await showDialog<_OwnUnitPick>(
+    context: context,
+    builder: (_) => _OwnUnitsDialog(
+      units: units,
+      email: ref.read(syncStateProvider).userEmail ?? '',
+    ),
+  );
+  if (picked == null || !context.mounted) return CreateUnitChoice.cancelled;
+  final unit = picked.unit;
+  if (unit == null) return CreateUnitChoice.create;
+
+  final localOnly = await notifier.localOnlyListEntries(unit.folderId);
+  if (!context.mounted) return CreateUnitChoice.cancelled;
+  if (!localOnly.isEmpty) {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Dołączyć do tej jednostki?'),
+        content: SingleChildScrollView(child: _ListReplacementNotice(localOnly)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Anuluj'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Dołącz'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) {
+      return CreateUnitChoice.cancelled;
+    }
+  }
+
+  await notifier.joinFoundUnit(unit, unit.inviteCode!);
+  await finishJoiningUnit(ref);
+  return CreateUnitChoice.joined;
+}
+
+/// Wybór z okna jednostek konta: jednostka do dołączenia albo `null` —
+/// mimo to założyć nową.
+class _OwnUnitPick {
+  final UnitCandidate? unit;
+  const _OwnUnitPick(this.unit);
+}
+
+class _OwnUnitsDialog extends StatefulWidget {
+  final List<UnitCandidate> units;
+  final String email;
+
+  const _OwnUnitsDialog({required this.units, required this.email});
+
+  @override
+  State<_OwnUnitsDialog> createState() => _OwnUnitsDialogState();
+}
+
+class _OwnUnitsDialogState extends State<_OwnUnitsDialog> {
+  late UnitCandidate _selected = widget.units.first;
+
+  @override
+  Widget build(BuildContext context) {
+    final many = widget.units.length > 1;
+    return AlertDialog(
+      title: Text(many
+          ? 'Na tym koncie są już jednostki'
+          : 'Na tym koncie jest już jednostka'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Na Dysku konta ${widget.email} '
+              '${many ? 'są już jednostki' : 'jest już jednostka'}. '
+              'Dołącz do niej zamiast zakładać kolejną — inaczej przybędzie '
+              'folder o tej samej nazwie i łatwo o pomyłkę, w którym są '
+              'dane.',
+              style: const TextStyle(fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            for (final unit in widget.units)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(
+                  unit == _selected
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_unchecked,
+                  color: OspTheme.info,
+                ),
+                title: Text(
+                  unit.unitName.trim().isEmpty ? '(bez nazwy)' : unit.unitName,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                subtitle: Text([
+                  'kod ${unit.inviteCode}',
+                  if (unit.createdAt != null)
+                    'założona ${TimeFormat.date(unit.createdAt!)}',
+                ].join(' · ')),
+                onTap: many ? () => setState(() => _selected = unit) : null,
+              ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Anuluj'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(const _OwnUnitPick(null)),
+          child: const Text('Utwórz nową'),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.of(context).pop(_OwnUnitPick(_selected)),
           child: const Text('Dołącz'),
         ),
       ],
@@ -275,7 +479,9 @@ class _JoinUnitDialogState extends ConsumerState<_JoinUnitDialog> {
         setState(() => _error = attempt.error);
       }
     } catch (e) {
-      if (mounted) setState(() => _error = 'Błąd: $e');
+      if (mounted) {
+        setState(() => _error = 'Nie udało się: ${describeSyncError(e)}');
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }

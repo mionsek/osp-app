@@ -12,6 +12,13 @@ class ReportsListScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final reports = ref.watch(reportsProvider);
+    final awaitingUpload = ref.watch(reportsAwaitingUploadProvider);
+    // Ten sam numer na dwóch wyjazdach — oznaczony przy każdym z nich, aż
+    // ktoś nada jednemu nowy.
+    final numberCounts = <String, int>{};
+    for (final r in reports) {
+      numberCounts[r.reportNumber] = (numberCounts[r.reportNumber] ?? 0) + 1;
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -56,6 +63,7 @@ class ReportsListScreen extends ConsumerWidget {
               itemCount: reports.length,
               itemBuilder: (context, index) {
                 final report = reports[index];
+                final duplicated = (numberCounts[report.reportNumber] ?? 0) > 1;
                 return Card(
                   child: ListTile(
                     leading: _threatIcon(report.threatCategory),
@@ -63,13 +71,39 @@ class ReportsListScreen extends ConsumerWidget {
                       '${report.reportNumber} — ${report.addressLocality}',
                       style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
-                    subtitle: Text(
-                      '${TimeFormat.date(report.date)} • '
-                      '${report.threatCategory}'
-                      '${report.threatSubtype != null ? " → ${report.threatSubtype}" : ""}'
-                      ' • ${report.totalFirefighters} ratowników',
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${TimeFormat.date(report.date)} • '
+                          '${report.threatCategory}'
+                          '${report.threatSubtype != null ? " → ${report.threatSubtype}" : ""}'
+                          ' • ${report.totalFirefighters} ratowników',
+                        ),
+                        if (duplicated)
+                          const Text(
+                            'Ten sam numer ma inny wyjazd',
+                            style: TextStyle(
+                              color: OspTheme.attention,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                      ],
                     ),
-                    trailing: const Icon(Icons.chevron_right),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (awaitingUpload.contains(report.id))
+                          const Tooltip(
+                            message: 'Czeka na wysłanie na Dysk jednostki',
+                            child: Icon(
+                              Icons.cloud_upload,
+                              color: OspTheme.attention,
+                            ),
+                          ),
+                        const Icon(Icons.chevron_right),
+                      ],
+                    ),
                     onTap: () => context.push('/reports/view/${report.id}'),
                   ),
                 );

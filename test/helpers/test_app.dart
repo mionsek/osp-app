@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:hive/hive.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:osp_app/core/theme/osp_theme.dart';
@@ -31,34 +32,8 @@ class FakeSyncService extends Mock implements SyncService {}
 Future<Directory> setUpTestHive() async {
   final tempDir = await Directory.systemTemp.createTemp('osp_widget_test');
   Hive.init(tempDir.path);
-
-  if (!Hive.isAdapterRegistered(0)) Hive.registerAdapter(VehicleAdapter());
-  if (!Hive.isAdapterRegistered(1)) Hive.registerAdapter(FirefighterAdapter());
-  if (!Hive.isAdapterRegistered(2)) {
-    Hive.registerAdapter(CrewAssignmentAdapter());
-  }
-  if (!Hive.isAdapterRegistered(3)) Hive.registerAdapter(ThreatEntryAdapter());
-  if (!Hive.isAdapterRegistered(4)) Hive.registerAdapter(ReportAdapter());
-  if (!Hive.isAdapterRegistered(5)) Hive.registerAdapter(UnitConfigAdapter());
-  if (!Hive.isAdapterRegistered(6)) {
-    Hive.registerAdapter(PropertyHandoverAdapter());
-  }
-  if (!Hive.isAdapterRegistered(7)) Hive.registerAdapter(VehicleTripAdapter());
-  if (!Hive.isAdapterRegistered(8)) {
-    Hive.registerAdapter(TripEquipmentUseAdapter());
-  }
-
-  await Future.wait([
-    Hive.openBox<Vehicle>('vehicles'),
-    Hive.openBox<Firefighter>('firefighters'),
-    Hive.openBox<Report>('reports'),
-    Hive.openBox<UnitConfig>('config'),
-    Hive.openBox<ThreatEntry>('threats'),
-    Hive.openBox<dynamic>('settings'),
-    Hive.openBox<PropertyHandover>('property_handovers'),
-    Hive.openBox<VehicleTrip>('vehicle_trips'),
-  ]);
-
+  DatabaseService.registerAdapters();
+  await DatabaseService.openBoxes();
   return tempDir;
 }
 
@@ -73,10 +48,22 @@ Future<void> disposeTestHive(Directory tempDir) async {
 /// Kreator wyjazdu woła `pullReportsOnly()` w `initState`, więc bez tego
 /// każdy test próbowałby sięgnąć na Dysk Google.
 FakeSyncService fakeSync() {
+  registerFallbackValue(<Report>[]);
   final sync = FakeSyncService();
   when(() => sync.pullReportsOnly()).thenAnswer((_) async => true);
   when(() => sync.state).thenReturn(const SyncState());
+  // Każdy zapis przez provider zgłasza zmianę do wysłania.
+  when(() => sync.notifyLocalChange()).thenReturn(null);
+  when(() => sync.reportsAwaitingUpload(any())).thenReturn(const {});
   return sync;
+}
+
+/// Stan synchronizacji ustalony z góry — ekran dostaje dokładnie ten
+/// przypadek, który badamy, bez logowania i bez Dysku.
+class FixedSyncState extends SyncStateNotifier {
+  FixedSyncState(super.syncService, SyncState initial) {
+    state = initial;
+  }
 }
 
 /// Opakowuje badany ekran w to samo, co daje mu aplikacja: motyw, polskie
@@ -94,17 +81,41 @@ Widget testApp(
     ],
     child: MaterialApp(
       theme: OspTheme.lightTheme,
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
+      localizationsDelegates: _localizations,
       supportedLocales: const [Locale('pl')],
       locale: const Locale('pl'),
       home: child,
     ),
   );
 }
+
+/// [testApp] z routerem — dla ekranów, które po zapisie przechodzą dalej
+/// (`context.go`).
+Widget testRouterApp(
+  GoRouter router, {
+  FakeSyncService? sync,
+  List<Override> overrides = const [],
+}) {
+  return ProviderScope(
+    overrides: [
+      syncServiceProvider.overrideWithValue(sync ?? fakeSync()),
+      ...overrides,
+    ],
+    child: MaterialApp.router(
+      theme: OspTheme.lightTheme,
+      localizationsDelegates: _localizations,
+      supportedLocales: const [Locale('pl')],
+      locale: const Locale('pl'),
+      routerConfig: router,
+    ),
+  );
+}
+
+const _localizations = [
+  GlobalMaterialLocalizations.delegate,
+  GlobalWidgetsLocalizations.delegate,
+  GlobalCupertinoLocalizations.delegate,
+];
 
 /// Skrót na wypełnienie bazy danymi, od których zaczyna się większość testów.
 DatabaseService seededDb({

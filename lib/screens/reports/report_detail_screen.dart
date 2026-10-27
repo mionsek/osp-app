@@ -6,8 +6,10 @@ import '../../models/models.dart';
 import '../../models/sync_state.dart';
 import '../../providers/providers.dart';
 import '../../services/bluetooth_print_service.dart';
+import '../../services/report_numbers.dart';
 import '../../services/report_pdf.dart';
 import '../../widgets/bluetooth_printer_picker.dart';
+import '../../widgets/sync_feedback.dart';
 import '../../core/theme/osp_theme.dart';
 import '../../core/utils/time_format.dart';
 
@@ -68,6 +70,8 @@ class ReportDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final db = ref.watch(databaseServiceProvider);
+    // Po zmianie numeru albo po pobraniu nowszej wersji z Dysku.
+    ref.watch(reportsProvider);
     final report = db.getReport(reportId);
     final firefighters = ref.watch(firefightersProvider);
     final config = ref.watch(unitConfigProvider);
@@ -116,55 +120,9 @@ class ReportDetailScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Sync status banner
-            if (syncState.isConnected)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                margin: const EdgeInsets.only(bottom: 12),
-                decoration: BoxDecoration(
-                  color: syncState.isSyncing
-                      ? Colors.blue[50]
-                      : syncState.status == SyncStatus.error
-                          ? Colors.red[50]
-                          : Colors.green[50],
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      syncState.isSyncing
-                          ? Icons.sync
-                          : syncState.status == SyncStatus.error
-                              ? Icons.cloud_off
-                              : Icons.cloud_done,
-                      size: 18,
-                      color: syncState.isSyncing
-                          ? Colors.blue
-                          : syncState.status == SyncStatus.error
-                              ? Colors.red
-                              : Colors.green,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      syncState.isSyncing
-                          ? 'Synchronizacja z Google Drive...'
-                          : syncState.status == SyncStatus.error
-                              ? 'Błąd synchronizacji'
-                              : syncState.lastSyncTime != null
-                                  ? 'Zapisano na Google Drive'
-                                  : 'Połączono z Google Drive',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: syncState.isSyncing
-                            ? Colors.blue[800]
-                            : syncState.status == SyncStatus.error
-                                ? Colors.red[800]
-                                : Colors.green[800],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            if (syncState.isConnected && syncState.unitFolderId != null)
+              _UploadStatus(report: report),
+            _DuplicateNumberNotice(report: report),
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -333,5 +291,196 @@ class _Row extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// Czy ten wyjazd jest już na Dysku jednostki.
+///
+/// Wcześniej pasek pisał „Zapisano na Google Drive" po każdej udanej
+/// synchronizacji — także przy wyjeździe, który dopiero czekał na wysłanie.
+class _UploadStatus extends ConsumerWidget {
+  final Report report;
+  const _UploadStatus({required this.report});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sync = ref.watch(syncStateProvider);
+    final pending =
+        ref.watch(reportsAwaitingUploadProvider).contains(report.id);
+
+    final (Color color, Color surface, IconData icon, String text) =
+        switch ((pending, sync.isSyncing, sync.status == SyncStatus.error)) {
+      (false, _, _) => (
+          OspTheme.success,
+          OspTheme.successSurface,
+          Icons.cloud_done,
+          'Zapisano na Dysku jednostki',
+        ),
+      (true, true, _) => (
+          OspTheme.info,
+          OspTheme.infoSurface,
+          Icons.sync,
+          'Wysyłanie na Dysk jednostki…',
+        ),
+      (true, false, true) => (
+          OspTheme.danger,
+          OspTheme.dangerSurface,
+          Icons.cloud_off,
+          'Wyjazd jest na telefonie, ale jeszcze nie na Dysku jednostki. '
+              '${syncErrorText(sync)}',
+        ),
+      (true, false, false) => (
+          OspTheme.attention,
+          OspTheme.attentionSurface,
+          Icons.cloud_upload,
+          'Czeka na wysłanie na Dysk jednostki',
+        ),
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(text, style: TextStyle(fontSize: 13, color: color)),
+          ),
+          if (pending && !sync.isSyncing)
+            TextButton(
+              onPressed: () => runManualSync(context, ref),
+              child: const Text('Wyślij teraz'),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Ten sam numer ma inny wyjazd — zwykle dwa telefony nadały go w tych
+/// samych minutach, zanim któryś wysłał swój wyjazd na Dysk.
+///
+/// Wcześniej było o tym tylko 6 sekund paska na ekranie głównym.
+class _DuplicateNumberNotice extends ConsumerWidget {
+  final Report report;
+  const _DuplicateNumberNotice({required this.report});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(reportsProvider);
+    final db = ref.watch(databaseServiceProvider);
+    final others = db.reportsWithNumber(report.reportNumber, exceptId: report.id);
+    if (others.isEmpty) return const SizedBox.shrink();
+
+    final canEdit =
+        ref.watch(syncStateProvider).canEditDocument(report.createdBy);
+    final next = db.nextReportNumberFor(report.reportNumber,
+        fallbackYear: report.year);
+
+    // Dwa raporty z tej samej akcji — tu automat numeru nie zmienia.
+    final sameIncident =
+        others.any((o) => ReportNumbers.looksLikeSameIncident(o, report));
+
+    String describe(Report r) => [
+          '${TimeFormat.date(r.date)} ${TimeFormat.hhmm(r.departureTime)}',
+          [r.addressLocality, r.threatCategory]
+              .where((s) => s.isNotEmpty)
+              .join(' — '),
+          if (r.createdBy.isNotEmpty) 'z konta ${r.createdBy}',
+        ].join(', ');
+
+    return Card(
+      color: OspTheme.attentionSurface,
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.warning_amber, color: OspTheme.attention),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    sameIncident
+                        ? 'Ten sam wyjazd zapisany dwa razy?'
+                        : 'Numer ${report.reportNumber} ma też inny wyjazd',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: OspTheme.attention,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (sameIncident)
+              Text('Numer ${report.reportNumber} ma też wyjazd z tego samego '
+                  'dnia i podobnej godziny:'),
+            for (final r in others) Text('• ${describe(r)}'),
+            const SizedBox(height: 8),
+            Text(
+              [
+                sameIncident
+                    ? 'Jeśli to ta sama akcja, usuń jeden z wyjazdów (kosz '
+                        'u góry ekranu). Jeśli to różne wyjazdy, nadaj temu '
+                        'nowy numer.'
+                    : 'Późniejszy z wyjazdów dostanie nowy numer sam, przy '
+                        'synchronizacji telefonu, z którego go dodano.',
+                if (!canEdit)
+                  'Numer tego wyjazdu może zmienić jego autor albo '
+                      'administrator.',
+              ].join(' '),
+            ),
+            if (canEdit) ...[
+              const SizedBox(height: 8),
+              ElevatedButton(
+                onPressed: () => _renumber(context, ref, next),
+                child: Text('Nadaj temu wyjazdowi numer $next'),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _renumber(
+      BuildContext context, WidgetRef ref, String next) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Zmienić numer na $next?'),
+        content: Text(
+          'Wyjazd ${report.reportNumber} dostanie numer $next — także na '
+          'Dysku jednostki i u kolegów. Jeśli był już wydrukowany, popraw '
+          'numer na wydruku.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Anuluj'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Zmień numer'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final number =
+        await ref.read(reportsProvider.notifier).assignNextNumber(report);
+    messenger.showSnackBar(SnackBar(
+      content: Text('Wyjazd ma teraz numer $number.'),
+      backgroundColor: OspTheme.success,
+    ));
   }
 }

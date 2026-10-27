@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/providers.dart';
 import '../../core/theme/osp_theme.dart';
+import '../../services/sync_service.dart';
 import '../../widgets/unit_account_dialogs.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
@@ -73,6 +74,15 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     try {
       final syncState = ref.read(syncStateProvider);
 
+      if (syncState.userEmail != null) {
+        final choice = await confirmCreateOrJoinOwnUnit(context, ref);
+        if (!mounted || choice == CreateUnitChoice.cancelled) return;
+        if (choice == CreateUnitChoice.joined) {
+          context.go('/home');
+          return;
+        }
+      }
+
       final configNotifier = ref.read(unitConfigProvider.notifier);
       final db = ref.read(databaseServiceProvider);
       await configNotifier.completeOnboarding(
@@ -98,7 +108,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Błąd: $e')),
+          SnackBar(content: Text('Nie udało się: ${describeSyncError(e)}')),
         );
       }
     } finally {
@@ -141,7 +151,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         setState(() => _joinError = attempt.error);
       }
     } catch (e) {
-      if (mounted) setState(() => _joinError = 'Błąd: $e');
+      if (mounted) {
+        setState(() => _joinError = 'Nie udało się: ${describeSyncError(e)}');
+      }
     } finally {
       if (mounted) setState(() => _isJoining = false);
     }

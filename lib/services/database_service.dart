@@ -20,17 +20,33 @@ class DatabaseService {
 
   static Future<void> initialize() async {
     await Hive.initFlutter();
+    registerAdapters();
+    await openBoxes();
+  }
 
-    Hive.registerAdapter(VehicleAdapter());
-    Hive.registerAdapter(FirefighterAdapter());
-    Hive.registerAdapter(CrewAssignmentAdapter());
-    Hive.registerAdapter(ThreatEntryAdapter());
-    Hive.registerAdapter(ReportAdapter());
-    Hive.registerAdapter(UnitConfigAdapter());
-    Hive.registerAdapter(PropertyHandoverAdapter());
-    Hive.registerAdapter(VehicleTripAdapter());
-    Hive.registerAdapter(TripEquipmentUseAdapter());
+  /// Adaptery wszystkich modeli. Można wołać wiele razy — testy rejestrują
+  /// je przed każdym plikiem.
+  static void registerAdapters() {
+    void register<T>(TypeAdapter<T> adapter) {
+      if (!Hive.isAdapterRegistered(adapter.typeId)) {
+        Hive.registerAdapter(adapter);
+      }
+    }
 
+    register(VehicleAdapter());
+    register(FirefighterAdapter());
+    register(CrewAssignmentAdapter());
+    register(ThreatEntryAdapter());
+    register(ReportAdapter());
+    register(UnitConfigAdapter());
+    register(PropertyHandoverAdapter());
+    register(VehicleTripAdapter());
+    register(TripEquipmentUseAdapter());
+  }
+
+  /// Otwiera wszystkie boksy aplikacji. Testy otwierają je tym samym
+  /// kodem, więc nowy boks nie zostanie w nich pominięty.
+  static Future<void> openBoxes() async {
     await Future.wait([
       Hive.openBox<Vehicle>(_vehiclesBox),
       Hive.openBox<Firefighter>(_firefightersBox),
@@ -57,8 +73,6 @@ class DatabaseService {
   Future<void> saveConfig(UnitConfig config) async {
     await configBox.put('main', config);
   }
-
-  bool get isOnboardingCompleted => getConfig().onboardingCompleted;
 
   // --- Podpowiedź „Pierwsze kroki" na ekranie głównym ---
   //
@@ -174,6 +188,68 @@ class DatabaseService {
     await saveTombstone(kind, id, tombstone);
   }
 
+  /// Zostawia na liście ratowników albo pojazdów tylko wpisy o podanych
+  /// identyfikatorach — przy dołączaniu do jednostki obowiązuje jej lista.
+  ///
+  /// Bez znaczników usunięcia: tych wpisów jednostka nigdy nie miała, więc
+  /// nie ma czego usuwać na Dysku. Wcześniej lokalne wpisy (np. testowy wóz
+  /// z trybu offline) przy pierwszej synchronizacji dopisywały się do listy
+  /// całej jednostki — także z telefonu bez uprawnień administratora.
+  Future<void> keepOnlyListEntries(String kind, Set<String> ids) async {
+    final Box box = switch (kind) {
+      SyncKind.firefighter => firefightersBox,
+      SyncKind.vehicle => vehiclesBox,
+      _ => throw ArgumentError.value(kind, 'kind'),
+    };
+    await box.deleteAll(box.keys.where((k) => !ids.contains(k)).toList());
+
+    final store = Map<String, String>.of(_tombstoneStore);
+    final before = store.length;
+    store.removeWhere((key, _) =>
+        key.startsWith('$kind:') && !ids.contains(key.substring(kind.length + 1)));
+    if (store.length != before) await settingsBox.put(_tombstonesKey, store);
+  }
+
+  // --- Usunięcie danych jednostki z telefonu ---
+
+  /// Pamięć plików Dysku z ostatniej synchronizacji (prowadzi ją
+  /// `SyncService`).
+  static const String driveFileCacheKey = 'driveFileCache';
+
+  /// Klucze `settings`, które opisują telefon, a nie jednostkę — zostają po
+  /// usunięciu danych. Wszystko inne w `settings` jest danymi jednostki,
+  /// więc nowy klucz zniknie razem z nimi bez dopisywania go tutaj.
+  static const Set<String> _phoneSettingsKeys = {_gettingStartedDismissedKey};
+
+  /// „Wyloguj i usuń dane z telefonu": ratownicy, pojazdy, wyjazdy,
+  /// przekazania mienia, przejazdy, słownik zagrożeń, dane jednostki
+  /// i wszystko, co synchronizacja o niej pamięta.
+  ///
+  /// Zostaje to, co należy do telefonu: sparowana drukarka Bluetooth
+  /// i zamknięta karta „Pierwsze kroki". Wcześniej jedynym sposobem na
+  /// usunięcie danych jednostki po odejściu z niej było odinstalowanie
+  /// aplikacji.
+  Future<void> wipeUnitData() async {
+    final config = getConfig();
+    await Future.wait([
+      vehiclesBox.clear(),
+      firefightersBox.clear(),
+      reportsBox.clear(),
+      handoversBox.clear(),
+      tripsBox.clear(),
+      threatsBox.clear(),
+      configBox.clear(),
+      settingsBox.deleteAll(settingsBox.keys
+          .where((k) => !_phoneSettingsKeys.contains(k))
+          .toList()),
+    ]);
+    await saveConfig(UnitConfig(
+      btPrinterMac: config.btPrinterMac,
+      btPrinterName: config.btPrinterName,
+    ));
+    await ensureDefaultThreats();
+  }
+
   // --- Vehicles ---
 
   Box<Vehicle> get vehiclesBox => Hive.box<Vehicle>(_vehiclesBox);
@@ -259,8 +335,9 @@ class DatabaseService {
 
   Report? getReport(String id) => reportsBox.get(id);
 
-  String getNextReportNumber() {
-    final year = DateTime.now().year;
+  /// Pierwszy wolny numer wyjazdu w roku [year] (domyślnie bieżącym).
+  String getNextReportNumber({int? year}) {
+    year ??= DateTime.now().year;
     final reportsThisYear = reportsBox.values
         .where((r) => r.year == year)
         .toList();
@@ -286,6 +363,22 @@ class DatabaseService {
     }
     return counts.entries.where((e) => e.value > 1).map((e) => e.key).toList();
   }
+
+  /// Wyjazdy z numerem [number] (numer zawiera rok, np. 0002/2026), poza
+  /// wyjazdem [exceptId].
+  List<Report> reportsWithNumber(String number, {String? exceptId}) =>
+      reportsBox.values
+          .where((r) => r.reportNumber == number && r.id != exceptId)
+          .toList();
+
+  /// Rok z numeru wyjazdu („0002/2026" → 2026).
+  static int? yearOfReportNumber(String number) =>
+      int.tryParse(number.split('/').last);
+
+  /// Pierwszy wolny numer w roku, z którego jest [number] — dla wyjazdu,
+  /// którego numer okazał się zajęty. [fallbackYear], gdy numer nie ma roku.
+  String nextReportNumberFor(String number, {int? fallbackYear}) =>
+      getNextReportNumber(year: yearOfReportNumber(number) ?? fallbackYear);
 
   // --- Property handovers (przekazanie mienia) ---
 
@@ -359,15 +452,6 @@ class DatabaseService {
   }
 
   VehicleTrip? getTrip(String id) => tripsBox.get(id);
-
-  /// Przejazd powiązany z danym raportem, jeśli już powstał.
-  /// Chroni przed dopisaniem tego samego wyjazdu alarmowego dwa razy.
-  VehicleTrip? getTripForReport(String reportId) {
-    for (final t in tripsBox.values) {
-      if (t.reportId == reportId) return t;
-    }
-    return null;
-  }
 
   Future<void> addTrip(VehicleTrip trip) async {
     await tripsBox.put(trip.id, trip);

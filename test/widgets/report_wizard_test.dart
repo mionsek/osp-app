@@ -1,7 +1,10 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:osp_app/models/models.dart';
 import 'package:osp_app/screens/reports/report_wizard_screen.dart';
 import 'package:osp_app/screens/reports/steps/step_summary.dart';
@@ -155,6 +158,174 @@ void main() {
       await tester.tap(find.text('Kontynuuj mimo to'));
       await tester.pumpAndSettle();
 
+      expect(find.text('Zapisz raport'), findsOneWidget);
+    });
+  });
+
+  group('numer wyjazdu przy dwóch telefonach', () {
+    final year = DateTime.now().year;
+
+    Report fromOtherPhone(String id, String number) => Report(
+          id: id,
+          reportNumber: number,
+          year: year,
+          date: DateTime(year, 8, 10),
+          departureTime: DateTime(year, 8, 10, 14, 30),
+          addressLocality: 'Gdynia',
+          addressStreet: '',
+          addressDescription: '',
+          threatCategory: 'Miejscowe Zagrożenie',
+          createdAt: DateTime(year, 8, 10),
+          updatedAt: DateTime(year, 8, 10),
+          createdBy: 'wojtek@gmail.com',
+        );
+
+    /// Kreator z routerem — po zapisie przechodzi do ekranu wyjazdu.
+    Widget wizardApp(FakeSyncService sync) => testRouterApp(
+          GoRouter(
+            initialLocation: '/reports/new',
+            routes: [
+              GoRoute(
+                path: '/reports/new',
+                builder: (context, state) => const ReportWizardScreen(),
+              ),
+              GoRoute(
+                path: '/reports/view/:id',
+                builder: (context, state) => Scaffold(
+                  body: Text('Zapisano ${state.pathParameters['id']}'),
+                ),
+              ),
+            ],
+          ),
+          sync: sync,
+        );
+
+    /// Od kroku 1 do „Zapisz raport" — przez oba ostrzeżenia o obsadzie.
+    Future<void> goToSummary(WidgetTester tester) async {
+      await fillStepOne(tester);
+      await tapNext(tester, 'Dalej — Zastępy');
+      await tapNext(tester, 'Podsumowanie');
+      await tester.tap(find.text('Kontynuuj mimo to'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Kontynuuj mimo to'));
+      await tester.pumpAndSettle();
+    }
+
+    /// Wyjazd z innego telefonu, od razu w pamięci bazy. Zapis pliku Hive to
+    /// prawdziwe operacje na dysku — na udawanym czasie `await` nie wraca.
+    void seed(Report r) => db.reportsBox.put(r.id, r);
+
+    /// To samo przed uruchomieniem ekranu — do końca, żeby późniejszy zapis
+    /// z kreatora nie czekał w kolejce Hive za niedokończonym.
+    Future<void> seedBefore(WidgetTester tester, Report r) =>
+        tester.runAsync(() => db.reportsBox.put(r.id, r));
+
+    /// Stuknięcie, po którym kreator zapisuje do Hive — na prawdziwym czasie.
+    Future<void> tapAndWrite(WidgetTester tester, String label) async {
+      await tester.ensureVisible(find.text(label));
+      await tester.runAsync(() async {
+        await tester.tap(find.text(label));
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+      });
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> save(WidgetTester tester) =>
+        tapAndWrite(tester, 'Zapisz raport');
+
+    /// Treść pola numeru. Podpowiedź pola to też „0001/2026", więc szukanie
+    /// po tekście trafia w dwa miejsca.
+    String numberField(WidgetTester tester) => tester
+        .widget<EditableText>(find.descendant(
+          of: find.widgetWithText(TextFormField, 'Numer ewidencyjny'),
+          matching: find.byType(EditableText),
+        ))
+        .controller
+        .text;
+
+    testWidgets('pole pokazuje numer policzony po pobraniu wyjazdów z Dysku',
+        (tester) async {
+      // Pole trzymało numer z chwili otwarcia kreatora, a zapisywał się
+      // inny — ten po pobraniu.
+      final sync = fakeSync();
+      final pulled = Completer<bool>();
+      when(() => sync.pullReportsOnly()).thenAnswer((_) => pulled.future);
+
+      await tester.pumpWidget(testApp(const ReportWizardScreen(), sync: sync));
+      await tester.pumpAndSettle();
+      expect(numberField(tester), '0001/$year');
+
+      // Pobranie z Dysku przyniosło wyjazd kolegi.
+      await seedBefore(tester, fromOtherPhone('r-w', '0001/$year'));
+      pulled.complete(true);
+      await tester.pumpAndSettle();
+
+      expect(numberField(tester), '0002/$year');
+    });
+
+    testWidgets('numer zajęty w międzyczasie na innym telefonie — wyjazd '
+        'dostaje następny i mówi o tym', (tester) async {
+      final sync = fakeSync();
+      var pulls = 0;
+      when(() => sync.pullReportsOnly()).thenAnswer((_) async {
+        // Przy otwarciu kreatora Dysk jest pusty; przy zapisie jest już
+        // wyjazd kolegi z tym samym numerem.
+        if (++pulls == 2) seed(fromOtherPhone('r-w', '0001/$year'));
+        return true;
+      });
+
+      await tester.pumpWidget(wizardApp(sync));
+      await tester.pumpAndSettle();
+      expect(numberField(tester), '0001/$year');
+      await goToSummary(tester);
+      await save(tester);
+
+      final mine = db.getAllReports().where((r) => r.id != 'r-w').single;
+      expect(mine.reportNumber, '0002/$year');
+      expect(db.findDuplicateReportNumbers(), isEmpty);
+      expect(
+        find.textContaining('Numer 0001/$year ma już wyjazd dodany '
+            'w międzyczasie na innym telefonie'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('ręcznie wpisany zajęty numer — pytanie przed zapisem',
+        (tester) async {
+      await seedBefore(tester, fromOtherPhone('r-w', '0001/$year'));
+
+      await tester.pumpWidget(wizardApp(fakeSync()));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+          find.widgetWithText(TextFormField, '0002/$year'), '0001/$year');
+      await tester.pumpAndSettle();
+      await goToSummary(tester);
+      await save(tester);
+
+      expect(find.text('Numer 0001/$year jest zajęty'), findsOneWidget);
+      expect(find.textContaining('Gdynia — Miejscowe Zagrożenie'),
+          findsOneWidget);
+      await tapAndWrite(tester, 'Zapisz jako 0002/$year');
+
+      final mine = db.getAllReports().where((r) => r.id != 'r-w').single;
+      expect(mine.reportNumber, '0002/$year');
+    });
+
+    testWidgets('„Wróć" przy zajętym numerze niczego nie zapisuje',
+        (tester) async {
+      await seedBefore(tester, fromOtherPhone('r-w', '0001/$year'));
+
+      await tester.pumpWidget(wizardApp(fakeSync()));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+          find.widgetWithText(TextFormField, '0002/$year'), '0001/$year');
+      await tester.pumpAndSettle();
+      await goToSummary(tester);
+      await save(tester);
+      await tester.tap(find.text('Wróć'));
+      await tester.pumpAndSettle();
+
+      expect(db.getAllReports(), hasLength(1));
       expect(find.text('Zapisz raport'), findsOneWidget);
     });
   });

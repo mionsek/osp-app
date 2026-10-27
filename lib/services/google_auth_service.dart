@@ -26,9 +26,6 @@ class GoogleAuthService {
     return _googleSignIn!;
   }
 
-  /// Current signed-in user, or null.
-  GoogleSignInAccount? get currentUser => _currentUser;
-
   /// Whether the user is currently signed in.
   bool get isSignedIn => _currentUser != null;
 

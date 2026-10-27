@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
-import 'package:osp_app/models/models.dart';
 import 'package:osp_app/models/sync_state.dart';
 import 'package:osp_app/services/database_service.dart';
 import 'package:osp_app/services/sync_service.dart';
@@ -23,36 +22,13 @@ void main() {
   final db = DatabaseService();
 
   setUpAll(() {
-    if (!Hive.isAdapterRegistered(0)) Hive.registerAdapter(VehicleAdapter());
-    if (!Hive.isAdapterRegistered(1)) Hive.registerAdapter(FirefighterAdapter());
-    if (!Hive.isAdapterRegistered(2)) {
-      Hive.registerAdapter(CrewAssignmentAdapter());
-    }
-    if (!Hive.isAdapterRegistered(3)) Hive.registerAdapter(ThreatEntryAdapter());
-    if (!Hive.isAdapterRegistered(4)) Hive.registerAdapter(ReportAdapter());
-    if (!Hive.isAdapterRegistered(5)) Hive.registerAdapter(UnitConfigAdapter());
-    if (!Hive.isAdapterRegistered(6)) {
-      Hive.registerAdapter(PropertyHandoverAdapter());
-    }
-    if (!Hive.isAdapterRegistered(7)) Hive.registerAdapter(VehicleTripAdapter());
-    if (!Hive.isAdapterRegistered(8)) {
-      Hive.registerAdapter(TripEquipmentUseAdapter());
-    }
+    DatabaseService.registerAdapters();
   });
 
   setUp(() async {
     dir = await Directory.systemTemp.createTemp('osp_account_switch');
     Hive.init(dir.path);
-    await Future.wait([
-      Hive.openBox<Vehicle>('vehicles'),
-      Hive.openBox<Firefighter>('firefighters'),
-      Hive.openBox<Report>('reports'),
-      Hive.openBox<UnitConfig>('config'),
-      Hive.openBox<ThreatEntry>('threats'),
-      Hive.openBox<dynamic>('settings'),
-      Hive.openBox<PropertyHandover>('property_handovers'),
-      Hive.openBox<VehicleTrip>('vehicle_trips'),
-    ]);
+    await DatabaseService.openBoxes();
     drive = FakeDrive();
     auth = FakeAuth('ospkielno@gmail.com');
     sync = SyncService(db, auth, drive);

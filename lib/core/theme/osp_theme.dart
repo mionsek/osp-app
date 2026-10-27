@@ -19,8 +19,6 @@ class OspTheme {
   // ---------------------------------------------------------------------------
 
   static const Color primaryRed = Color(0xFFB71C1C);
-  static const Color darkRed = Color(0xFF7F0000);
-  static const Color lightRed = Color(0xFFFF5252);
 
   /// Kolor uzupełniający motywu (`ColorScheme.secondary`).
   static const Color accentOrange = Color(0xFFFF6F00);
@@ -81,9 +79,14 @@ class OspTheme {
 
   static const Color handoversSurface = Color(0xFFF5EFEB);
   static const Color successSurface = Color(0xFFE8F5E9);
+  static const Color dangerSurface = Color(0xFFFFEBEE);
   static const Color infoSurface = Color(0xFFE3F2FD);
   static const Color vehiclesSurface = Color(0xFFFFF3E0);
   static const Color vehiclesBorder = Color(0xFFFFCC80);
+
+  /// Tło pod [attention] — ostrzeżenie, które nie jest błędem, np. dane,
+  /// które znikną z telefonu po dołączeniu do jednostki.
+  static const Color attentionSurface = vehiclesSurface;
 
   // ---------------------------------------------------------------------------
   // Medale Top 3 w statystykach

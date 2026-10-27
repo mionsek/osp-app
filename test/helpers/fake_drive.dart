@@ -20,6 +20,18 @@ class FakeDrive implements GoogleDriveService {
   /// Odczyty treści plików od ostatniego [resetCounters].
   int reads = 0;
 
+  /// Konto, na którym „pracuje" telefon — właściciel zakładanych jednostek.
+  /// Atrapa nie zna kont, więc test ustawia je wprost.
+  String? account;
+
+  /// Błąd, którym kończy się każdy zapis — np. zerwane połączenie.
+  Object? failWrites;
+
+  void _maybeFail() {
+    final error = failWrites;
+    if (error != null) throw error;
+  }
+
   void resetCounters() {
     writes = 0;
     reads = 0;
@@ -67,6 +79,7 @@ class FakeDrive implements GoogleDriveService {
   @override
   Future<String> createUnitFolder(String unitName) async {
     final id = _folder('OSP_App_$unitName', null);
+    files[id]!.owner = account;
     _folder('config', id);
     _folder('reports', id);
     _folder('handovers', id);
@@ -104,8 +117,18 @@ class FakeDrive implements GoogleDriveService {
       _folder('$year', reportsFolderId);
 
   @override
-  Future<List<UnitCandidate>> findUnitsByInviteCode(String code) async {
-    final found = <UnitCandidate>[];
+  Future<List<UnitCandidate>> findUnitsByInviteCode(String code) async => [
+        for (final u in _units())
+          if (u.inviteCode == code) u,
+      ];
+
+  @override
+  Future<List<UnitCandidate>> findOwnedUnits() async => [
+        for (final u in _units())
+          if (account != null && u.ownerEmail == account) u,
+      ];
+
+  Iterable<UnitCandidate> _units() sync* {
     for (final f in files.values) {
       if (f.name != 'unit_config.json' || f.content == null) continue;
       final Map<String, dynamic> json;
@@ -114,16 +137,19 @@ class FakeDrive implements GoogleDriveService {
       } catch (_) {
         continue;
       }
-      if (json['inviteCode'] != code) continue;
-      final unit = files[f.parent]!.parent!;
+      final unit = files[f.parent]?.parent;
+      if (unit == null) continue;
       final name = json['unitName'];
-      found.add(UnitCandidate(
+      final code = json['inviteCode'];
+      final created = json['createdAt'];
+      yield UnitCandidate(
         folderId: unit,
         unitName: name is String ? name : '',
         ownerEmail: files[unit]!.owner,
-      ));
+        inviteCode: code is String ? code : null,
+        createdAt: created is String ? DateTime.tryParse(created) : null,
+      );
     }
-    return found;
   }
 
   @override
@@ -145,6 +171,7 @@ class FakeDrive implements GoogleDriveService {
     String fileName,
     Map<String, dynamic> data,
   ) async {
+    _maybeFail();
     writes++;
     final id = _newId('file');
     final modified = _tick();
@@ -160,6 +187,7 @@ class FakeDrive implements GoogleDriveService {
     Map<String, dynamic> data, {
     String? fileName,
   }) async {
+    _maybeFail();
     writes++;
     final f = files[fileId]!;
     if (fileName != null) f.name = fileName;

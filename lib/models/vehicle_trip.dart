@@ -245,10 +245,6 @@ class VehicleTrip extends HiveObject {
     return equipmentUse.fold(0, (sum, e) => sum + e.minutes);
   }
 
-  /// Opis pracy urządzeń do pokazania na liście: „Autopompa 120 min".
-  String get equipmentLabel =>
-      equipmentUse.map((e) => '${e.name} ${e.minutes} min').join(', ');
-
   /// Trasa w formacie z druku: „skąd – dokąd".
   String get routeLabel {
     final from = routeFrom.trim();

@@ -14,10 +14,17 @@
          (przycisk w formularzu), nigdy w tle. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <!-- allowBackup="false": baza aplikacji (ratownicy, daty badań, dane osób
+         przejmujących mienie) nie trafia do kopii zapasowej Androida na
+         prywatnym koncie Google właściciela telefonu ani do kopii przez adb.
+         Dane jednostki są na jej Dysku. Od Androida 12 przeniesienie danych
+         kablem albo przez Wi-Fi na nowy telefon nadal działa; na Androidzie
+         11 i starszym ten sam atrybut wyłącza także je. -->
     <application
         android:label="Raporty OSP"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="false">
         <activity
             android:name=".MainActivity"
             android:exported="true"

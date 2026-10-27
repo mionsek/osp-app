@@ -45,6 +45,19 @@ final syncStateProvider = StateNotifierProvider<SyncStateNotifier, SyncState>((
   return SyncStateNotifier(syncService);
 });
 
+/// Zapis na telefonie, który ma od razu pójść na Dysk jednostki.
+void Function() _sendSoon(Ref ref) =>
+    () => ref.read(syncServiceProvider).notifyLocalChange();
+
+/// Wyjazdy, których obecnej wersji nie ma jeszcze na Dysku jednostki.
+/// Bez połączenia z jednostką — pusty: nie ma dokąd wysyłać.
+final reportsAwaitingUploadProvider = Provider<Set<String>>((ref) {
+  final sync = ref.watch(syncStateProvider);
+  final reports = ref.watch(reportsProvider);
+  if (!sync.isConnected || sync.unitFolderId == null) return const {};
+  return ref.read(syncServiceProvider).reportsAwaitingUpload(reports);
+});
+
 /// Czy zalogowana osoba może zarządzać jednostką — dodawać pojazdy,
 /// ratowników i nadawać uprawnienia.
 ///
@@ -68,6 +81,9 @@ class SyncStateNotifier extends StateNotifier<SyncState> {
     state = _syncService.state;
     if (state.isConnected) {
       _syncService.startAutoSync();
+      // Od razu po uruchomieniu — zmiany z innych telefonów i to, co nie
+      // wyszło z tego przed zamknięciem aplikacji.
+      _syncService.syncIfOnline();
     }
   }
 
@@ -122,6 +138,14 @@ class SyncStateNotifier extends StateNotifier<SyncState> {
     _syncService.startAutoSync();
   }
 
+  /// Ratownicy i pojazdy z telefonu spoza list jednostki — przed dołączeniem
+  /// ekran ostrzega, że zastąpi je lista jednostki.
+  Future<LocalListEntries> localOnlyListEntries(String unitFolderId) =>
+      _syncService.localOnlyListEntries(unitFolderId);
+
+  /// Jednostki już założone na zalogowanym koncie.
+  Future<List<UnitCandidate>> ownUnits() => _syncService.ownUnits();
+
   /// Runs full sync. Returns number of duplicate report numbers detected.
   Future<int> syncNow() async {
     final duplicates = await _syncService.syncAll();
@@ -134,6 +158,12 @@ class SyncStateNotifier extends StateNotifier<SyncState> {
     await _syncService.pullReportsOnly();
   }
 
+  /// Powrót do aplikacji z tła.
+  void onAppResumed() => _syncService.syncIfOnline();
+
+  /// Komunikaty o nowych numerach wyjazdów zostały pokazane.
+  void clearRenumberNotes() => _syncService.clearRenumberNotes();
+
   Future<void> disconnect() async {
     await _syncService.disconnectUnit();
     state = const SyncState();
@@ -145,30 +175,45 @@ class SyncStateNotifier extends StateNotifier<SyncState> {
     await _syncService.disconnectUnit();
     state = const SyncState();
   }
+
+  /// Wylogowanie razem z usunięciem danych jednostki z telefonu. Ekran
+  /// najpierw synchronizuje, żeby zmiany z tego telefonu nie przepadły.
+  Future<void> signOutAndWipe() async {
+    await signOut();
+    await _syncService.wipeLocalUnitData();
+    state = _syncService.state;
+  }
 }
 
 // --- Config ---
 
 final unitConfigProvider =
     StateNotifierProvider<UnitConfigNotifier, UnitConfig>((ref) {
-      return UnitConfigNotifier(ref.watch(databaseServiceProvider));
+      return UnitConfigNotifier(
+        ref.watch(databaseServiceProvider),
+        onChanged: _sendSoon(ref),
+      );
     });
 
 class UnitConfigNotifier extends StateNotifier<UnitConfig> {
   final DatabaseService _db;
-  UnitConfigNotifier(this._db) : super(_db.getConfig());
+  final void Function() _onChanged;
+  UnitConfigNotifier(this._db, {void Function()? onChanged})
+      : _onChanged = onChanged ?? _noop,
+        super(_db.getConfig());
 
   Future<void> save(UnitConfig config) async {
     // Porównanie z zapisaną konfiguracją, nie ze stanem ekranu: po dołączeniu
     // do jednostki zapis ma już dane z Dysku i nie jest to edycja.
     final before = _db.getConfig();
-    if (before.fullName != config.fullName ||
+    final edited = before.fullName != config.fullName ||
         before.locality != config.locality ||
-        before.unitStreet != config.unitStreet) {
-      await _db.markUnitConfigEdited();
-    }
+        before.unitStreet != config.unitStreet;
+    if (edited) await _db.markUnitConfigEdited();
     await _db.saveConfig(config);
     state = config;
+    // Drukarka i ustawienia telefonu nie idą na Dysk.
+    if (edited) _onChanged();
   }
 
   void refresh() {
@@ -199,18 +244,25 @@ class UnitConfigNotifier extends StateNotifier<UnitConfig> {
 
 final vehiclesProvider = StateNotifierProvider<VehiclesNotifier, List<Vehicle>>(
   (ref) {
-    return VehiclesNotifier(ref.watch(databaseServiceProvider));
+    return VehiclesNotifier(
+      ref.watch(databaseServiceProvider),
+      onChanged: _sendSoon(ref),
+    );
   },
 );
 
 class VehiclesNotifier extends StateNotifier<List<Vehicle>> {
   final DatabaseService _db;
-  VehiclesNotifier(this._db) : super(_db.getAllVehicles());
+  final void Function() _onChanged;
+  VehiclesNotifier(this._db, {void Function()? onChanged})
+      : _onChanged = onChanged ?? _noop,
+        super(_db.getAllVehicles());
 
   Future<void> add(Vehicle vehicle) async {
     vehicle.updatedAt = DateTime.now();
     await _db.addVehicle(vehicle);
     state = _db.getAllVehicles();
+    _onChanged();
   }
 
   Future<void> update(Vehicle vehicle) async {
@@ -218,11 +270,13 @@ class VehiclesNotifier extends StateNotifier<List<Vehicle>> {
     vehicle.updatedAt = DateTime.now();
     await _db.updateVehicle(vehicle);
     state = _db.getAllVehicles();
+    _onChanged();
   }
 
   Future<void> delete(String id) async {
     await _db.deleteVehicle(id);
     state = _db.getAllVehicles();
+    _onChanged();
   }
 
   void refresh() {
@@ -234,17 +288,24 @@ class VehiclesNotifier extends StateNotifier<List<Vehicle>> {
 
 final firefightersProvider =
     StateNotifierProvider<FirefightersNotifier, List<Firefighter>>((ref) {
-      return FirefightersNotifier(ref.watch(databaseServiceProvider));
+      return FirefightersNotifier(
+        ref.watch(databaseServiceProvider),
+        onChanged: _sendSoon(ref),
+      );
     });
 
 class FirefightersNotifier extends StateNotifier<List<Firefighter>> {
   final DatabaseService _db;
-  FirefightersNotifier(this._db) : super(_db.getAllFirefighters());
+  final void Function() _onChanged;
+  FirefightersNotifier(this._db, {void Function()? onChanged})
+      : _onChanged = onChanged ?? _noop,
+        super(_db.getAllFirefighters());
 
   Future<void> add(Firefighter firefighter) async {
     firefighter.updatedAt = DateTime.now();
     await _db.addFirefighter(firefighter);
     state = _db.getAllFirefighters();
+    _onChanged();
   }
 
   Future<void> update(Firefighter firefighter) async {
@@ -252,11 +313,13 @@ class FirefightersNotifier extends StateNotifier<List<Firefighter>> {
     firefighter.updatedAt = DateTime.now();
     await _db.updateFirefighter(firefighter);
     state = _db.getAllFirefighters();
+    _onChanged();
   }
 
   Future<void> delete(String id) async {
     await _db.deleteFirefighter(id);
     state = _db.getAllFirefighters();
+    _onChanged();
   }
 
   List<Firefighter> search(String query) => _db.searchFirefighters(query);
@@ -271,29 +334,50 @@ class FirefightersNotifier extends StateNotifier<List<Firefighter>> {
 final reportsProvider = StateNotifierProvider<ReportsNotifier, List<Report>>((
   ref,
 ) {
-  return ReportsNotifier(ref.watch(databaseServiceProvider));
+  return ReportsNotifier(
+    ref.watch(databaseServiceProvider),
+    onChanged: _sendSoon(ref),
+  );
 });
 
 class ReportsNotifier extends StateNotifier<List<Report>> {
   final DatabaseService _db;
-  ReportsNotifier(this._db) : super(_db.getAllReports());
+  final void Function() _onChanged;
+  ReportsNotifier(this._db, {void Function()? onChanged})
+      : _onChanged = onChanged ?? _noop,
+        super(_db.getAllReports());
 
   Future<void> add(Report report) async {
     await _db.addReport(report);
     state = _db.getAllReports();
+    _onChanged();
   }
 
   Future<void> update(Report report) async {
     await _db.updateReport(report);
     state = _db.getAllReports();
+    _onChanged();
   }
 
   Future<void> delete(String id) async {
     await _db.deleteReport(id);
     state = _db.getAllReports();
+    _onChanged();
   }
 
   String getNextNumber() => _db.getNextReportNumber();
+
+  /// Nadaje wyjazdowi pierwszy wolny numer w jego roku — gdy ten sam numer
+  /// nadały dwa telefony. Zwraca nowy numer.
+  Future<String> assignNextNumber(Report report) async {
+    final number = _db.nextReportNumberFor(report.reportNumber,
+        fallbackYear: report.year);
+    report
+      ..reportNumber = number
+      ..updatedAt = DateTime.now();
+    await update(report);
+    return number;
+  }
 
   void refresh() {
     state = _db.getAllReports();
@@ -304,26 +388,35 @@ class ReportsNotifier extends StateNotifier<List<Report>> {
 
 final handoversProvider =
     StateNotifierProvider<HandoversNotifier, List<PropertyHandover>>((ref) {
-      return HandoversNotifier(ref.watch(databaseServiceProvider));
+      return HandoversNotifier(
+        ref.watch(databaseServiceProvider),
+        onChanged: _sendSoon(ref),
+      );
     });
 
 class HandoversNotifier extends StateNotifier<List<PropertyHandover>> {
   final DatabaseService _db;
-  HandoversNotifier(this._db) : super(_db.getAllHandovers());
+  final void Function() _onChanged;
+  HandoversNotifier(this._db, {void Function()? onChanged})
+      : _onChanged = onChanged ?? _noop,
+        super(_db.getAllHandovers());
 
   Future<void> add(PropertyHandover handover) async {
     await _db.addHandover(handover);
     state = _db.getAllHandovers();
+    _onChanged();
   }
 
   Future<void> update(PropertyHandover handover) async {
     await _db.updateHandover(handover);
     state = _db.getAllHandovers();
+    _onChanged();
   }
 
   Future<void> delete(String id) async {
     await _db.deleteHandover(id);
     state = _db.getAllHandovers();
+    _onChanged();
   }
 
   void refresh() {
@@ -335,26 +428,52 @@ class HandoversNotifier extends StateNotifier<List<PropertyHandover>> {
 
 final vehicleTripsProvider =
     StateNotifierProvider<VehicleTripsNotifier, List<VehicleTrip>>((ref) {
-      return VehicleTripsNotifier(ref.watch(databaseServiceProvider));
+      return VehicleTripsNotifier(
+        ref.watch(databaseServiceProvider),
+        onChanged: _sendSoon(ref),
+      );
     });
 
 class VehicleTripsNotifier extends StateNotifier<List<VehicleTrip>> {
   final DatabaseService _db;
-  VehicleTripsNotifier(this._db) : super(_db.getAllTrips());
+  final void Function() _onChanged;
+  VehicleTripsNotifier(this._db, {void Function()? onChanged})
+      : _onChanged = onChanged ?? _noop,
+        super(_db.getAllTrips());
 
   Future<void> add(VehicleTrip trip) async {
     await _db.addTrip(trip);
     state = _db.getAllTrips();
+    _onChanged();
   }
 
   Future<void> update(VehicleTrip trip) async {
     await _db.updateTrip(trip);
     state = _db.getAllTrips();
+    _onChanged();
   }
 
   Future<void> delete(String id) async {
     await _db.deleteTrip(id);
     state = _db.getAllTrips();
+    _onChanged();
+  }
+
+  /// Przejazd poprawiony w formularzu razem z godzinami powiązanego wyjazdu.
+  /// Zwraca wyjazd, jeśli też się zmienił.
+  Future<Report?> saveEditedByUser(
+    VehicleTrip trip, {
+    required Set<String> touched,
+    required bool canEditReport,
+  }) async {
+    final report = await _db.saveTripEditedByUser(
+      trip,
+      touched: touched,
+      canEditReport: canEditReport,
+    );
+    state = _db.getAllTrips();
+    _onChanged();
+    return report;
   }
 
   void refresh() {
@@ -387,12 +506,18 @@ final tripMonthsProvider =
 
 final threatsProvider =
     StateNotifierProvider<ThreatsNotifier, List<ThreatEntry>>((ref) {
-      return ThreatsNotifier(ref.watch(databaseServiceProvider));
+      return ThreatsNotifier(
+        ref.watch(databaseServiceProvider),
+        onChanged: _sendSoon(ref),
+      );
     });
 
 class ThreatsNotifier extends StateNotifier<List<ThreatEntry>> {
   final DatabaseService _db;
-  ThreatsNotifier(this._db) : super(_db.getAllThreats());
+  final void Function() _onChanged;
+  ThreatsNotifier(this._db, {void Function()? onChanged})
+      : _onChanged = onChanged ?? _noop,
+        super(_db.getAllThreats());
 
   Future<void> addCustomSubtype(String category, String subtype) async {
     final existing = _db.threatsBox.get(category);
@@ -400,6 +525,7 @@ class ThreatsNotifier extends StateNotifier<List<ThreatEntry>> {
       existing.subtypes.add(subtype);
       await _db.addThreat(existing);
       state = _db.getAllThreats();
+      _onChanged();
     }
   }
 
@@ -407,3 +533,5 @@ class ThreatsNotifier extends StateNotifier<List<ThreatEntry>> {
     state = _db.getAllThreats();
   }
 }
+
+void _noop() {}

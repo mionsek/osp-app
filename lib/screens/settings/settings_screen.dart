@@ -3,11 +3,14 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../providers/providers.dart';
 import '../../models/sync_state.dart';
 import '../../services/bluetooth_print_service.dart';
+import '../../services/google_drive_service.dart';
 import '../../widgets/admin_only_notice.dart';
 import '../../widgets/bluetooth_printer_picker.dart';
+import '../../widgets/sync_feedback.dart';
 import '../../widgets/unit_account_dialogs.dart';
 import 'unit_members_section.dart';
 import '../../core/utils/polish_text.dart';
@@ -223,6 +226,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 }
 
+/// Wylogowanie z zostawieniem danych jednostki na telefonie albo z ich
+/// usunięciem.
+enum _SignOutChoice { keep, wipe }
+
 /// Konto Google i połączenie z jednostką.
 ///
 /// Trzy stany: niezalogowany, zalogowany bez jednostki i w jednostce.
@@ -304,29 +311,94 @@ class _GoogleSyncSectionState extends ConsumerState<_GoogleSyncSection> {
 
   Future<void> _signOut(SyncState s) async {
     final code = s.unitInviteCode;
-    final confirm = await showDialog<bool>(
+    final hasUnit = s.unitFolderId != null;
+    final choice = await showDialog<_SignOutChoice>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Wyloguj'),
-        content: Text(
-          'Wylogujesz się i odłączysz telefon od jednostki. Dane na '
-          'telefonie zostaną.'
-          '${code != null ? '\n\nŻeby wrócić, zaloguj się i dołącz kodem $code.' : ''}',
-        ),
+        content: Text(hasUnit
+            ? 'Wylogujesz się i odłączysz telefon od jednostki.\n\n'
+                'Dane jednostki możesz zostawić na telefonie albo z niego '
+                'usunąć — na Dysku jednostki zostaną w obu przypadkach. '
+                'Usuń je, jeśli odchodzisz z jednostki albo oddajesz telefon.'
+                '${code != null ? '\n\nŻeby wrócić, zaloguj się i dołącz kodem $code.' : ''}'
+            : 'Wylogujesz się z konta Google. Dane na telefonie zostaną.'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
+            onPressed: () => Navigator.pop(ctx),
             child: const Text('Anuluj'),
           ),
+          if (hasUnit)
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, _SignOutChoice.wipe),
+              style: TextButton.styleFrom(foregroundColor: OspTheme.danger),
+              child: const Text('Wyloguj i usuń dane'),
+            ),
           ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
+            onPressed: () => Navigator.pop(ctx, _SignOutChoice.keep),
             child: const Text('Wyloguj'),
           ),
         ],
       ),
     );
-    if (confirm != true) return;
-    await _run(() => ref.read(syncStateProvider.notifier).signOut());
+    switch (choice) {
+      case null:
+        return;
+      case _SignOutChoice.keep:
+        await _run(() => ref.read(syncStateProvider.notifier).signOut());
+      case _SignOutChoice.wipe:
+        await _signOutAndWipe();
+    }
+  }
+
+  /// Usunięcie danych jednostki z telefonu — najpierw wysyłka zmian, bo po
+  /// usunięciu nie będzie już skąd ich wysłać.
+  Future<void> _signOutAndWipe() async {
+    final notifier = ref.read(syncStateProvider.notifier);
+    setState(() => _busy = true);
+    try {
+      final before = ref.read(syncStateProvider).lastSyncTime;
+      await notifier.syncNow();
+      final after = ref.read(syncStateProvider);
+      final synced =
+          after.status == SyncStatus.idle && after.lastSyncTime != before;
+      if (!synced && mounted) {
+        final force = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Nie wysłano zmian'),
+            content: Text(
+              'Nie udało się zsynchronizować tego telefonu'
+              '${after.errorMessage != null ? ' (${after.errorMessage})' : ''}. '
+              'Zmiany, które nie trafiły jeszcze na Dysk, usunięcie skasuje '
+              'bezpowrotnie.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Anuluj'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: TextButton.styleFrom(foregroundColor: OspTheme.danger),
+                child: const Text('Usuń mimo to'),
+              ),
+            ],
+          ),
+        );
+        if (force != true) return;
+      }
+      if (!mounted) return;
+
+      final router = GoRouter.of(context);
+      await notifier.signOutAndWipe();
+      refreshLocalDataProviders(ref);
+      router.go('/onboarding');
+    } catch (e) {
+      _snack('Błąd: $e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _join() async {
@@ -362,8 +434,14 @@ class _GoogleSyncSectionState extends ConsumerState<_GoogleSyncSection> {
         ],
       ),
     );
-    if (confirm != true) return;
+    if (confirm != true || !mounted) return;
     await _run(() async {
+      final choice = await confirmCreateOrJoinOwnUnit(context, ref);
+      if (choice == CreateUnitChoice.joined) {
+        _snack('Dołączono do jednostki '
+            '${ref.read(unitConfigProvider).fullName}');
+      }
+      if (choice != CreateUnitChoice.create || !mounted) return;
       final code = await ref.read(syncStateProvider.notifier).createUnit(name);
       if (!mounted) return;
       final wantsSwitch =
@@ -499,7 +577,7 @@ class _GoogleSyncSectionState extends ConsumerState<_GoogleSyncSection> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  'Błąd: ${syncState.errorMessage}',
+                  syncErrorText(syncState),
                   style: const TextStyle(color: Colors.red, fontSize: 12),
                 ),
               ),
@@ -517,7 +595,8 @@ class _GoogleSyncSectionState extends ConsumerState<_GoogleSyncSection> {
             OutlinedButton.icon(
               onPressed: syncState.isSyncing
                   ? null
-                  : () => ref.read(syncStateProvider.notifier).syncNow(),
+                  // Błąd i tak stoi wyżej, w ramce — pasek tylko z sukcesem.
+                  : () => runManualSync(context, ref, showErrors: false),
               icon: syncState.isSyncing
                   ? const SizedBox(
                       width: 16,
@@ -528,6 +607,14 @@ class _GoogleSyncSectionState extends ConsumerState<_GoogleSyncSection> {
               label: Text(syncState.isSyncing
                   ? 'Synchronizacja...'
                   : 'Synchronizuj teraz'),
+            ),
+            const SizedBox(height: 4),
+            // Na Dysku konta jednostki może leżeć kilka folderów o tej samej
+            // nazwie — stąd prosto do właściwego.
+            TextButton.icon(
+              onPressed: () => _openUnitFolder(syncState.unitFolderId!),
+              icon: const Icon(Icons.folder_open, size: 18),
+              label: const Text('Otwórz folder jednostki na Dysku'),
             ),
             // Jednostkę często zakłada się na wspólnym koncie jednostki,
             // a wyjazdy podpisują się kontem, na którym się jest.
@@ -554,6 +641,14 @@ class _GoogleSyncSectionState extends ConsumerState<_GoogleSyncSection> {
         ],
       ],
     );
+  }
+
+  Future<void> _openUnitFolder(String folderId) async {
+    final opened = await launchUrl(
+      GoogleDriveService.folderUrl(folderId),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!opened) _snack('Nie udało się otworzyć Dysku Google.');
   }
 
   String _formatTime(DateTime time) {

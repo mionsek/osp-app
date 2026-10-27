@@ -21,6 +21,10 @@ class StepSummary extends ConsumerWidget {
   final VoidCallback onSave;
   final VoidCallback onBack;
 
+  /// Zapis w toku (sprawdzanie numeru na Dysku) — przycisk nieaktywny, żeby
+  /// drugie stuknięcie nie dodało drugiego wyjazdu.
+  final bool saving;
+
   const StepSummary({
     super.key,
     required this.reportNumber,
@@ -36,6 +40,7 @@ class StepSummary extends ConsumerWidget {
     required this.notes,
     required this.onSave,
     required this.onBack,
+    this.saving = false,
   });
 
   @override
@@ -159,9 +164,15 @@ class StepSummary extends ConsumerWidget {
           const SizedBox(height: 24),
 
           ElevatedButton.icon(
-            onPressed: onSave,
-            icon: const Icon(Icons.save),
-            label: const Text('Zapisz raport'),
+            onPressed: saving ? null : onSave,
+            icon: saving
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.save),
+            label: Text(saving ? 'Sprawdzam numer…' : 'Zapisz raport'),
             style: ElevatedButton.styleFrom(
               backgroundColor: OspTheme.success,
               minimumSize: const Size(double.infinity, 56),

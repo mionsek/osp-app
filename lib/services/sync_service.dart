@@ -7,10 +7,43 @@ import 'package:googleapis/drive/v3.dart' as drive;
 import '../models/models.dart';
 import '../models/sync_state.dart';
 import 'database_service.dart';
+import 'drive_retry.dart';
 import 'google_auth_service.dart';
 import 'google_drive_service.dart';
+import 'report_numbers.dart';
 import 'sync_json.dart';
 import '../core/utils/file_names.dart';
+import '../core/utils/time_format.dart';
+
+/// Komunikat dla użytkownika zamiast surowego tekstu wyjątku.
+///
+/// Zgłoszenie z testów 1.7.3: na ekranie stało „ClientException: Software
+/// caused connection abort, uri=https://www.googleapis.com/upload/…", choć
+/// chodziło tylko o zerwane połączenie, a dane były bezpieczne na telefonie.
+String describeSyncError(Object e) {
+  if (isTransientDriveError(e)) {
+    return e is drive.DetailedApiRequestError
+        ? 'Dysk Google chwilowo nie odpowiada. Dane są zapisane na telefonie, '
+            'synchronizacja ponowi się sama.'
+        : 'Połączenie z internetem zostało przerwane. Dane są zapisane na '
+            'telefonie, synchronizacja ponowi się sama.';
+  }
+  return '$e';
+}
+
+/// Ratownicy i pojazdy z telefonu, których nie ma w jednostce — przy
+/// dołączaniu zostaną zastąpione jej listą.
+class LocalListEntries {
+  final List<String> firefighters;
+  final List<String> vehicles;
+
+  const LocalListEntries({
+    this.firefighters = const [],
+    this.vehicles = const [],
+  });
+
+  bool get isEmpty => firefighters.isEmpty && vehicles.isEmpty;
+}
 
 /// Orchestrates bidirectional sync between local Hive and Google Drive.
 class SyncService {
@@ -35,7 +68,21 @@ class SyncService {
   SyncState _state = const SyncState();
   SyncState get state => _state;
 
-  SyncService(this._db, this.authService, this._driveService);
+  /// Zwłoka między zapisem na telefonie a wysyłką — zbiera w jeden przebieg
+  /// zapisy idące razem (wyjazd i jego wiersze w ewidencji przejazdów).
+  final Duration localChangeDelay;
+
+  Timer? _localChangeTimer;
+
+  /// Zapis w trakcie synchronizacji — ta mogła już minąć etap wysyłki.
+  bool _changedWhileSyncing = false;
+
+  SyncService(
+    this._db,
+    this.authService,
+    this._driveService, {
+    this.localChangeDelay = const Duration(seconds: 2),
+  });
 
   // ── Initialization ─────────────────────────────────────────────
 
@@ -64,6 +111,60 @@ class SyncService {
     _autoSyncTimer = null;
     _connectivitySubscription?.cancel();
     _connectivitySubscription = null;
+    _localChangeTimer?.cancel();
+    _localChangeTimer = null;
+  }
+
+  /// Coś zapisano na telefonie — wysyłka zaraz, a nie przy najbliższej
+  /// synchronizacji co 5 minut.
+  ///
+  /// Zgłoszenie z testu 1.7.4 na dwóch telefonach: zapis wyjazdu niczego
+  /// nie wysyłał, a co 5 minut synchronizacja idzie tylko przy aplikacji
+  /// otwartej na ekranie. Wyjazd kolegi czekał więc na telefonie, a drugi
+  /// telefon nadał w tym czasie ten sam numer 0002/2026.
+  ///
+  /// Bez sieci przebieg kończy się błędem, a zmiana czeka na powrót
+  /// połączenia albo na następną synchronizację.
+  void notifyLocalChange() {
+    if (!_state.isConnected || _state.unitFolderId == null) return;
+    if (_isSyncing) {
+      _changedWhileSyncing = true;
+      return;
+    }
+    _localChangeTimer?.cancel();
+    _localChangeTimer = Timer(localChangeDelay, () async {
+      _localChangeTimer = null;
+      // Bez sieci każdy zapis kończyłby się czerwonym błędem — wyśle go
+      // powrót zasięgu (nasłuch zmian sieci w [startAutoSync]).
+      if (await _hasNetwork()) syncAll();
+    });
+  }
+
+  /// Czy telefon ma jakąkolwiek sieć. Gdy nie da się tego sprawdzić,
+  /// próbujemy — najwyżej skończy się zwykłym błędem połączenia.
+  Future<bool> _hasNetwork() async {
+    try {
+      final results = await Connectivity().checkConnectivity();
+      return results.any((r) => r != ConnectivityResult.none);
+    } catch (_) {
+      return true;
+    }
+  }
+
+  /// Po synchronizacji: zapis z jej trwania wysyłamy osobnym przebiegiem.
+  void _afterSyncPass() {
+    if (!_changedWhileSyncing) return;
+    _changedWhileSyncing = false;
+    notifyLocalChange();
+  }
+
+  /// Uruchomienie aplikacji i powrót do niej z tła. Android usypia aplikację
+  /// po chwili, więc synchronizacja co 5 minut stoi, dopóki ktoś jej znów
+  /// nie otworzy — a wtedy powinien od razu zobaczyć wyjazdy z innych
+  /// telefonów. Bez sieci nie próbujemy: zrobi to powrót zasięgu.
+  Future<void> syncIfOnline() async {
+    if (_isSyncing || !await _hasNetwork()) return;
+    await syncAll();
   }
 
   void dispose() {
@@ -153,6 +254,64 @@ class SyncService {
 
     // Pull remote data to local
     await _pullAllData();
+
+    // Ratownicy i pojazdy pochodzą od jednostki. Wyjazdy, przekazania
+    // i przejazdy z tego telefonu zostają i pojadą na Dysk — to praca tej
+    // osoby, a nie lista, którą prowadzi administrator.
+    for (final kind in const [SyncKind.firefighter, SyncKind.vehicle]) {
+      final ids = _remoteListIds[kind];
+      if (ids != null) await _db.keepOnlyListEntries(kind, ids);
+    }
+  }
+
+  /// Ratownicy i pojazdy z telefonu, których nie ma na listach jednostki
+  /// z folderu [unitFolderId] — do ostrzeżenia przed dołączeniem.
+  Future<LocalListEntries> localOnlyListEntries(String unitFolderId) async {
+    final configFolderId = await _driveService.findConfigFolder(unitFolderId);
+    final dataFolderId = configFolderId ?? unitFolderId;
+
+    /// `null`, gdy listy nie udało się przeczytać — wtedy dołączenie jej nie
+    /// zastąpi (jak w [joinFoundUnit]), więc nie ma przed czym ostrzegać.
+    Future<Set<String>?> idsIn(String fileName) async {
+      final data =
+          (await _driveService.readJsonFileByName(dataFolderId, fileName))?[
+              'data'];
+      if (data is! List) return null;
+      return {
+        for (final e in data)
+          if (e is Map && e['id'] is String) e['id'] as String,
+      };
+    }
+
+    final firefighterIds = await idsIn('firefighters.json');
+    final vehicleIds = await idsIn('vehicles.json');
+    return LocalListEntries(
+      firefighters: [
+        if (firefighterIds != null)
+          for (final f in _db.getAllFirefighters())
+            if (!firefighterIds.contains(f.id)) f.lastNameFirst,
+      ]..sort(),
+      vehicles: [
+        if (vehicleIds != null)
+          for (final v in _db.getAllVehicles())
+            if (!vehicleIds.contains(v.id)) v.name,
+      ]..sort(),
+    );
+  }
+
+  /// Jednostki założone na zalogowanym koncie, najnowsze pierwsze — do
+  /// ostrzeżenia przed zakładaniem kolejnej.
+  ///
+  /// Bez jednostek bez kodu zaproszenia (uszkodzony plik) — do takiej nie
+  /// dołączy nikt, więc nie ma jej co proponować.
+  Future<List<UnitCandidate>> ownUnits() async {
+    final units = [
+      for (final u in await _driveService.findOwnedUnits())
+        if ((u.inviteCode ?? '').isNotEmpty) u,
+    ];
+    return units
+      ..sort((a, b) => (b.createdAt ?? DateTime(2000))
+          .compareTo(a.createdAt ?? DateTime(2000)));
   }
 
   /// Wyszukanie i dołączenie bez pytania — tylko gdy kod wskazuje dokładnie
@@ -247,6 +406,7 @@ class SyncService {
         errorMessage: 'Konto ${authService.userEmail} nie ma dostępu do tej '
             'jednostki. Poproś administratora o zaproszenie na ten adres '
             'albo wróć do poprzedniego konta.',
+        errorTime: DateTime.now(),
       ));
     }
     return true;
@@ -351,11 +511,23 @@ class SyncService {
     _updateState(const SyncState());
   }
 
+  /// Usuwa z telefonu dane jednostki — po wylogowaniu, na życzenie osoby,
+  /// która odchodzi z jednostki albo oddaje telefon.
+  ///
+  /// Dane zostają na Dysku jednostki; telefon traci tylko swoją kopię.
+  Future<void> wipeLocalUnitData() async {
+    stopAutoSync();
+    await _resetUnitState();
+    await _db.wipeUnitData();
+    _updateState(SyncState(userEmail: authService.userEmail));
+  }
+
   /// Zapomina wszystko, co dotyczyło plików poprzedniej jednostki — inaczej
   /// zapis w nowej trafiałby do plików starej.
   Future<void> _resetUnitState() async {
     _remoteDocs.clear();
     _remoteConfigHashes.clear();
+    _remoteListIds.clear();
     _remoteUnitConfig = null;
     _remoteSyncFormat = 1;
     _reportsFolderId = null;
@@ -379,7 +551,12 @@ class SyncService {
     }
 
     _isSyncing = true;
+    final pass = Completer<void>();
+    _currentPass = pass.future;
     _skippedFiles = 0;
+    _sentChanges = 0;
+    _receivedChanges = 0;
+    _renumberNotes.clear();
     _updateState(_state.copyWith(status: SyncStatus.syncing));
 
     try {
@@ -387,6 +564,9 @@ class SyncService {
         await _pullConfig();
         await _pullDocuments();
         await _afterPull();
+        // Po pobraniu, przed wysyłką — nowy numer wychodzi tym samym
+        // przebiegiem.
+        await _resolveNumberConflicts();
         await _pushConfig();
         await _pushDocuments();
       });
@@ -400,6 +580,12 @@ class SyncService {
           clearError: true,
           duplicateReportNumbers: duplicates,
           skippedFiles: _skippedFiles,
+          lastSyncSent: _sentChanges,
+          lastSyncReceived: _receivedChanges,
+          // Bez nowych zmian numerów — poprzednie zostają do przeczytania.
+          renumberNotes: _renumberNotes.isEmpty
+              ? null
+              : [..._state.renumberNotes, ..._renumberNotes],
         ),
       );
       return duplicates.length;
@@ -408,29 +594,87 @@ class SyncService {
         status: SyncStatus.error,
         errorMessage: 'Jednostka używa nowszej wersji aplikacji. '
             'Zaktualizuj aplikację, żeby synchronizować dane.',
+        errorTime: DateTime.now(),
       ));
       return 0;
     } catch (e) {
       debugPrint('Sync error: $e');
-      _updateState(
-        _state.copyWith(status: SyncStatus.error, errorMessage: e.toString()),
-      );
+      _updateState(_state.copyWith(
+        status: SyncStatus.error,
+        errorMessage: describeSyncError(e),
+        errorTime: DateTime.now(),
+      ));
       return 0;
     } finally {
       _isSyncing = false;
+      pass.complete();
       // Także po błędzie w połowie — część danych mogła już się zapisać.
       onDataPulled?.call();
+      _afterSyncPass();
     }
+  }
+
+  /// Trwająca synchronizacja albo pobranie raportów.
+  Future<void>? _currentPass;
+
+  /// Nowe numery nadane w bieżącym przebiegu — komunikaty dla autora.
+  final List<String> _renumberNotes = [];
+
+  /// Powtórzony numer z dwóch telefonów rozstrzygamy sami: wcześniejszy
+  /// wyjazd zatrzymuje numer, późniejszy dostaje pierwszy wolny w swoim roku
+  /// ([ReportNumbers.laterDuplicates]).
+  ///
+  /// Numer zmienia tylko telefon autora późniejszego wyjazdu, a przy
+  /// wyjazdach bez autora — telefon administratora. Gdyby poprawiał każdy,
+  /// dwa telefony mogłyby nadać temu samemu wyjazdowi różne numery.
+  Future<void> _resolveNumberConflicts() async {
+    for (final r in ReportNumbers.laterDuplicates(_db.getAllReports())) {
+      final mine = r.createdBy.trim().isEmpty
+          ? _state.isCurrentUserAdmin
+          : _state.isAuthor(r.createdBy);
+      if (!mine) continue;
+
+      final old = r.reportNumber;
+      r
+        ..reportNumber = _db.nextReportNumberFor(old, fallbackYear: r.year)
+        // Nowszy stempel — inaczej telefony z numerem sprzed zmiany
+        // uznałyby swoją wersję za aktualną.
+        ..updatedAt = DateTime.now();
+      await _db.updateReport(r);
+      _renumberNotes.add(
+        'Wyjazd z ${TimeFormat.date(r.date)}, '
+        '${TimeFormat.hhmm(r.departureTime)}'
+        '${r.addressLocality.isEmpty ? '' : ' (${r.addressLocality})'} '
+        'ma teraz numer ${r.reportNumber} — numer $old ma wcześniejszy '
+        'wyjazd. Jeśli był już wydrukowany, popraw numer na wydruku.',
+      );
+    }
+  }
+
+  /// Komunikaty o nowych numerach zostały pokazane.
+  void clearRenumberNotes() {
+    if (_state.renumberNotes.isEmpty) return;
+    _updateState(_state.copyWith(renumberNotes: const []));
   }
 
   /// Pull only reports from Drive (lightweight — used before creating a new report).
   /// Returns true if pull succeeded.
   Future<bool> pullReportsOnly() async {
     if (!_state.isConnected || _state.unitFolderId == null) return false;
+    // Bez zasięgu kreator nie może czekać na ponowienia przy zapisie
+    // wyjazdu — numer liczy się wtedy z tego, co jest na telefonie.
+    if (!_isSyncing && !await _hasNetwork()) return false;
     // Pełna synchronizacja i tak pobiera raporty, a dwa przebiegi naraz
-    // zapisywałyby te same rekordy z dwóch miejsc.
-    if (_isSyncing) return true;
+    // zapisywałyby te same rekordy z dwóch miejsc. Czekamy na jej koniec —
+    // kreator liczy po tym numer wyjazdu, a od wysyłki zaraz po zapisie
+    // synchronizacja trwa częściej niż kiedyś.
+    if (_isSyncing) {
+      await _currentPass;
+      return true;
+    }
     _isSyncing = true;
+    final pass = Completer<void>();
+    _currentPass = pass.future;
     try {
       await _withAuthRetry(
           () => _pullDocuments(kinds: const {SyncKind.report}));
@@ -444,8 +688,28 @@ class SyncService {
       return false;
     } finally {
       _isSyncing = false;
+      pass.complete();
       onDataPulled?.call();
+      _afterSyncPass();
     }
+  }
+
+  /// Wyjazdy z telefonu, których obecnej wersji nie ma na Dysku jednostki —
+  /// jeszcze nie wyszły albo zmieniono je po wysłaniu.
+  ///
+  /// Ekran wyjazdu pisał „Zapisano na Google Drive" po każdej udanej
+  /// synchronizacji, także przy wyjeździe, który dopiero czekał na wysłanie.
+  Set<String> reportsAwaitingUpload(Iterable<Report> reports) {
+    final onDrive = <String>{
+      for (final e in _loadFileCache().values)
+        if (e['k'] == SyncKind.report) '${e['id']}:${e['h']}',
+    };
+    return {
+      for (final r in reports)
+        if (!onDrive.contains(
+            '${r.id}:${SyncJson.contentHash(SyncJson.reportToJson(r))}'))
+          r.id,
+    };
   }
 
   /// Świeży token przed pracą z Dyskiem, a przy odmowie (401) jeszcze jedna
@@ -475,6 +739,14 @@ class SyncService {
 
   int _skippedFiles = 0;
 
+  /// Zmiany wysłane i pobrane w bieżącym przebiegu.
+  int _sentChanges = 0;
+  int _receivedChanges = 0;
+
+  /// Identyfikatory wpisów (także usuniętych) na listach ratowników
+  /// i pojazdów jednostki, z ostatniego pobrania.
+  final Map<String, Set<String>> _remoteListIds = {};
+
   String? _reportsFolderId;
   final Map<int, String> _yearFolderIds = {};
   String? _handoversFolderId;
@@ -494,7 +766,7 @@ class SyncService {
   // poprzedniej synchronizacji się nie zmienił, nie jest czytany ponownie —
   // wcześniej każdy telefon co 5 minut pobierał treść wszystkich plików.
 
-  static const String _fileCacheKey = 'driveFileCache';
+  static const String _fileCacheKey = DatabaseService.driveFileCacheKey;
 
   Map<String, Map<String, dynamic>> _loadFileCache() {
     final raw = _db.settingsBox.get(_fileCacheKey);
@@ -627,10 +899,15 @@ class SyncService {
   /// losowo cofnięta przez kolegę ze starszą kopią.
   Future<String> _mergeList(String kind, Object? rawList) async {
     final canonical = <Map<String, dynamic>>[];
+    // Tylko lista, którą udało się przeczytać, może zastąpić tę z telefonu —
+    // brak albo uszkodzenie pliku nie znaczy, że jednostka nie ma ratowników.
+    _remoteListIds.remove(kind);
     if (rawList is List) {
+      final ids = _remoteListIds[kind] = {};
       for (final item in rawList) {
         try {
           final entry = Map<String, dynamic>.from(item as Map);
+          ids.add(entry['id'] as String);
           canonical.add(await _mergeListEntry(kind, entry));
         } catch (e) {
           debugPrint('Pominięty wpis ($kind): $e');
@@ -655,6 +932,7 @@ class SyncService {
       if (!newerHere &&
           (exists || _db.tombstoneOf(kind, id) == null)) {
         await _db.applyRemoteDeletion(kind, id, entry);
+        if (exists) _receivedChanges++;
       }
       return entry;
     }
@@ -675,6 +953,17 @@ class SyncService {
         (remoteAt == null && localAt == null) ||
         (remoteAt != null && (localAt == null || remoteAt.isAfter(localAt)));
     if (takeRemote) {
+      // Wpisy bez stempli brane są z Dysku przy każdym przebiegu — zmianą
+      // są tylko wtedy, gdy faktycznie różnią się od tego, co już tu jest.
+      final localFf = _db.getFirefighter(id);
+      final localVehicle = _db.getVehicle(id);
+      final before = kind == SyncKind.firefighter
+          ? (localFf == null ? null : SyncJson.firefighterToJson(localFf))
+          : (localVehicle == null ? null : SyncJson.vehicleToJson(localVehicle));
+      if (before == null ||
+          SyncJson.contentHash(before) != SyncJson.contentHash(canonical)) {
+        _receivedChanges++;
+      }
       if (kind == SyncKind.firefighter) {
         await _db.addFirefighter(SyncJson.firefighterFromJson(
           entry,
@@ -708,10 +997,12 @@ class SyncService {
           _db.getAllThreats().where((l) => l.category == t.category).firstOrNull;
       if (local == null) {
         await _db.addThreat(t);
+        _receivedChanges++;
         continue;
       }
       final missing = t.subtypes.where((s) => !local.subtypes.contains(s));
       if (missing.isEmpty) continue;
+      _receivedChanges++;
       await _db.addThreat(ThreatEntry(
         category: local.category,
         subtypes: [...local.subtypes, ...missing],
@@ -740,16 +1031,22 @@ class SyncService {
         'data': entries,
       });
       _remoteConfigHashes[fileName] = _listHash(entries);
+      _sentChanges++;
     }
 
-    await pushList('firefighters.json', [
-      ..._db.getAllFirefighters().map(SyncJson.firefighterToJson),
-      ..._db.tombstonesOf(SyncKind.firefighter),
-    ]);
-    await pushList('vehicles.json', [
-      ..._db.getAllVehicles().map(SyncJson.vehicleToJson),
-      ..._db.tombstonesOf(SyncKind.vehicle),
-    ]);
+    // Listy prowadzi administrator. Telefon bez uprawnień nie może ich
+    // zmienić z ekranu, ale wysyłał swoją kopię, gdy tylko różniła się od
+    // Dysku — np. z wpisami sprzed dołączenia do jednostki.
+    if (_state.isCurrentUserAdmin) {
+      await pushList('firefighters.json', [
+        ..._db.getAllFirefighters().map(SyncJson.firefighterToJson),
+        ..._db.tombstonesOf(SyncKind.firefighter),
+      ]);
+      await pushList('vehicles.json', [
+        ..._db.getAllVehicles().map(SyncJson.vehicleToJson),
+        ..._db.tombstonesOf(SyncKind.vehicle),
+      ]);
+    }
 
     final threats = _db.getAllThreats();
     if (_threatsHash(threats) != _remoteConfigHashes['threat_types.json']) {
@@ -758,6 +1055,7 @@ class SyncService {
         'data': threats.map(SyncJson.threatToJson).toList(),
       });
       _remoteConfigHashes['threat_types.json'] = _threatsHash(threats);
+      _sentChanges++;
     }
 
     final config = _db.getConfig();
@@ -900,6 +1198,7 @@ class SyncService {
       if (!newerHere &&
           (localAt != null || tombAt == null || tombAt.isBefore(remoteAt))) {
         await _db.applyRemoteDeletion(kind, id, data);
+        if (localAt != null) _receivedChanges++;
       }
       return SyncJson.contentHash(data);
     }
@@ -912,6 +1211,7 @@ class SyncService {
 
     final localAt = _localStamp(kind, id);
     if (localAt == null || remoteAt.isAfter(localAt)) {
+      _receivedChanges++;
       switch (kind) {
         case SyncKind.report:
           await _db.addReport(SyncJson.reportFromJson(data));
@@ -1010,6 +1310,7 @@ class SyncService {
       if (folder == null || name == null) return;
       written = await _driveService.createJsonFile(await folder(), name, json);
     }
+    _sentChanges++;
 
     cache[written.id] = {
       'm': written.modifiedTime?.toIso8601String(),
