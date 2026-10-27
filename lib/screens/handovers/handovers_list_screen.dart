@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/providers.dart';
+import '../../widgets/sync_feedback.dart';
+import '../../widgets/upload_status.dart';
 import '../../core/theme/osp_theme.dart';
 import '../../core/utils/time_format.dart';
 
@@ -12,8 +14,9 @@ class HandoversListScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final handovers = ref.watch(handoversProvider);
+    final awaitingUpload = ref.watch(handoversAwaitingUploadProvider);
 
-    return Scaffold(
+    return SyncOnOpen(child: Scaffold(
       appBar: AppBar(
         title: const Text('Przekazania mienia'),
       ),
@@ -69,13 +72,20 @@ class HandoversListScreen extends ConsumerWidget {
                       'Przejmujący: ${h.recipientName.isNotEmpty ? h.recipientName : "—"}'
                       '${h.recipientTypeLabel.isNotEmpty ? " (${h.recipientTypeLabel})" : ""}',
                     ),
-                    trailing: const Icon(Icons.chevron_right),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (awaitingUpload.contains(h.id))
+                          const AwaitingUploadIcon(),
+                        const Icon(Icons.chevron_right),
+                      ],
+                    ),
                     onTap: () => context.push('/handovers/view/${h.id}'),
                   ),
                 );
               },
             ),
-    );
+    ));
   }
 
   void _showNoFirefightersDialog(BuildContext context) {

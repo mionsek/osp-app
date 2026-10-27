@@ -261,11 +261,11 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
   /// ekranu szczegółów, skąd można wydrukować lub wysłać potwierdzenie.
   void _afterSave(String handoverId) {
     final syncState = ref.read(syncStateProvider);
+    final inUnit = syncState.isConnected && syncState.unitFolderId != null;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(syncState.isConnected
-            ? 'Przekazanie mienia zapisane. Synchronizacja z Google Drive '
-                'w toku...'
+        content: Text(inUnit
+            ? 'Przekazanie mienia zapisane. Wysyłanie na Dysk jednostki…'
             : 'Przekazanie mienia zapisane lokalnie.'),
         backgroundColor: OspTheme.success,
         duration: const Duration(seconds: 3),

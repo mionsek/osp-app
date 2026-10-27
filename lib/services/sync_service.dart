@@ -167,6 +167,22 @@ class SyncService {
     await syncAll();
   }
 
+  /// Najkrótszy odstęp między synchronizacjami przy otwieraniu list.
+  static const staleAfter = Duration(seconds: 30);
+
+  /// Otwarcie listy wyjazdów, przekazań albo ewidencji. Kolega mógł właśnie
+  /// coś dodać, a w tle telefon pobiera co 5 minut — zgłoszenie z testu
+  /// 1.7.6: „raz nie pokazało, dopiero po naciśnięciu chmurki". Najwyżej
+  /// raz na [staleAfter], także po nieudanej próbie, żeby przechodzenie
+  /// między ekranami nie pytało Dysku za każdym razem.
+  Future<void> syncIfStale() async {
+    final last = [_state.lastSyncTime, _state.errorTime]
+        .whereType<DateTime>()
+        .fold<DateTime?>(null, (a, b) => a == null || b.isAfter(a) ? b : a);
+    if (last != null && DateTime.now().difference(last) < staleAfter) return;
+    await syncIfOnline();
+  }
+
   void dispose() {
     stopAutoSync();
   }
@@ -699,16 +715,29 @@ class SyncService {
   ///
   /// Ekran wyjazdu pisał „Zapisano na Google Drive" po każdej udanej
   /// synchronizacji, także przy wyjeździe, który dopiero czekał na wysłanie.
-  Set<String> reportsAwaitingUpload(Iterable<Report> reports) {
+  Set<String> reportsAwaitingUpload(Iterable<Report> reports) =>
+      _awaitingUpload(SyncKind.report, {
+        for (final r in reports) r.id: SyncJson.reportToJson(r),
+      });
+
+  /// To samo dla przekazań mienia — zgłoszenie z testu 1.7.6: przekazanie
+  /// kolegi nie dotarło, a jego ekran nie mówił, czy w ogóle wyszło.
+  Set<String> handoversAwaitingUpload(Iterable<PropertyHandover> handovers) =>
+      _awaitingUpload(SyncKind.handover, {
+        for (final h in handovers) h.id: SyncJson.handoverToJson(h),
+      });
+
+  /// Rekordy [kind], których obecnej treści nie ma w żadnym pliku na
+  /// Dysku jednostki (według pamięci plików z ostatniej synchronizacji).
+  Set<String> _awaitingUpload(
+      String kind, Map<String, Map<String, dynamic>> current) {
     final onDrive = <String>{
       for (final e in _loadFileCache().values)
-        if (e['k'] == SyncKind.report) '${e['id']}:${e['h']}',
+        if (e['k'] == kind) '${e['id']}:${e['h']}',
     };
     return {
-      for (final r in reports)
-        if (!onDrive.contains(
-            '${r.id}:${SyncJson.contentHash(SyncJson.reportToJson(r))}'))
-          r.id,
+      for (final MapEntry(key: id, value: json) in current.entries)
+        if (!onDrive.contains('$id:${SyncJson.contentHash(json)}')) id,
     };
   }
 
@@ -1102,31 +1131,50 @@ class SyncService {
     _remoteDocs.removeWhere(
         (key, _) => wanted(key.substring(0, key.indexOf(':'))));
 
+    // Czytamy ze wszystkich folderów o danej nazwie, a piszemy do
+    // najstarszego — tego samego na każdym telefonie. Dwa telefony, które
+    // zapisują pierwszy wpis w tej samej chwili, mogą oba założyć folder;
+    // przy czytaniu tylko jednego wpisy z drugiego były dla kolegów
+    // niewidoczne.
+    final subfolders = await _driveService.listSubfolders(folderId);
+    List<String> named(String name) => [
+          for (final f in subfolders)
+            if (f.name == name) f.id!,
+        ];
+
     if (wanted(SyncKind.report)) {
-      _reportsFolderId = await _driveService.findReportsFolder(folderId);
-      final reportsFolderId = _reportsFolderId;
-      if (reportsFolderId != null) {
+      final reportsFolders = named('reports');
+      _reportsFolderId = reportsFolders.firstOrNull;
+      final years = <int, String>{};
+      for (final reportsFolderId in reportsFolders) {
         for (final yearFolder
             in await _driveService.listSubfolders(reportsFolderId)) {
           final year = int.tryParse(yearFolder.name ?? '');
-          if (year != null) _yearFolderIds[year] = yearFolder.id!;
+          if (year != null) years.putIfAbsent(year, () => yearFolder.id!);
           await _pullFolder(SyncKind.report, yearFolder.id!, cache, seen);
         }
         // Raporty ze starszej struktury — wprost w reports/.
         await _pullFolder(SyncKind.report, reportsFolderId, cache, seen);
       }
+      _yearFolderIds
+        ..clear()
+        ..addAll(years);
     }
 
     if (wanted(SyncKind.handover)) {
-      _handoversFolderId = await _driveService.findHandoversFolder(folderId);
-      final id = _handoversFolderId;
-      if (id != null) await _pullFolder(SyncKind.handover, id, cache, seen);
+      final handoversFolders = named('handovers');
+      _handoversFolderId = handoversFolders.firstOrNull;
+      for (final id in handoversFolders) {
+        await _pullFolder(SyncKind.handover, id, cache, seen);
+      }
     }
 
     if (wanted(SyncKind.trip)) {
-      _tripsFolderId = await _findTripsFolder(folderId);
-      final id = _tripsFolderId;
-      if (id != null) await _pullFolder(SyncKind.trip, id, cache, seen);
+      final tripsFolders = named('trips');
+      _tripsFolderId = tripsFolders.firstOrNull;
+      for (final id in tripsFolders) {
+        await _pullFolder(SyncKind.trip, id, cache, seen);
+      }
     }
 
     // Pliki, których już nie ma na Dysku, nie są potrzebne w pamięci.

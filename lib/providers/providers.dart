@@ -58,6 +58,14 @@ final reportsAwaitingUploadProvider = Provider<Set<String>>((ref) {
   return ref.read(syncServiceProvider).reportsAwaitingUpload(reports);
 });
 
+/// Przekazania mienia, których obecnej wersji nie ma jeszcze na Dysku.
+final handoversAwaitingUploadProvider = Provider<Set<String>>((ref) {
+  final sync = ref.watch(syncStateProvider);
+  final handovers = ref.watch(handoversProvider);
+  if (!sync.isConnected || sync.unitFolderId == null) return const {};
+  return ref.read(syncServiceProvider).handoversAwaitingUpload(handovers);
+});
+
 /// Czy zalogowana osoba może zarządzać jednostką — dodawać pojazdy,
 /// ratowników i nadawać uprawnienia.
 ///
@@ -160,6 +168,9 @@ class SyncStateNotifier extends StateNotifier<SyncState> {
 
   /// Powrót do aplikacji z tła.
   void onAppResumed() => _syncService.syncIfOnline();
+
+  /// Otwarcie listy — pobranie zmian kolegów, jeśli dawno nie było.
+  Future<void> syncIfStale() => _syncService.syncIfStale();
 
   /// Komunikaty o nowych numerach wyjazdów zostały pokazane.
   void clearRenumberNotes() => _syncService.clearRenumberNotes();

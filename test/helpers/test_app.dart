@@ -49,12 +49,15 @@ Future<void> disposeTestHive(Directory tempDir) async {
 /// każdy test próbowałby sięgnąć na Dysk Google.
 FakeSyncService fakeSync() {
   registerFallbackValue(<Report>[]);
+  registerFallbackValue(<PropertyHandover>[]);
   final sync = FakeSyncService();
   when(() => sync.pullReportsOnly()).thenAnswer((_) async => true);
   when(() => sync.state).thenReturn(const SyncState());
   // Każdy zapis przez provider zgłasza zmianę do wysłania.
   when(() => sync.notifyLocalChange()).thenReturn(null);
   when(() => sync.reportsAwaitingUpload(any())).thenReturn(const {});
+  when(() => sync.handoversAwaitingUpload(any())).thenReturn(const {});
+  when(() => sync.syncIfStale()).thenAnswer((_) async {});
   return sync;
 }
 

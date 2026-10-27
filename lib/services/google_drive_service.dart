@@ -135,11 +135,18 @@ class GoogleDriveService {
     });
   }
 
-  /// List subfolders inside a folder.
+  /// List subfolders inside a folder — najstarsze pierwsze.
+  ///
+  /// Gdy dwa telefony założyły folder o tej samej nazwie, każdy pisze do
+  /// pierwszego z listy — przy kolejności według daty założenia jest to ten
+  /// sam folder na wszystkich telefonach.
   Future<List<drive.File>> _listSubfolders(String parentId) => _listAll(
         "'$parentId' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
         fields: 'id, name',
+        orderBy: _oldestFirst,
       );
+
+  static const _oldestFirst = 'createdTime';
 
   /// Wszystkie pliki pasujące do [query], strona po stronie.
   ///
@@ -170,12 +177,13 @@ class GoogleDriveService {
     return files;
   }
 
-  /// Podfolder o podanej nazwie, bez ponawiania — do użycia wewnątrz
-  /// operacji, która sama jest ponawiana.
+  /// Podfolder o podanej nazwie (najstarszy, gdy jest kilka), bez
+  /// ponawiania — do użycia wewnątrz operacji, która sama jest ponawiana.
   Future<String?> _queryChildFolder(String parentId, String name) async {
     final result = await _api.files.list(
       q: "'$parentId' in parents and name = '$name' and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
       spaces: 'drive',
+      orderBy: _oldestFirst,
       $fields: 'files(id)',
     );
     return result.files?.isNotEmpty == true ? result.files!.first.id : null;

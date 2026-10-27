@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/providers.dart';
+import '../../widgets/sync_feedback.dart';
+import '../../widgets/upload_status.dart';
 import '../../core/theme/osp_theme.dart';
 import '../../core/utils/time_format.dart';
 
@@ -20,7 +22,7 @@ class ReportsListScreen extends ConsumerWidget {
       numberCounts[r.reportNumber] = (numberCounts[r.reportNumber] ?? 0) + 1;
     }
 
-    return Scaffold(
+    return SyncOnOpen(child: Scaffold(
       appBar: AppBar(
         title: const Text('Lista wyjazdów'),
       ),
@@ -94,13 +96,7 @@ class ReportsListScreen extends ConsumerWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         if (awaitingUpload.contains(report.id))
-                          const Tooltip(
-                            message: 'Czeka na wysłanie na Dysk jednostki',
-                            child: Icon(
-                              Icons.cloud_upload,
-                              color: OspTheme.attention,
-                            ),
-                          ),
+                          const AwaitingUploadIcon(),
                         const Icon(Icons.chevron_right),
                       ],
                     ),
@@ -109,7 +105,7 @@ class ReportsListScreen extends ConsumerWidget {
                 );
               },
             ),
-    );
+    ));
   }
 
   Widget _threatIcon(String category) {

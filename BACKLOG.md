@@ -960,3 +960,34 @@ ekran pisał „Zapisano na Google Drive". Na Dysku: fałszywy alarm Dawida od
 
 ### Nie zrobione w tej gałęzi
 - [ ] **Wykrywanie odebranego dostępu** — po teście na dwóch telefonach (patrz „Do zrobienia — Kolejne branche")
+
+## Zrobione (fix/049-stan-wyslania-przekazan)
+Zgłoszenie z testu 1.7.6 (27.10.2026): Wojciech dodał przekazanie mienia,
+a Dawid go nie widział, także na Dysku, mimo prób synchronizacji.
+
+**Co sprawdzone.** Zapis przekazania, wysyłka, folder `handovers` na Dysku
+i pobranie na drugim telefonie działają jak przy wyjazdach — nowy test dwóch
+telefonów przechodzi dla przekazania (dodanie, poprawka, usunięcie),
+przejazdu z ewidencji, ratownika i pojazdu od administratora oraz własnego
+podtypu zagrożenia. Zrzut z Dysku po aktualizacji: przekazanie Wojciecha
+pojawiło się w `handovers` o 21:26, przekazanie Dawida o 21:27 — przyczyna
+ta sama, co przy wypadku z 1.7.4: do 1.7.4 zapis niczego nie wysyłał,
+a przekazanie wyszło dopiero przy synchronizacji z nowszej wersji.
+
+Drugie zgłoszenie z tej samej rozmowy (Wojciech): „musiałem dwa razy
+synchronizować, raz nie pokazało, dopiero po naciśnięciu chmurki". Telefon
+pobiera zmiany kolegów przy uruchomieniu, po powrocie z tła, co 5 minut
+i po „chmurce" — przejście w aplikacji z listy na ekran główny i z powrotem
+niczego nie pobierało.
+
+- [x] **Stan wysłania przekazania** — na ekranie przekazania ten sam pasek co na ekranie wyjazdu („Zapisano na Dysku jednostki" / „Czeka na wysłanie" z „Wyślij teraz" / błąd z powodem i godziną), na liście przekazań ikona chmurki przy tych, które czekają. Pasek jest wspólnym widżetem dla wyjazdów i przekazań
+- [x] **Dane z drugiego folderu o tej samej nazwie** — przekazania, przejazdy i wyjazdy były czytane tylko z pierwszego znalezionego folderu `handovers`, `trips`, `reports`. Dwa telefony, które zapisują pierwszy wpis w tej samej chwili, mogą oba założyć folder (np. `trips` przy pierwszym przejeździe) — wtedy wpisy z drugiego były dla kolegów niewidoczne. Teraz czytane są wszystkie, a zapis idzie zawsze do najstarszego, tego samego na każdym telefonie (lista folderów według daty założenia). Konfiguracja (`config`) czytana dalej z jednego — najstarszego
+- [x] **Pobieranie przy otwarciu listy** wyjazdów, przekazań i ewidencji przejazdów — po cichu, najwyżej raz na pół minuty (także po nieudanej próbie), żeby przechodzenie między ekranami nie pytało Dysku za każdym razem. Synchronizacja w tle co 5 minut bez zmian
+- [x] Ekran przekazania odświeża się po pobraniu nowszej wersji z Dysku (wcześniej trzymał stan z chwili otwarcia)
+- [x] Komunikat po zapisie przekazania mówił „Synchronizacja z Google Drive w toku…" także poza jednostką; teraz jak przy wyjeździe
+- [x] 15 nowych testów: wszystkie rodzaje danych na dwóch telefonach, dane w drugim folderze `handovers`, `trips` i `reports`, zapis do najstarszego folderu, pobieranie przy otwarciu listy i jego limit, stan wysłania przekazania w usłudze i na ekranach (czeka / na Dysku / błąd / bez jednostki / lista). Łącznie **354**
+- [x] Wersja **1.7.7+20**
+
+### Do sprawdzenia na telefonach
+- [ ] Na telefonie Wojciecha (1.7.7): czy jego przekazanie pokazuje „Czeka na wysłanie" — wtedy „Wyślij teraz"; czerwony komunikat pokaże powód, jeśli jest inny
+- [ ] Na Dysku ospkielno, w folderze jednostki: czy jest jeden folder `handovers` i jeden `trips`

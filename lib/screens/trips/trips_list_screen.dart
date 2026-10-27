@@ -33,6 +33,10 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
     final now = DateTime.now();
     _year = now.year;
     _month = now.month;
+    // Przejazdy kolegów — jak przy liście wyjazdów (SyncOnOpen).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) ref.read(syncStateProvider.notifier).syncIfStale();
+    });
   }
 
   @override

@@ -3,13 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/models.dart';
-import '../../models/sync_state.dart';
 import '../../providers/providers.dart';
 import '../../services/bluetooth_print_service.dart';
 import '../../services/report_numbers.dart';
 import '../../services/report_pdf.dart';
 import '../../widgets/bluetooth_printer_picker.dart';
-import '../../widgets/sync_feedback.dart';
+import '../../widgets/upload_status.dart';
 import '../../core/theme/osp_theme.dart';
 import '../../core/utils/time_format.dart';
 
@@ -75,7 +74,6 @@ class ReportDetailScreen extends ConsumerWidget {
     final report = db.getReport(reportId);
     final firefighters = ref.watch(firefightersProvider);
     final config = ref.watch(unitConfigProvider);
-    final syncState = ref.watch(syncStateProvider);
 
     if (report == null) {
       return Scaffold(
@@ -120,8 +118,10 @@ class ReportDetailScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (syncState.isConnected && syncState.unitFolderId != null)
-              _UploadStatus(report: report),
+            UploadStatusBanner(
+              subject: 'Wyjazd',
+              pending: ref.watch(reportsAwaitingUploadProvider).contains(report.id),
+            ),
             _DuplicateNumberNotice(report: report),
             Card(
               child: Padding(
@@ -288,74 +288,6 @@ class _Row extends StatelessWidget {
             child: Text(value,
                 style: const TextStyle(fontWeight: FontWeight.w600)),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Czy ten wyjazd jest już na Dysku jednostki.
-///
-/// Wcześniej pasek pisał „Zapisano na Google Drive" po każdej udanej
-/// synchronizacji — także przy wyjeździe, który dopiero czekał na wysłanie.
-class _UploadStatus extends ConsumerWidget {
-  final Report report;
-  const _UploadStatus({required this.report});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final sync = ref.watch(syncStateProvider);
-    final pending =
-        ref.watch(reportsAwaitingUploadProvider).contains(report.id);
-
-    final (Color color, Color surface, IconData icon, String text) =
-        switch ((pending, sync.isSyncing, sync.status == SyncStatus.error)) {
-      (false, _, _) => (
-          OspTheme.success,
-          OspTheme.successSurface,
-          Icons.cloud_done,
-          'Zapisano na Dysku jednostki',
-        ),
-      (true, true, _) => (
-          OspTheme.info,
-          OspTheme.infoSurface,
-          Icons.sync,
-          'Wysyłanie na Dysk jednostki…',
-        ),
-      (true, false, true) => (
-          OspTheme.danger,
-          OspTheme.dangerSurface,
-          Icons.cloud_off,
-          'Wyjazd jest na telefonie, ale jeszcze nie na Dysku jednostki. '
-              '${syncErrorText(sync)}',
-        ),
-      (true, false, false) => (
-          OspTheme.attention,
-          OspTheme.attentionSurface,
-          Icons.cloud_upload,
-          'Czeka na wysłanie na Dysk jednostki',
-        ),
-    };
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: surface,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: color),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(text, style: TextStyle(fontSize: 13, color: color)),
-          ),
-          if (pending && !sync.isSyncing)
-            TextButton(
-              onPressed: () => runManualSync(context, ref),
-              child: const Text('Wyślij teraz'),
-            ),
         ],
       ),
     );

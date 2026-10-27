@@ -74,3 +74,27 @@ Future<void> runManualSync(
     ));
   }
 }
+
+/// Lista, która przy otwarciu pobiera zmiany kolegów, jeśli dawno ich nie
+/// pobierano (`SyncService.syncIfStale`) — po cichu, jak synchronizacja
+/// w tle. Bez tego wpis kolegi pokazywał się dopiero po „chmurce".
+class SyncOnOpen extends ConsumerStatefulWidget {
+  final Widget child;
+  const SyncOnOpen({super.key, required this.child});
+
+  @override
+  ConsumerState<SyncOnOpen> createState() => _SyncOnOpenState();
+}
+
+class _SyncOnOpenState extends ConsumerState<SyncOnOpen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) ref.read(syncStateProvider.notifier).syncIfStale();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}

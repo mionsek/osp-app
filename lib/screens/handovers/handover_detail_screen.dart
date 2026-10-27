@@ -7,6 +7,7 @@ import '../../providers/providers.dart';
 import '../../services/bluetooth_print_service.dart';
 import '../../services/handover_pdf.dart';
 import '../../widgets/bluetooth_printer_picker.dart';
+import '../../widgets/upload_status.dart';
 import '../../core/theme/osp_theme.dart';
 import '../../core/utils/time_format.dart';
 
@@ -72,6 +73,8 @@ class HandoverDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final db = ref.watch(databaseServiceProvider);
+    // Po pobraniu nowszej wersji z Dysku.
+    ref.watch(handoversProvider);
     final handover = db.getHandover(handoverId);
     final firefighters = ref.watch(firefightersProvider);
     final config = ref.watch(unitConfigProvider);
@@ -121,6 +124,12 @@ class HandoverDetailScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            UploadStatusBanner(
+              subject: 'Przekazanie',
+              pending: ref
+                  .watch(handoversAwaitingUploadProvider)
+                  .contains(handover.id),
+            ),
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
