@@ -18,6 +18,24 @@ class UnitMemberAccess {
   });
 }
 
+/// Jednostka znaleziona po kodzie zaproszenia, przed dołączeniem.
+class UnitCandidate {
+  final String folderId;
+
+  /// Nazwa z `unit_config.json` — tę może wpisać każdy, kto ma plik.
+  final String unitName;
+
+  /// Właściciel folderu według Dysku. W odróżnieniu od treści pliku tego
+  /// nie da się podrobić, więc to on pokazuje, czyja to naprawdę jednostka.
+  final String? ownerEmail;
+
+  const UnitCandidate({
+    required this.folderId,
+    required this.unitName,
+    this.ownerEmail,
+  });
+}
+
 /// Service for CRUD operations on Google Drive.
 /// All data lives in a shared unit folder.
 class GoogleDriveService {
@@ -206,38 +224,57 @@ class GoogleDriveService {
   Future<void> revokeFolderAccess(String folderId, String permissionId) =>
       _api.permissions.delete(folderId, permissionId);
 
-  /// Find unit folder shared with current user by invite code.
-  /// The invite code is stored in unit_config.json inside the config subfolder.
-  Future<String?> findUnitByInviteCode(String code) async {
-    // Search for unit_config.json files accessible to the user
-    final result = await _api.files.list(
-      q: "name = 'unit_config.json' and mimeType = 'application/json' and trashed = false",
-      spaces: 'drive',
-      $fields: 'files(id, parents)',
+  /// Wszystkie jednostki widoczne dla konta, których `unit_config.json` ma
+  /// podany kod zaproszenia.
+  ///
+  /// Wszystkie, a nie pierwsza: przy pełnym dostępie do Dysku wyszukiwanie
+  /// obejmuje też foldery udostępnione przez obcych, więc ktoś znający kod
+  /// mógł podsunąć własny folder z takim samym plikiem, a Dysk nie
+  /// gwarantuje kolejności wyników. Ekran dołączania odmawia, gdy pasuje
+  /// więcej niż jedna, i pokazuje właściciela folderu przed dołączeniem.
+  Future<List<UnitCandidate>> findUnitsByInviteCode(String code) async {
+    final files = await _listAll(
+      "name = 'unit_config.json' and mimeType = 'application/json' and trashed = false",
+      fields: 'id, parents',
     );
 
-    if (result.files == null) return null;
-
-    for (final file in result.files!) {
+    final found = <String, UnitCandidate>{};
+    for (final file in files) {
       try {
         final content = await readJsonFile(file.id!);
-        if (content != null && content['inviteCode'] == code) {
-          // The file is in /config/ subfolder, we need the grandparent (unit folder)
-          final configFolderId = file.parents?.isNotEmpty == true ? file.parents!.first : null;
-          if (configFolderId == null) continue;
-          // Get the parent of config folder = unit folder
-          final configFolder = await _api.files.get(configFolderId, $fields: 'parents');
-          if (configFolder is drive.File && configFolder.parents?.isNotEmpty == true) {
-            return configFolder.parents!.first;
-          }
-          // Fallback: maybe unit_config.json is in root folder (old structure)
-          return configFolderId;
-        }
+        if (content == null || content['inviteCode'] != code) continue;
+        final parentId =
+            file.parents?.isNotEmpty == true ? file.parents!.first : null;
+        if (parentId == null) continue;
+
+        // Plik leży w podfolderze `config`, więc jednostka to folder wyżej.
+        // Najstarsze jednostki miały plik bezpośrednio w swoim folderze —
+        // wcześniej brany był wtedy rodzic tego folderu, czyli np. cały
+        // „Mój dysk".
+        final parent =
+            await _api.files.get(parentId, $fields: 'name, parents');
+        final unitFolderId = parent is drive.File &&
+                parent.name == 'config' &&
+                parent.parents?.isNotEmpty == true
+            ? parent.parents!.first
+            : parentId;
+        if (found.containsKey(unitFolderId)) continue;
+
+        final unitFolder =
+            await _api.files.get(unitFolderId, $fields: 'owners(emailAddress)');
+        final name = content['unitName'];
+        found[unitFolderId] = UnitCandidate(
+          folderId: unitFolderId,
+          unitName: name is String ? name : '',
+          ownerEmail: unitFolder is drive.File
+              ? unitFolder.owners?.firstOrNull?.emailAddress
+              : null,
+        );
       } catch (e) {
         debugPrint('Error checking file ${file.id}: $e');
       }
     }
-    return null;
+    return found.values.toList();
   }
 
   // ── JSON file operations ───────────────────────────────────────

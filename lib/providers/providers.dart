@@ -112,13 +112,14 @@ class SyncStateNotifier extends StateNotifier<SyncState> {
     return code;
   }
 
-  Future<bool> joinUnit(String code) async {
-    final success = await _syncService.joinUnit(code);
-    if (success) {
-      state = _syncService.state;
-      _syncService.startAutoSync();
-    }
-    return success;
+  /// Wyszukanie jednostki po kodzie — przed dołączeniem ekran pokazuje,
+  /// czyj to folder.
+  Future<UnitLookup> lookupUnit(String code) => _syncService.lookupUnit(code);
+
+  Future<void> joinFoundUnit(UnitCandidate unit, String code) async {
+    await _syncService.joinFoundUnit(unit, code);
+    state = _syncService.state;
+    _syncService.startAutoSync();
   }
 
   /// Runs full sync. Returns number of duplicate report numbers detected.

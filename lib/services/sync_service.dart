@@ -119,28 +119,49 @@ class SyncService {
     return inviteCode;
   }
 
-  /// Join an existing unit by invite code.
-  Future<bool> joinUnit(String code) async {
-    final folderId = await _driveService.findUnitByInviteCode(
+  /// Szuka jednostki po kodzie zaproszenia, niczego jeszcze nie zmieniając.
+  ///
+  /// Kod nie jest tajemnicą (krąży po czatach), a przy pełnym dostępie do
+  /// Dysku wyszukiwanie widzi też foldery udostępnione przez obcych. Kiedy
+  /// kod pasuje do kilku folderów, nie zgadujemy, który jest prawdziwy.
+  Future<UnitLookup> lookupUnit(String code) async {
+    final found = await _driveService.findUnitsByInviteCode(
       code.trim().toUpperCase(),
     );
-    if (folderId == null) return false;
+    return switch (found.length) {
+      0 => const UnitNotFound(),
+      1 => UnitFound(found.single),
+      _ => UnitAmbiguous(found.length),
+    };
+  }
+
+  /// Dołącza do jednostki znalezionej przez [lookupUnit].
+  Future<void> joinFoundUnit(UnitCandidate unit, String code) async {
+    final normalized = code.trim().toUpperCase();
     await _resetUnitState();
 
     _updateState(
       _state.copyWith(
         status: SyncStatus.idle,
         userEmail: authService.userEmail,
-        unitFolderId: folderId,
-        unitInviteCode: code.trim().toUpperCase(),
+        unitFolderId: unit.folderId,
+        unitInviteCode: normalized,
       ),
     );
 
-    await _saveDriveConfig(folderId, code.trim().toUpperCase());
+    await _saveDriveConfig(unit.folderId, normalized);
 
     // Pull remote data to local
     await _pullAllData();
+  }
 
+  /// Wyszukanie i dołączenie bez pytania — tylko gdy kod wskazuje dokładnie
+  /// jedną jednostkę. Ekrany przed dołączeniem pokazują właściciela folderu
+  /// i proszą o potwierdzenie ([lookupUnit] i [joinFoundUnit]).
+  Future<bool> joinUnit(String code) async {
+    final lookup = await lookupUnit(code);
+    if (lookup is! UnitFound) return false;
+    await joinFoundUnit(lookup.unit, code);
     return true;
   }
 
@@ -510,7 +531,8 @@ class SyncService {
       'unit_config.json',
     );
     _remoteUnitConfig = configData;
-    _remoteSyncFormat = (configData?['syncFormat'] as num?)?.toInt() ?? 1;
+    final format = configData?['syncFormat'];
+    _remoteSyncFormat = format is num ? format.toInt() : 1;
     if (_remoteSyncFormat > syncFormat) throw SyncFormatTooNewException();
     if (configData != null) await _mergeUnitConfig(configData);
 
@@ -540,21 +562,30 @@ class SyncService {
     _remoteConfigHashes['threat_types.json'] =
         await _mergeThreats(tData?['data']);
 
-    // Lista administratorów jednostki
+    // Lista administratorów jednostki. Plik może zmienić każdy członek
+    // (albo ktoś przez pomyłkę na Dysku) — zły typ zatrzymywał dawniej
+    // synchronizację całej jednostki, więc bierzemy tylko poprawne adresy.
     final adminsData = await _driveService.readJsonFileByName(
       dataFolderId,
       'admins.json',
     );
-    final admins = (adminsData?['admins'] as List?)
-            ?.map((e) => e.toString())
-            .toList() ??
-        const <String>[];
+    final rawAdmins = adminsData?['admins'];
+    if (rawAdmins != null && rawAdmins is! List) _skippedFiles++;
+    final admins = rawAdmins is List
+        ? [
+            for (final e in rawAdmins)
+              if (e is String && e.contains('@')) e,
+          ]
+        : const <String>[];
     await _db.cacheAdminEmails(admins);
     _updateState(_state.copyWith(
-      founderEmail: configData?['createdBy'] as String?,
+      founderEmail: _text(configData?['createdBy']),
       adminEmails: admins,
     ));
   }
+
+  /// Tekst z pliku na Dysku albo `null`, gdy jest tam coś innego.
+  static String? _text(Object? value) => value is String ? value : null;
 
   /// Dane jednostki z Dysku — chyba że na tym telefonie zmieniono je później.
   Future<void> _mergeUnitConfig(Map<String, dynamic> configData) async {
@@ -564,14 +595,19 @@ class SyncService {
     final localIsNewer = editedHere != null &&
         (remoteAt == null || editedHere.isAfter(remoteAt));
 
-    final unitName = (configData['unitName'] as String? ?? '').trim();
+    // Wartości złego typu traktujemy jak brak — plik może poprawić każdy
+    // członek jednostki, a sztywne rzutowanie przerywało synchronizację.
+    final unitName = (_text(configData['unitName']) ?? '').trim();
     // Adresu z Dysku nie wymuszamy na pustkę: starsze jednostki nie mają go
     // jeszcze zapisanego, a nadpisanie skasowałoby to, co ktoś wpisał lokalnie.
-    final remoteLocality = (configData['locality'] as String? ?? '').trim();
-    final remoteStreet = (configData['unitStreet'] as String? ?? '').trim();
+    final remoteLocality = (_text(configData['locality']) ?? '').trim();
+    final remoteStreet = (_text(configData['unitStreet']) ?? '').trim();
+    // Bez poprawnego adresu założyciela zostaje lokalny — inaczej zepsuty
+    // plik odbierałby założycielowi stałe uprawnienia administratora.
+    final founder = _text(configData['createdBy']) ?? config.ownerEmail;
 
     await _db.saveConfig(localIsNewer
-        ? config.copyWith(ownerEmail: configData['createdBy'] as String? ?? '')
+        ? config.copyWith(ownerEmail: founder)
         : config.copyWith(
             // Nazwę bierzemy w całości. Wcześniej była rozbijana po spacjach
             // („ostatni wyraz to miejscowość"), co przy nazwach w rodzaju
@@ -579,7 +615,7 @@ class SyncService {
             unitFullName: unitName.isEmpty ? null : unitName,
             locality: remoteLocality.isEmpty ? null : remoteLocality,
             unitStreet: remoteStreet.isEmpty ? null : remoteStreet,
-            ownerEmail: configData['createdBy'] as String? ?? '',
+            ownerEmail: founder,
           ));
   }
 
@@ -1206,6 +1242,27 @@ class SyncService {
 /// Jednostka zapisała dane w formacie nowszym, niż ta wersja aplikacji
 /// rozumie.
 class SyncFormatTooNewException implements Exception {}
+
+/// Wynik [SyncService.lookupUnit].
+sealed class UnitLookup {
+  const UnitLookup();
+}
+
+/// Żaden folder widoczny dla konta nie ma tego kodu.
+class UnitNotFound extends UnitLookup {
+  const UnitNotFound();
+}
+
+/// Kod pasuje do kilku folderów — kopia folderu albo próba podszycia się.
+class UnitAmbiguous extends UnitLookup {
+  final int count;
+  const UnitAmbiguous(this.count);
+}
+
+class UnitFound extends UnitLookup {
+  final UnitCandidate unit;
+  const UnitFound(this.unit);
+}
 
 /// Wynik [SyncService.switchToPersonalAccount].
 enum AccountSwitchResult {

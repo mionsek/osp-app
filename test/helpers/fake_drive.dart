@@ -104,13 +104,26 @@ class FakeDrive implements GoogleDriveService {
       _folder('$year', reportsFolderId);
 
   @override
-  Future<String?> findUnitByInviteCode(String code) async {
+  Future<List<UnitCandidate>> findUnitsByInviteCode(String code) async {
+    final found = <UnitCandidate>[];
     for (final f in files.values) {
       if (f.name != 'unit_config.json' || f.content == null) continue;
-      final json = jsonDecode(f.content!) as Map<String, dynamic>;
-      if (json['inviteCode'] == code) return files[f.parent]!.parent;
+      final Map<String, dynamic> json;
+      try {
+        json = jsonDecode(f.content!) as Map<String, dynamic>;
+      } catch (_) {
+        continue;
+      }
+      if (json['inviteCode'] != code) continue;
+      final unit = files[f.parent]!.parent!;
+      final name = json['unitName'];
+      found.add(UnitCandidate(
+        folderId: unit,
+        unitName: name is String ? name : '',
+        ownerEmail: files[unit]!.owner,
+      ));
     }
-    return null;
+    return found;
   }
 
   @override
@@ -221,7 +234,11 @@ class FakeFile {
   String? content;
   DateTime? modified;
 
-  FakeFile(this.id, this.name, this.parent, {this.isFolder = false});
+  /// Właściciel według Dysku — do testów obrony przed podsuniętym folderem.
+  String? owner;
+
+  FakeFile(this.id, this.name, this.parent,
+      {this.isFolder = false, this.owner});
 }
 
 /// Zalogowane konto bez prawdziwego Google.

@@ -862,9 +862,32 @@ Zgłoszenia Dawida po testach 1.7.1 na dwóch telefonach.
 - [x] **Numer telefonu przejmującego opcjonalny** — „(opcjonalnie)" w etykiecie i podpowiedź, że można go pominąć; jego brak nie trafia już na listę „Niepełne dane" przy zapisie. Wydruk bez numeru był poprawny już wcześniej
 
 ### Testy i wersja
-- [x] 17 nowych testów (łącznie **272**): treść zaproszenia i jej wysłanie z kodem jednostki, przejście na własne konto (powodzenie, to samo konto, inne konto, zamknięty wybór i powrót jednostki po zalogowaniu), konto bez dostępu, rozpoznawanie drukarek, trzy stany sekcji konta w Ustawieniach i kod w oknie wylogowania
-- [x] Wersja **1.7.2+15**
+- [x] 17 nowych testów: treść zaproszenia i jej wysłanie z kodem jednostki, przejście na własne konto (powodzenie, to samo konto, inne konto, zamknięty wybór i powrót jednostki po zalogowaniu), konto bez dostępu, rozpoznawanie drukarek, trzy stany sekcji konta w Ustawieniach i kod w oknie wylogowania. Z przeglądem bezpieczeństwa niżej łącznie **278**
+- [x] Wersja **1.7.2+15**, a po przeglądzie bezpieczeństwa **1.7.3+16** — 1.7.2 powstała przed obroną przed podsuniętym folderem, do testów służy 1.7.3
 - [x] Sprawdzone na emulatorze (Android 14): 1.7.2 instaluje się jako aktualizacja 1.7.1 bez odinstalowania; Ustawienia pokazują nową sekcję konta (stan niezalogowany); „Wybierz drukarkę" bez sparowanych urządzeń od razu otwiera wyszukiwanie, które startuje i kończy się na wirtualnym Bluetooth emulatora (bez urządzeń w pobliżu); pole telefonu w przekazaniu ma „(opcjonalnie)". Podpowiedź pod polem urywała się przy liczniku znaków — dostała drugą linię. **Logowania Google nie sprawdzono** — na emulatorze nie ma konta
+
+### Przegląd bezpieczeństwa (na prośbę Dawida)
+Pełny dostęp do Dysku oznacza, że token otwiera cały Dysk, a ograniczenie do
+folderu `OSP_App_…` istnieje wyłącznie w kodzie. Sprawdzone, czy da się kod do
+czegoś innego zmusić albo token wykraść — testami (`test/security_test.dart`)
+i na emulatorze.
+- [x] **Odczyt danych aplikacji z telefonu** — `run-as` odmawia (paczka bez trybu debugowania), bezpośredni odczyt katalogu: „Permission denied". Sprawdzone z konsoli, która ma więcej uprawnień niż zwykła aplikacja
+- [x] **Fałszywa drukarka** — podrobione komunikaty Bluetooth (`ACTION_FOUND`, `BOND_STATE_CHANGED`, `DISCOVERY_FINISHED`) system odrzuca jako chronione, nawet wysłane z konsoli; okno parowania bez zmian
+- [x] **Sekrety w paczce** — brak hasła do klucza, plików kluczy, kluczy API Google i `client_secret`
+- [x] **Elementy dostępne dla innych aplikacji** — ekran startowy (bez linków zewnętrznych) i dwa elementy bibliotek Google/Androida chronione uprawnieniami systemowymi
+- [x] **Sieć** — domyślne ustawienia Androida dla `targetSdk` 36: bez nieszyfrowanych połączeń i bez certyfikatów dodanych przez użytkownika (sama konfiguracja, podsłuchu nie próbowano)
+- [x] **Token** tylko w pamięci, nigdzie nie zapisywany; jedyny adres spoza Google w kodzie to zbiórka „na kawę", otwierana w przeglądarce bez tokenu. Aplikacja w ogóle nie usuwa plików z Dysku (usunięcia to znaczniki w plikach)
+- [x] **Spreparowane pliki od członka jednostki** (śmieci, złe typy, puste pliki, prywatny plik ofiary z identyfikatorem prawdziwego raportu) — wszystkie zapisy zostają w folderze jednostki, prywatny plik nietknięty, śmieci pominięte
+- [x] **Znalezione i naprawione: zepsuta konfiguracja zatrzymywała synchronizację całej jednostki.** Zły typ w `unit_config.json` albo `admins.json` (np. liczba zamiast adresu, napis zamiast listy) wywracał odczyt przy każdej synchronizacji, aż ktoś ręcznie poprawił plik na Dysku. Teraz wartości złego typu traktowane są jak brak, a przy następnej wysyłce plik zapisuje się poprawnie. Zepsute pole założyciela nie kasuje już założyciela na telefonie
+- [x] **Znalezione i naprawione: podsunięty folder z tym samym kodem.** Kod krąży po czatach; obcy, który go zna, mógł udostępnić ofierze własny folder z takim samym `unit_config.json`, a Dysk nie gwarantuje kolejności wyników — telefon mógł dołączyć do obcego folderu i wysłać tam nazwiska, daty badań i przekazania mienia. Teraz: kod pasujący do kilku folderów → odmowa z wyjaśnieniem; przed dołączeniem okno z nazwą jednostki i **właścicielem folderu według Dysku** (tego, w odróżnieniu od treści pliku, nie da się podrobić)
+- [x] Przy okazji: dla najstarszych jednostek (plik bezpośrednio w folderze jednostki, bez `config/`) wyszukiwanie brało rodzica tego folderu — np. cały „Mój dysk". Teraz folder jednostki ustalany po nazwie `config`
+- [x] Testy: 4 scenariusze ataku na atrapie Dysku i 2 testy okna dołączania (odmowa przy kilku dopasowaniach, właściciel widoczny przed dołączeniem, rezygnacja niczego nie zmienia)
+
+**Czego kod nie zabezpieczy** — zapisane, żeby było jasne, gdzie leży ryzyko:
+- **Klucz podpisu.** Paczka przepakowana obcym kluczem nie zaloguje się do Google (błąd 10), ale kto ma klucz i hasło, może wydać wersję przejmującą Dysk każdego, kto ją zainstaluje. Przy pełnym dostępie kopia klucza w bezpiecznym miejscu jest ważniejsza niż wcześniej
+- **Biblioteki zewnętrzne** działają z tym samym tokenem — wersje przypięte w `pubspec.lock`, podbijać świadomie, nie hurtem
+- **Członkowie jednostki** z założenia mogą nadać sobie administratora (`admins.json`) albo usunąć pliki przez Dysk; także ustawić w `unit_config.json` wyższy `syncFormat` i zablokować starsze wersje. Granicą jest to, kogo się zaprasza (feature/022)
+- Nie sprawdzone: prawdziwy podsłuch sieci, wyciąganie tokenu z telefonu z rootem, logowanie paczki podpisanej obcym kluczem (wymaga konta Google na emulatorze)
 
 ### Do zrobienia przez Dawida
 - [ ] **Google Cloud → Dostęp do danych:** dopisać zakres `https://www.googleapis.com/auth/drive`. Testerom logowanie zadziała i bez tego, ale ekran zgody pokaże wtedy właściwy opis

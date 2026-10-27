@@ -133,15 +133,12 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     });
     try {
       final code = _codeController.text.trim().toUpperCase();
-      final success =
-          await ref.read(syncStateProvider.notifier).joinUnit(code);
-
-      if (success && mounted) {
-        await finishJoiningUnit(ref);
-        if (mounted) context.go('/home');
-      } else if (mounted) {
-        setState(() => _joinError =
-            joinNotFoundMessage(ref.read(syncStateProvider).userEmail));
+      final attempt = await joinUnitWithConfirmation(context, ref, code);
+      if (!mounted) return;
+      if (attempt.joined) {
+        context.go('/home');
+      } else if (attempt.error != null) {
+        setState(() => _joinError = attempt.error);
       }
     } catch (e) {
       if (mounted) setState(() => _joinError = 'Błąd: $e');

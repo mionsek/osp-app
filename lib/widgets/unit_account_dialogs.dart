@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/theme/osp_theme.dart';
 import '../providers/providers.dart';
+import '../services/google_drive_service.dart';
 import '../services/sync_service.dart';
 
 // Okna wspólne dla wprowadzenia i Ustawień: kod zaproszenia, dołączenie
@@ -40,6 +41,102 @@ Future<void> finishJoiningUnit(WidgetRef ref) async {
   ref.read(reportsProvider.notifier).refresh();
   ref.read(handoversProvider.notifier).refresh();
   ref.read(vehicleTripsProvider.notifier).refresh();
+}
+
+/// Wynik dołączania z ekranu: dołączono albo komunikat do pokazania;
+/// oba puste — ktoś zrezygnował w oknie potwierdzenia.
+typedef JoinAttempt = ({bool joined, String? error});
+
+/// Szuka jednostki po kodzie, pokazuje, czyj to folder, i dołącza dopiero
+/// po potwierdzeniu.
+///
+/// Kod krąży po czatach, a obcy, który go zna, może udostępnić ofierze
+/// własny folder z tym samym kodem — telefon wysłałby wtedy dane jednostki
+/// do niego. Właściciel folderu pochodzi z Dysku i tego nie da się podrobić,
+/// dlatego widać go przed dołączeniem. Gdy kod pasuje do kilku folderów,
+/// nie zgadujemy, który jest prawdziwy.
+Future<JoinAttempt> joinUnitWithConfirmation(
+  BuildContext context,
+  WidgetRef ref,
+  String code,
+) async {
+  final notifier = ref.read(syncStateProvider.notifier);
+  final lookup = await notifier.lookupUnit(code);
+  if (!context.mounted) return (joined: false, error: null);
+
+  switch (lookup) {
+    case UnitNotFound():
+      return (
+        joined: false,
+        error: joinNotFoundMessage(ref.read(syncStateProvider).userEmail),
+      );
+    case UnitAmbiguous():
+      return (
+        joined: false,
+        error: 'Ten kod pasuje do więcej niż jednej jednostki widocznej dla '
+            'tego konta — to może być kopia folderu albo próba podszycia '
+            'się. Nie dołączam. Poproś administratora o nowe zaproszenie.',
+      );
+    case UnitFound(:final unit):
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => _ConfirmUnitDialog(unit: unit),
+      );
+      if (confirmed != true || !context.mounted) {
+        return (joined: false, error: null);
+      }
+      await notifier.joinFoundUnit(unit, code);
+      await finishJoiningUnit(ref);
+      return (joined: true, error: null);
+  }
+}
+
+class _ConfirmUnitDialog extends StatelessWidget {
+  final UnitCandidate unit;
+
+  const _ConfirmUnitDialog({required this.unit});
+
+  @override
+  Widget build(BuildContext context) {
+    final name = unit.unitName.trim().isEmpty ? '(bez nazwy)' : unit.unitName;
+    return AlertDialog(
+      title: const Text('Dołączyć do tej jednostki?'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Jednostka', style: TextStyle(color: Colors.grey[600])),
+            Text(name, style: const TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 12),
+            Text('Właściciel folderu na Dysku',
+                style: TextStyle(color: Colors.grey[600])),
+            Text(
+              unit.ownerEmail ?? 'nieznany',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Dołącz tylko, jeśli znasz to konto — zwykle to konto jednostki '
+              'albo jej administratora. Po dołączeniu wyjazdy, ratownicy '
+              'i przekazania z tego telefonu trafią do tego folderu.',
+              style: TextStyle(fontSize: 13),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Anuluj'),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text('Dołącz'),
+        ),
+      ],
+    );
+  }
 }
 
 /// Kod zaproszenia zaraz po założeniu jednostki.
@@ -170,15 +267,13 @@ class _JoinUnitDialogState extends ConsumerState<_JoinUnitDialog> {
       _error = null;
     });
     try {
-      final joined = await ref.read(syncStateProvider.notifier).joinUnit(code);
+      final attempt = await joinUnitWithConfirmation(context, ref, code);
       if (!mounted) return;
-      if (!joined) {
-        setState(() => _error =
-            joinNotFoundMessage(ref.read(syncStateProvider).userEmail));
-        return;
+      if (attempt.joined) {
+        Navigator.of(context).pop(true);
+      } else if (attempt.error != null) {
+        setState(() => _error = attempt.error);
       }
-      await finishJoiningUnit(ref);
-      if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       if (mounted) setState(() => _error = 'Błąd: $e');
     } finally {
