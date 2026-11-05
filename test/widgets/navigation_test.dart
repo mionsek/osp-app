@@ -173,6 +173,8 @@ void main() {
       '/equipment',
       '/equipment/add',
       '/equipment/edit/e1',
+      '/equipment/card/e1',
+      '/equipment/work/new?startup=all',
       '/firefighters',
       '/firefighters/add',
       '/firefighters/edit/f1',

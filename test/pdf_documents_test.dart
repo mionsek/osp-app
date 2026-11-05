@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:osp_app/models/models.dart';
 import 'package:osp_app/providers/statistics_provider.dart';
+import 'package:osp_app/services/equipment_card.dart';
+import 'package:osp_app/services/equipment_card_pdf.dart';
 import 'package:osp_app/services/handover_pdf.dart';
 import 'package:osp_app/services/report_pdf.dart';
 import 'package:osp_app/services/stats_pdf.dart';
@@ -129,6 +131,52 @@ void main() {
           config: config,
           year: 2026,
           month: 8);
+      expect(pageCount(bytes), greaterThanOrEqualTo(3));
+    });
+  });
+
+  group('karta pracy sprzętu', () {
+    final niagara = Equipment(
+      id: 'e1',
+      name: 'Motopompa pływająca',
+      brand: 'Niagara',
+      model: 'GXV160KN/5',
+      fuelType: EquipmentFuel.petrol,
+      fuelPerHour: 2,
+    );
+    EquipmentCardRow row(int day, {bool startup = false}) => EquipmentCardRow(
+          date: DateTime(2026, 11, day, 14),
+          operatorName: 'Żółkiewski Łukasz',
+          minutes: startup ? 15 : 45,
+          purpose: startup
+              ? EquipmentWork.startupPurpose
+              : 'Miejscowe zagrożenie, Żukowo — wypompowanie wody z piwnicy',
+          isStartup: startup,
+        );
+
+    test('pusta karta — przód z tabelą i tył z rozliczeniem', () async {
+      final bytes = await EquipmentCardPdf.bytes(
+          device: niagara, rows: const [], config: config, year: 2026, month: 11);
+      expect(pageCount(bytes), 2);
+    });
+
+    test('sprzęt bez normy, rodzaju paliwa i marki', () async {
+      final bytes = await EquipmentCardPdf.bytes(
+          device: Equipment(id: 'e2', name: 'Pilarka'),
+          rows: [row(1, startup: true), row(3)],
+          config: config,
+          year: 2026,
+          month: 11);
+      expect(pageCount(bytes), 2);
+    });
+
+    test('dużo wpisów przechodzi na kolejne strony', () async {
+      final bytes = await EquipmentCardPdf.bytes(
+          device: niagara,
+          rows: [for (var i = 0; i < 45; i++) row(1 + i % 28, startup: i.isOdd)],
+          config: config,
+          year: 2026,
+          month: 11);
       expect(pageCount(bytes), greaterThanOrEqualTo(3));
     });
   });

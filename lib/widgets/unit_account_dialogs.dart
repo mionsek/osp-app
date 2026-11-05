@@ -46,6 +46,7 @@ void refreshLocalDataProviders(WidgetRef ref) {
   ref.read(threatsProvider.notifier).refresh();
   ref.read(vehiclesProvider.notifier).refresh();
   ref.read(equipmentProvider.notifier).refresh();
+  ref.read(equipmentWorkProvider.notifier).refresh();
   ref.read(firefightersProvider.notifier).refresh();
   ref.read(reportsProvider.notifier).refresh();
   ref.read(handoversProvider.notifier).refresh();

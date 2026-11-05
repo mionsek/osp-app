@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/models.dart';
 import '../../providers/providers.dart';
-import '../../services/bluetooth_print_service.dart';
 import '../../services/report_numbers.dart';
 import '../../services/report_pdf.dart';
 import '../../widgets/bluetooth_printer_picker.dart';
@@ -16,56 +15,6 @@ import '../../widgets/navigation.dart';
 class ReportDetailScreen extends ConsumerWidget {
   final String reportId;
   const ReportDetailScreen({super.key, required this.reportId});
-
-  /// Druk na sparowanej drukarce termicznej Bluetooth. Gdy drukarka nie
-  /// jest jeszcze wybrana, pozwalamy wybrać ją od razu tutaj.
-  Future<void> _printViaBluetooth(
-    BuildContext context,
-    WidgetRef ref,
-    Report report,
-    UnitConfig config,
-    List<Firefighter> firefighters,
-  ) async {
-    final messenger = ScaffoldMessenger.of(context);
-    void show(String text, {bool ok = false}) {
-      messenger.showSnackBar(SnackBar(
-        content: Text(text),
-        backgroundColor: ok ? OspTheme.success : Colors.red,
-      ));
-    }
-
-    var mac = config.btPrinterMac;
-    if (mac == null || mac.isEmpty) {
-      final result = await pickBluetoothPrinter(context, ref);
-      if (result.errorMessage != null) {
-        show(result.errorMessage!);
-        return;
-      }
-      if (!result.selected) return;
-      mac = ref.read(unitConfigProvider).btPrinterMac;
-      if (mac == null || mac.isEmpty) return;
-    }
-    try {
-      if (!await BluetoothPrintService.ensurePermission()) {
-        show('Brak zgody na dostęp do Bluetooth.');
-        return;
-      }
-      if (!await BluetoothPrintService.connectIfNeeded(mac)) {
-        show('Nie udało się połączyć z drukarką.');
-        return;
-      }
-      messenger.showSnackBar(const SnackBar(
-        content: Text('Wysyłanie do drukarki...'),
-        duration: Duration(seconds: 2),
-      ));
-      final bytes =
-          await ReportPdf.bytes(report, config, firefighters);
-      final ok = await BluetoothPrintService.printPdf(bytes);
-      show(ok ? 'Wysłano do drukarki.' : 'Drukarka odrzuciła zadanie.', ok: ok);
-    } catch (e) {
-      show('Błąd druku: $e');
-    }
-  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -201,8 +150,8 @@ class ReportDetailScreen extends ConsumerWidget {
               final hasPrinter = config.btPrinterMac != null &&
                   config.btPrinterMac!.isNotEmpty;
               return OutlinedButton.icon(
-                onPressed: () => _printViaBluetooth(
-                    context, ref, report, config, firefighters),
+                onPressed: () => printOnBluetoothPrinter(context, ref,
+                    () => ReportPdf.bytes(report, config, firefighters)),
                 icon: const Icon(Icons.bluetooth),
                 label: Text(hasPrinter
                     ? 'Drukuj na ${config.btPrinterName ?? "drukarce Bluetooth"}'

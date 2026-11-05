@@ -60,6 +60,37 @@ class PdfOutput {
     await Printing.sharePdf(bytes: await doc.save(), filename: filename);
   }
 
+  /// Liczba po polsku: przecinek dziesiętny, bez zbędnych zer; `null` — pusto.
+  /// Rozliczenia paliwa na kartach drogowej i pracy sprzętu.
+  static String number(num? v, {int decimals = 2}) {
+    if (v == null) return '';
+    final s = v.toDouble().toStringAsFixed(decimals);
+    return s
+        .replaceAll(RegExp(r'0+$'), '')
+        .replaceAll(RegExp(r'\.$'), '')
+        .replaceAll('.', ',');
+  }
+
+  /// Linia do podpisu z podpowiedzią pod spodem i etykietą („Obliczył").
+  static pw.Widget signatureLine(String label, String hint) => pw.Column(
+        children: [
+          pw.Container(
+            width: 190,
+            decoration: const pw.BoxDecoration(
+              border: pw.Border(top: pw.BorderSide(width: 0.7)),
+            ),
+            padding: const pw.EdgeInsets.only(top: 2),
+            child: pw.Text(hint,
+                style: const pw.TextStyle(fontSize: 6),
+                textAlign: pw.TextAlign.center),
+          ),
+          pw.SizedBox(height: 2),
+          pw.Text(label,
+              style:
+                  pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold)),
+        ],
+      );
+
   /// Prosty zawijacz tekstu na potrzeby wykropkowanych linii formularza —
   /// dzieli po słowach, a nadmiar (ponad [maxLines]) dokłada do ostatniej
   /// linii zamiast go obcinać.

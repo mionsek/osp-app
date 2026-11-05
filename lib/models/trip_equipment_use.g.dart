@@ -20,19 +20,25 @@ class TripEquipmentUseAdapter extends TypeAdapter<TripEquipmentUse> {
       name: fields[0] as String,
       minutes: fields[1] as int,
       equipmentId: fields[2] as String?,
+      operatorName: fields[3] == null ? '' : fields[3] as String,
+      operatorId: fields[4] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, TripEquipmentUse obj) {
     writer
-      ..writeByte(3)
+      ..writeByte(5)
       ..writeByte(0)
       ..write(obj.name)
       ..writeByte(1)
       ..write(obj.minutes)
       ..writeByte(2)
-      ..write(obj.equipmentId);
+      ..write(obj.equipmentId)
+      ..writeByte(3)
+      ..write(obj.operatorName)
+      ..writeByte(4)
+      ..write(obj.operatorId);
   }
 
   @override

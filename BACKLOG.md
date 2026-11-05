@@ -326,18 +326,19 @@ Zgłoszone po teście na dwóch telefonach 27.10.2026 (wersja 1.7.4).
 
 ### Sprzęt i karty pracy urządzeń
 Ustalenia Dawida po rozmowie z Deringiem (listopad 2026): **każde urządzenie
-z własnym silnikiem ma w gminie osobną kartę pracy**. Karta drogowa wozu
-(druk Kielna, zdjęcia z 7.08.2026) nie rozróżnia urządzeń — ma jedną kolumnę
-„Minuty pracy urządzeń specjalistycznych" i pozycję 5 rozliczenia liczoną
-normą autopompy. Lista sprzętu, wybór w przejeździe i poprawka karty drogowej
-— zrobione w feature/051. Zostaje to, co zależy od wzoru karty urządzenia:
+z własnym silnikiem ma w gminie osobną kartę pracy**. Lista sprzętu, wybór
+w przejeździe i poprawka karty drogowej — feature/051. Wzór karty
+(„Miesięczna karta pracy sprzętu silnikowego", zdjęcia motopompy pływającej
+Niagara z 5.11.2026) i odpowiedzi Deringa — wydruk karty, rozruchy i osoba
+obsługująca w feature/052. Zostaje:
 
-- [ ] **Wydruk karty pracy urządzenia** — osobna dla każdego urządzenia. **Czeka na wzór druku**: zdjęcie pustej i wypełnionej karty, jak przy karcie drogowej (feature/033 pokazał, że wydruk „z głowy" to zmyślona tabela). Przy okazji do ustalenia: okres karty (miesiąc?), czy wpisuje się rozruchy kontrolne i ćwiczenia, czas w minutach czy godzinach, czy jest paliwo pobrane z kanistrów, motogodziny, osoba obsługująca, numer fabryczny / inwentarzowy
-- [ ] **Praca sprzętu bez wyjazdu** — rozruchy kontrolne agregatu, ćwiczenia, prace przy remizie. Dziś minuty pracy da się wpisać tylko przy przejeździe wozu. Wpis: data, urządzenie, czas, cel (akcja, ćwiczenia, rozruch kontrolny, prace gospodarcze). Zakres zależy od wzoru karty
-- [ ] **Excel „Praca sprzętu"** do pobrania (Udostępnij, jak PDF): arkusz szczegółów (data, wóz, numer wyjazdu, urządzenie, czas, norma, wyliczone paliwo, rodzaj paliwa) i zestawienie dla każdego urządzenia (godziny i paliwo osobno: benzyna, mieszanka, ON). Prawdziwy .xlsx, nie CSV — polski Excel psuje w CSV polskie znaki i przecinki dziesiętne. Dla statystyk i rozliczeń „na przyszłość"
-- [ ] **Statystyki pracy sprzętu** — godziny pracy każdego urządzenia w roku
-- [ ] **Pobrane paliwo z kanistrów** — razem z pustą dziś tabelą „Pobrano" karty drogowej (patrz feature/033)
-- [ ] **Pytanie do Deringa**: czy w kolumnie 10 karty wozu wpisuje się tylko sprzęt zasilany z wozu (autopompa, wyciągarka)? Od 1.8.0 aplikacja tak liczy — pozycja 5 mnoży te minuty przez normę autopompy, więc pilarka zawyżała paliwo z baku. Gdyby Dering odpowiedział inaczej, zmiana jest w jednym miejscu (`EquipmentUsage.countsOnVehicleCard`)
+- [ ] **Paliwo z kanistrów na karcie urządzenia** — Dering: paliwo z kanistrów „jest rozpisane na wszystkie urządzenia", nie pobiera się go osobno na urządzenie. Dziś tabela „Pobrano w litrach" i pozycje 1–3 i 8 rozliczenia zostają puste do wypełnienia długopisem. **Do ustalenia**: według jakiej reguły dzieli się kanister — po równo, według zużycia z normy, tak żeby „pobrano" = „zużyto"? Jeśli według zużycia, aplikacja może wpisywać to sama: tankowanie kanistrów (data, nr kwitu, litry paliwa i oleju) i podział na urządzenia na koniec miesiąca
+- [ ] **„Pozostało z ubiegłego miesiąca"** (pozycja 1) z pozycji 8 poprzedniej karty — ma sens dopiero razem z pobranym paliwem
+- [ ] **Licznik motogodzin** — rubryka „Stan licznika" na przodzie karty i tabela „Data / Stan licznika / Minuty pracy / Stan licznika / Zużycie paliwa" z tyłu zostają puste. Do ustalenia, czy któreś urządzenie ma licznik i co dokładnie wpisuje się w tę tabelę
+- [ ] **Excel „Praca sprzętu"** do pobrania (Udostępnij, jak PDF): arkusz szczegółów (data, wóz, numer wyjazdu, urządzenie, czas, obsługujący, norma, wyliczone paliwo, rodzaj paliwa) i zestawienie dla każdego urządzenia (godziny i paliwo osobno: benzyna, mieszanka, ON). Prawdziwy .xlsx, nie CSV — polski Excel psuje w CSV polskie znaki i przecinki dziesiętne. Mniej pilne, odkąd jest wydruk karty
+- [ ] **Statystyki pracy sprzętu** — godziny pracy i paliwo każdego urządzenia w roku
+- [ ] **Pobrane paliwo na karcie drogowej wozu** — pusta dziś tabela „Pobrano" (patrz feature/033)
+- [ ] **Do potwierdzenia z Deringiem**: „w karcie samochodu wpisujesz tylko wyjazdy z akcji, km, minuty postoju i minuty pompy" — rozumiemy, że na karcie wozu nie ma sprzętu z własnym silnikiem, a nie, że pomija się przejazdy na ćwiczenia, tankowanie czy przegląd. Aplikacja wpisuje na kartę wozu wszystkie jego przejazdy
 
 ### Funkcje ratownika — możliwe rozszerzenia
 Obecnie „Ratownik" jest **wyliczany**: brak kierowcy/dowódcy/KPP = ratownik.
@@ -1001,6 +1002,35 @@ Ekrany wyjazdu i przekazania miały domek zamiast strzałki, reszta ekranów —
 - [x] **Niezapisane dane**: kreator wyjazdu, formularze (przekazanie, przejazd, pojazd, ratownik) i dane jednostki w Ustawieniach z wpisanymi zmianami pytają „Wyjść bez zapisywania?" przy wstecz i przy domku. Pusty formularz zamyka się bez pytania, po zapisie też
 - [x] 10 nowych testów na prawdziwym drzewie tras: po zapisie przekazania wstecz do listy i do menu (aplikacja się nie zamyka), po „Lista wyjazdów" wstecz do menu, strzałka i domek na każdym z 19 ekranów, kreator cofa o krok i pyta na pierwszym, bez wpisanych danych bez pytania, „Zostań" zostawia, formularz pyta domkiem i wstecz, zapis zamyka bez pytania, Ustawienia pytają przed zapisem, a po nim nie. Łącznie **364**
 - [x] Wersja **1.7.8+21**
+
+## Zrobione (feature/052-karta-pracy-sprzetu)
+Wzór „Miesięcznej karty pracy sprzętu silnikowego" z OSP Kielno (zdjęcia
+karty motopompy pływającej Niagara, 5.11.2026) i odpowiedzi Deringa:
+karta miesięczna; wpisuje się „rozruch 15 min" albo czas pracy przy akcji;
+czas w minutach; paliwo z kanistrów rozpisuje się na cały sprzęt; na karcie
+wozu tylko przejazdy, km, minuty postoju i minuty pompy. Część
+nierozstrzygnięta — w „Sprzęt i karty pracy urządzeń" (Do zrobienia).
+
+### Karta pracy urządzenia
+- [x] **Wydruk karty** dla każdego urządzenia z własnym silnikiem — A4 w pionie, dwie strony jak na papierze. Przód: jednostka, miesiąc, marka, typ, rodzaj (nazwa z listy sprzętu), stan licznika, norma na godzinę pracy, tabela „Data / Nazwisko i imię obsługującego / Minut pracy / Cel użycia / Podpis dysponenta". Tył: tabela licznika, „Pobrano w litrach" (dnia, nr kwitu, paliwa, oleju, podpisy) i rozliczenie w litrach ET / ON w ośmiu pozycjach, „Obliczył" i „Sprawdził". Drukarka systemowa, Bluetooth (bez obrotu — strona jest w pionie) i udostępnianie
+- [x] **Wypełnia się samo**: praca przy akcjach i ćwiczeniach z ewidencji przejazdów (także wpisy sprzed listy sprzętu — po nazwie), rozruchy z nowych wpisów. „Cel użycia": rodzaj zdarzenia i miejscowość z wyjazdu alarmowego („Miejscowe zagrożenie, Kielno"), inaczej cel i miejsce przejazdu („Ćwiczenia, Szemud"), przy rozruchu „Rozruch kontrolny"
+- [x] **Rozliczenie**: pozycja 4 (przepracowano godz. i min.) i 5 (zużyto) z pracy, pozycja 6 (zużyto na rozruchy i kontrole) z rozruchów, 7 — suma; litry normą urządzenia, w kolumnie ET (benzyna, mieszanka) albo ON. Bez normy albo rodzaju paliwa — puste i ostrzeżenie na ekranie przed drukiem. Pobrane paliwo, stany z poprzedniego miesiąca i licznik — puste, do wypełnienia długopisem (zasada karty drogowej: lepiej puste niż zmyślone)
+- [x] **Ekran karty**: dotknięcie urządzenia z własnym silnikiem na liście sprzętu; wybór miesiąca, podsumowanie (praca, rozruchy, paliwo), wiersze z przejściem do przejazdu albo wpisu, „Dodaj pracę". Sprzęt zasilany z wozu nie ma karty — jego minuty są na karcie drogowej
+
+### Rozruchy i praca bez wyjazdu
+- [x] **„Rozruch kontrolny"** na liście sprzętu — jeden zapis dla zaznaczonych urządzeń (domyślnie wszystkich z własnym silnikiem), 15 min, data, obsługujący. Z karty urządzenia — „Inna praca" z celem użycia (ćwiczenia w remizie, prace gospodarcze). Wpisy może dodawać każdy członek jednostki; poprawia i usuwa autor albo administrator
+- [x] Synchronizowane przez Dysk jako osobne pliki w nowym folderze `equipment_work/`, ze stemplami i znacznikami usunięcia. Starsze wersje aplikacji folder pomijają — format danych bez zmian (`syncFormat` 2)
+
+### Obsługujący i marka
+- [x] **„Obsługujący"** przy urządzeniu z własnym silnikiem w przejeździe — podpowiada najpierw zastęp z wyjazdu, potem resztę kartoteki; można wpisać nazwisko spoza niej. W pliku przejazdu tylko gdy wpisany — wpisy bez niego mają tę samą treść co dawniej. Uwaga: przejazd poprawiony na telefonie z 1.8.0 lub starszą traci obsługującego
+- [x] **Marka** sprzętu osobno od typu — jak w nagłówku karty („Niagara", „GXV160KN/5")
+
+### Porządki
+- [x] Druk przez Bluetooth w jednym miejscu (`printOnBluetoothPrinter`) — raport, przekazanie mienia i karta drogowa miały trzy kopie tych samych kroków; liczby z przecinkiem i linie podpisu wspólne dla obu kart (`PdfOutput`); wybór miesiąca wspólny dla obu kart
+
+### Testy i wersja
+- [x] 24 nowe testy: wiersze karty (praca z przejazdów i rozruchy, tylko tego urządzenia i miesiąca, wpis sprzed listy po nazwie, cel użycia, obsługujący), rozliczenie z normą i bez, miesiące, kolumna ET / ON, zapis na Dysk (praca sprzętu, obsługujący, marka), baza (kolejność, znacznik usunięcia, usunięcie danych), dwa telefony (rozruch dociera, usunięcie też), wydruk (pusta karta, sprzęt bez danych, przejście na kolejne strony), ekrany (karta z podsumowaniem, ostrzeżenie o braku normy, rozruch całego sprzętu, inna praca z karty, otwarcie karty z listy, obsługujący w przejeździe, nawigacja). Łącznie **411**
+- [x] Wersja **1.9.0+23**
 
 ## Zrobione (feature/051-sprzet-i-powitanie)
 Prośby Dawida z 5.11.2026: powitanie na ekranie głównym oraz lista sprzętu

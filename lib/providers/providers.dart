@@ -33,6 +33,7 @@ final syncServiceProvider = Provider<SyncService>((ref) {
     ref.read(firefightersProvider.notifier).refresh();
     ref.read(vehiclesProvider.notifier).refresh();
     ref.read(equipmentProvider.notifier).refresh();
+    ref.read(equipmentWorkProvider.notifier).refresh();
     ref.read(threatsProvider.notifier).refresh();
     ref.read(unitConfigProvider.notifier).refresh();
   };
@@ -336,6 +337,45 @@ class EquipmentNotifier extends StateNotifier<List<Equipment>> {
 
   void refresh() {
     state = _db.getAllEquipment();
+  }
+}
+
+// --- Praca sprzętu poza przejazdami (rozruchy kontrolne) ---
+
+final equipmentWorkProvider =
+    StateNotifierProvider<EquipmentWorkNotifier, List<EquipmentWork>>((ref) {
+      return EquipmentWorkNotifier(
+        ref.watch(databaseServiceProvider),
+        onChanged: _sendSoon(ref),
+      );
+    });
+
+class EquipmentWorkNotifier extends StateNotifier<List<EquipmentWork>> {
+  final DatabaseService _db;
+  final void Function() _onChanged;
+  EquipmentWorkNotifier(this._db, {void Function()? onChanged})
+      : _onChanged = onChanged ?? _noop,
+        super(_db.getAllEquipmentWork());
+
+  /// Zapis nowego albo poprawionego wpisu — kilku naraz przy rozruchu
+  /// całego sprzętu.
+  Future<void> save(List<EquipmentWork> entries) async {
+    final now = DateTime.now();
+    for (final w in entries) {
+      await _db.addEquipmentWork(w..updatedAt = now);
+    }
+    state = _db.getAllEquipmentWork();
+    _onChanged();
+  }
+
+  Future<void> delete(String id) async {
+    await _db.deleteEquipmentWork(id);
+    state = _db.getAllEquipmentWork();
+    _onChanged();
+  }
+
+  void refresh() {
+    state = _db.getAllEquipmentWork();
   }
 }
 

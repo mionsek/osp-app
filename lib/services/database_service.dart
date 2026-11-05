@@ -18,6 +18,7 @@ class DatabaseService {
   static const String _handoversBox = 'property_handovers';
   static const String _tripsBox = 'vehicle_trips';
   static const String _equipmentBox = 'equipment';
+  static const String _equipmentWorkBox = 'equipment_work';
 
   static Future<void> initialize() async {
     await Hive.initFlutter();
@@ -44,6 +45,7 @@ class DatabaseService {
     register(VehicleTripAdapter());
     register(TripEquipmentUseAdapter());
     register(EquipmentAdapter());
+    register(EquipmentWorkAdapter());
   }
 
   /// Otwiera wszystkie boksy aplikacji. Testy otwierają je tym samym
@@ -59,6 +61,7 @@ class DatabaseService {
       Hive.openBox<PropertyHandover>(_handoversBox),
       Hive.openBox<VehicleTrip>(_tripsBox),
       Hive.openBox<Equipment>(_equipmentBox),
+      Hive.openBox<EquipmentWork>(_equipmentWorkBox),
     ]);
   }
 
@@ -189,6 +192,8 @@ class DatabaseService {
         await vehiclesBox.delete(id);
       case SyncKind.equipment:
         await equipmentBox.delete(id);
+      case SyncKind.equipmentWork:
+        await equipmentWorkBox.delete(id);
     }
     await saveTombstone(kind, id, tombstone);
   }
@@ -240,6 +245,7 @@ class DatabaseService {
     await Future.wait([
       vehiclesBox.clear(),
       equipmentBox.clear(),
+      equipmentWorkBox.clear(),
       firefightersBox.clear(),
       reportsBox.clear(),
       handoversBox.clear(),
@@ -301,6 +307,29 @@ class DatabaseService {
       await _tombstone(SyncKind.equipment, id, SyncJson.equipmentToJson(e));
     }
     await equipmentBox.delete(id);
+  }
+
+  // --- Praca sprzętu poza przejazdami (rozruchy) ---
+
+  Box<EquipmentWork> get equipmentWorkBox =>
+      Hive.box<EquipmentWork>(_equipmentWorkBox);
+
+  /// Wszystkie wpisy, od najnowszego.
+  List<EquipmentWork> getAllEquipmentWork() => equipmentWorkBox.values.toList()
+    ..sort((a, b) => b.date.compareTo(a.date));
+
+  EquipmentWork? getEquipmentWork(String id) => equipmentWorkBox.get(id);
+
+  Future<void> addEquipmentWork(EquipmentWork work) =>
+      equipmentWorkBox.put(work.id, work);
+
+  Future<void> deleteEquipmentWork(String id) async {
+    final w = equipmentWorkBox.get(id);
+    if (w != null) {
+      await _tombstone(
+          SyncKind.equipmentWork, id, SyncJson.equipmentWorkToJson(w));
+    }
+    await equipmentWorkBox.delete(id);
   }
 
   // --- Firefighters ---

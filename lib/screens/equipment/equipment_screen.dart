@@ -21,11 +21,20 @@ class EquipmentScreen extends ConsumerWidget {
     final vehicles = ref.watch(vehiclesProvider);
     final isAdmin = ref.watch(isAdminProvider);
     final syncState = ref.watch(syncStateProvider);
+    final withCards = equipment.where((e) => e.hasWorkCard).length;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Sprzęt'),
-        actions: const [HomeButton()],
+        actions: [
+          if (withCards > 0)
+            IconButton(
+              icon: const Icon(Icons.power_settings_new),
+              tooltip: 'Rozruch kontrolny',
+              onPressed: () => context.push('/equipment/work/new?startup=all'),
+            ),
+          const HomeButton(),
+        ],
       ),
       floatingActionButton: isAdmin
           ? FloatingActionButton.extended(
@@ -40,6 +49,15 @@ class EquipmentScreen extends ConsumerWidget {
             AdminOnlyNotice(
               what: 'Listę sprzętu',
               adminEmail: syncState.founderEmail,
+            ),
+          if (withCards > 0)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+              child: Text(
+                'Dotknij urządzenia z własnym silnikiem, żeby zobaczyć i '
+                'wydrukować jego miesięczną kartę pracy.',
+                style: TextStyle(fontSize: 12.5, color: Colors.grey[700]),
+              ),
             ),
           Expanded(
             child: equipment.isEmpty
@@ -151,7 +169,8 @@ class _EquipmentTile extends ConsumerWidget {
         if (!e.poweredByVehicle && e.fuelType.isNotEmpty) e.fuelType,
         if (!e.poweredByVehicle && e.fuelPerHour != null)
           '${e.fuelPerHour.toString().replaceAll('.', ',')} l/godz.',
-        if (e.model.isNotEmpty) e.model,
+        if ('${e.brand} ${e.model}'.trim().isNotEmpty)
+          '${e.brand} ${e.model}'.trim(),
       ].join(' · ');
 
   @override
@@ -159,6 +178,11 @@ class _EquipmentTile extends ConsumerWidget {
     final subtitle = details(equipment);
     return Card(
       child: ListTile(
+        // Sprzęt zasilany z wozu nie ma własnej karty — jego minuty są na
+        // karcie drogowej wozu.
+        onTap: equipment.hasWorkCard
+            ? () => context.push('/equipment/card/${equipment.id}')
+            : null,
         leading: Icon(
           equipment.poweredByVehicle
               ? Icons.settings_input_component
@@ -172,7 +196,7 @@ class _EquipmentTile extends ConsumerWidget {
         ),
         subtitle: subtitle.isEmpty ? null : Text(subtitle),
         trailing: !isAdmin
-            ? null
+            ? (equipment.hasWorkCard ? const Icon(Icons.chevron_right) : null)
             : Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [

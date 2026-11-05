@@ -563,6 +563,7 @@ class SyncService {
     _yearFolderIds.clear();
     _handoversFolderId = null;
     _tripsFolderId = null;
+    _equipmentWorkFolderId = null;
     await _db.settingsBox.delete(_fileCacheKey);
   }
 
@@ -793,6 +794,7 @@ class SyncService {
   final Map<int, String> _yearFolderIds = {};
   String? _handoversFolderId;
   String? _tripsFolderId;
+  String? _equipmentWorkFolderId;
 
   /// Wersja formatu danych na Dysku, którą ta aplikacja rozumie.
   ///
@@ -1218,6 +1220,16 @@ class SyncService {
       }
     }
 
+    // Osobny folder, a nie nowy format danych: wersje sprzed karty pracy
+    // sprzętu go nie znają i po prostu pomijają.
+    if (wanted(SyncKind.equipmentWork)) {
+      final workFolders = named(_equipmentWorkFolder);
+      _equipmentWorkFolderId = workFolders.firstOrNull;
+      for (final id in workFolders) {
+        await _pullFolder(SyncKind.equipmentWork, id, cache, seen);
+      }
+    }
+
     // Pliki, których już nie ma na Dysku, nie są potrzebne w pamięci.
     cache.removeWhere(
         (fileId, e) => wanted(e['k'] as String? ?? '') && !seen.contains(fileId));
@@ -1313,6 +1325,8 @@ class SyncService {
             keepLocalOverrides(trip, local);
           }
           await _db.addTrip(trip);
+        case SyncKind.equipmentWork:
+          await _db.addEquipmentWork(SyncJson.equipmentWorkFromJson(data));
       }
       if (tombAt != null) await _db.removeTombstone(kind, id);
     }
@@ -1356,12 +1370,22 @@ class SyncService {
           name: _buildTripFileName(t), folder: tripsFolder);
     }
 
+    Future<String> equipmentWorkFolder() async => _equipmentWorkFolderId ??=
+        await _driveService.createSubfolder(folderId, _equipmentWorkFolder);
+
+    for (final w in _db.getAllEquipmentWork()) {
+      await _pushDoc(cache, SyncKind.equipmentWork, w.id,
+          SyncJson.equipmentWorkToJson(w),
+          name: _buildEquipmentWorkFileName(w), folder: equipmentWorkFolder);
+    }
+
     // Znaczniki usunięcia nadpisują plik rekordu. Gdy pliku nie ma, rekord
     // nigdy nie opuścił telefonu i nie ma czego usuwać z Dysku.
     for (final kind in const [
       SyncKind.report,
       SyncKind.handover,
       SyncKind.trip,
+      SyncKind.equipmentWork,
     ]) {
       for (final tomb in _db.tombstonesOf(kind)) {
         final remote = _remoteDocs['$kind:${tomb['id']}'];
@@ -1433,6 +1457,8 @@ class SyncService {
         SyncKind.handover =>
           SyncJson.handoverToJson(SyncJson.handoverFromJson(data)),
         SyncKind.trip => SyncJson.tripToJson(SyncJson.tripFromJson(data)),
+        SyncKind.equipmentWork => SyncJson.equipmentWorkToJson(
+            SyncJson.equipmentWorkFromJson(data)),
         _ => data,
       };
 
@@ -1440,6 +1466,7 @@ class SyncService {
         SyncKind.report => _db.getReport(id) != null,
         SyncKind.handover => _db.getHandover(id) != null,
         SyncKind.trip => _db.getTrip(id) != null,
+        SyncKind.equipmentWork => _db.getEquipmentWork(id) != null,
         SyncKind.firefighter => _db.getFirefighter(id) != null,
         SyncKind.vehicle => _db.getVehicle(id) != null,
         SyncKind.equipment => _db.getEquipment(id) != null,
@@ -1452,6 +1479,7 @@ class SyncService {
         SyncKind.report => _db.getReport(id)?.updatedAt,
         SyncKind.handover => _db.getHandover(id)?.updatedAt,
         SyncKind.trip => _db.getTrip(id)?.updatedAt,
+        SyncKind.equipmentWork => _db.getEquipmentWork(id)?.updatedAt,
         SyncKind.firefighter => _db.getFirefighter(id)?.updatedAt,
         SyncKind.vehicle => _db.getVehicle(id)?.updatedAt,
         SyncKind.equipment => _db.getEquipment(id)?.updatedAt,
@@ -1601,6 +1629,15 @@ class SyncService {
     final name = _db.getVehicle(t.vehicleId)?.name ?? t.vehicleId;
     return '${FileNames.date(t.date)}_${FileNames.sanitize(name)}'
         '_${FileNames.shortHash(t.id)}.json';
+  }
+
+  /// Podfolder z pracą sprzętu poza przejazdami (rozruchy kontrolne).
+  static const String _equipmentWorkFolder = 'equipment_work';
+
+  String _buildEquipmentWorkFileName(EquipmentWork w) {
+    final name = _db.getEquipment(w.equipmentId)?.name ?? w.equipmentName;
+    return '${FileNames.date(w.date)}_${FileNames.sanitize(name)}'
+        '_${FileNames.shortHash(w.id)}.json';
   }
 
   /// Plik z Dysku zapisany przez starszą wersję aplikacji nie zna ręcznych

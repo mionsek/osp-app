@@ -33,6 +33,7 @@ class _EquipmentFormScreenState extends ConsumerState<EquipmentFormScreen> {
 
   final _nameCtrl = TextEditingController();
   final _normCtrl = TextEditingController();
+  final _brandCtrl = TextEditingController();
   final _modelCtrl = TextEditingController();
   final _serialCtrl = TextEditingController();
   String? _vehicleId;
@@ -55,6 +56,7 @@ class _EquipmentFormScreenState extends ConsumerState<EquipmentFormScreen> {
     if (e == null) return;
     _nameCtrl.text = e.name;
     _normCtrl.text = _num(e.fuelPerHour);
+    _brandCtrl.text = e.brand;
     _modelCtrl.text = e.model;
     _serialCtrl.text = e.serialNumber;
     _vehicleId = e.vehicleId;
@@ -66,6 +68,7 @@ class _EquipmentFormScreenState extends ConsumerState<EquipmentFormScreen> {
   void dispose() {
     _nameCtrl.dispose();
     _normCtrl.dispose();
+    _brandCtrl.dispose();
     _modelCtrl.dispose();
     _serialCtrl.dispose();
     super.dispose();
@@ -88,6 +91,7 @@ class _EquipmentFormScreenState extends ConsumerState<EquipmentFormScreen> {
       ..poweredByVehicle = _poweredByVehicle
       ..fuelType = ownEngine ? _fuelType : ''
       ..fuelPerHour = ownEngine ? _parseNum(_normCtrl.text) : null
+      ..brand = _brandCtrl.text.trim()
       ..model = _modelCtrl.text.trim()
       ..serialNumber = _serialCtrl.text.trim();
     if (existing == null) {
@@ -215,11 +219,22 @@ class _EquipmentFormScreenState extends ConsumerState<EquipmentFormScreen> {
                   ),
                 ],
                 const SizedBox(height: 16),
+                // Marka i typ osobno — tak jak w nagłówku karty pracy.
+                TextFormField(
+                  controller: _brandCtrl,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(
+                    labelText: 'Marka (opcjonalnie)',
+                    hintText: 'np. Stihl, Niagara',
+                    prefixIcon: Icon(Icons.sell_outlined),
+                  ),
+                ),
+                const SizedBox(height: 16),
                 TextFormField(
                   controller: _modelCtrl,
                   decoration: const InputDecoration(
-                    labelText: 'Typ / model (opcjonalnie)',
-                    hintText: 'np. Stihl MS 462',
+                    labelText: 'Typ (opcjonalnie)',
+                    hintText: 'np. MS 462',
                     prefixIcon: Icon(Icons.label_outline),
                   ),
                 ),

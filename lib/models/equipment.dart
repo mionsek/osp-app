@@ -53,7 +53,8 @@ class Equipment extends HiveObject {
   @HiveField(5)
   double? fuelPerHour;
 
-  /// Typ albo model, np. „Stihl MS 462".
+  /// Typ, np. „MS 462" — rubryka „Typ" karty pracy. Sprzęt dodany przed
+  /// rubryką [brand] ma tu markę i typ razem („Stihl MS 462").
   @HiveField(6, defaultValue: '')
   String model;
 
@@ -65,6 +66,10 @@ class Equipment extends HiveObject {
   @HiveField(8)
   DateTime? updatedAt;
 
+  /// Marka, np. „Niagara" — rubryka „Marka" karty pracy sprzętu.
+  @HiveField(9, defaultValue: '')
+  String brand;
+
   Equipment({
     required this.id,
     required this.name,
@@ -75,7 +80,20 @@ class Equipment extends HiveObject {
     this.model = '',
     this.serialNumber = '',
     this.updatedAt,
+    this.brand = '',
   });
+
+  /// Czy sprzęt ma własną miesięczną kartę pracy — każde urządzenie
+  /// z własnym silnikiem (Dering, listopad 2026).
+  bool get hasWorkCard => !poweredByVehicle;
+
+  /// Kolumna rozliczenia karty pracy: „ET" (benzyna, mieszanka) albo „ON";
+  /// `null`, gdy rodzaj paliwa nie jest wpisany.
+  String? get settlementColumn => switch (fuelType) {
+        EquipmentFuel.diesel => 'ON',
+        EquipmentFuel.petrol || EquipmentFuel.mix => 'ET',
+        _ => null,
+      };
 
   @override
   String toString() => name;

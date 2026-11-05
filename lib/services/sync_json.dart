@@ -13,6 +13,7 @@ class SyncKind {
   static const String firefighter = 'firefighter';
   static const String vehicle = 'vehicle';
   static const String equipment = 'equipment';
+  static const String equipmentWork = 'equipmentWork';
 }
 
 /// Zapis rekordów na Dysk i odczyt z powrotem.
@@ -151,6 +152,7 @@ class SyncJson {
         'poweredByVehicle': e.poweredByVehicle,
         'fuelType': e.fuelType,
         'fuelPerHour': e.fuelPerHour,
+        'brand': e.brand,
         'model': e.model,
         'serialNumber': e.serialNumber,
         'updatedAt': e.updatedAt?.toIso8601String(),
@@ -163,9 +165,43 @@ class SyncJson {
         poweredByVehicle: j['poweredByVehicle'] as bool? ?? false,
         fuelType: j['fuelType'] as String? ?? '',
         fuelPerHour: (j['fuelPerHour'] as num?)?.toDouble(),
+        brand: j['brand'] as String? ?? '',
         model: j['model'] as String? ?? '',
         serialNumber: j['serialNumber'] as String? ?? '',
         updatedAt: stampOf(j),
+      );
+
+  // ── Praca sprzętu poza przejazdem ───────────────────────────────────
+
+  static Map<String, dynamic> equipmentWorkToJson(EquipmentWork w) => {
+        'id': w.id,
+        'equipmentId': w.equipmentId,
+        'equipmentName': w.equipmentName,
+        'date': w.date.toIso8601String(),
+        'minutes': w.minutes,
+        'isStartup': w.isStartup,
+        'purpose': w.purpose,
+        'operatorName': w.operatorName,
+        'operatorId': w.operatorId,
+        'createdAt': w.createdAt.toIso8601String(),
+        'updatedAt': w.updatedAt.toIso8601String(),
+        'createdBy': w.createdBy,
+      };
+
+  static EquipmentWork equipmentWorkFromJson(Map<String, dynamic> j) =>
+      EquipmentWork(
+        id: j['id'] as String,
+        equipmentId: j['equipmentId'] as String,
+        equipmentName: j['equipmentName'] as String? ?? '',
+        date: DateTime.parse(j['date'] as String),
+        minutes: (j['minutes'] as num?)?.toInt() ?? 0,
+        isStartup: j['isStartup'] as bool? ?? false,
+        purpose: j['purpose'] as String? ?? '',
+        operatorName: j['operatorName'] as String? ?? '',
+        operatorId: j['operatorId'] as String?,
+        createdAt: DateTime.parse(j['createdAt'] as String),
+        updatedAt: DateTime.parse(j['updatedAt'] as String),
+        createdBy: j['createdBy'] as String? ?? '',
       );
 
   // ── Słownik zagrożeń ────────────────────────────────────────────────
@@ -274,6 +310,8 @@ class SyncJson {
               // Tylko gdy jest — wpisy sprzed listy sprzętu zachowują ten
               // sam skrót treści, więc nie są wysyłane ponownie.
               if (e.equipmentId != null) 'equipmentId': e.equipmentId,
+              if (e.operatorName.isNotEmpty) 'operatorName': e.operatorName,
+              if (e.operatorId != null) 'operatorId': e.operatorId,
             },
         ],
         'idleMinutes': t.idleMinutes,
@@ -313,6 +351,8 @@ class SyncJson {
               name: (e as Map)['name'] as String? ?? '',
               minutes: (e['minutes'] as num?)?.toInt() ?? 0,
               equipmentId: e['equipmentId'] as String?,
+              operatorName: e['operatorName'] as String? ?? '',
+              operatorId: e['operatorId'] as String?,
             ),
         ],
         overriddenFields: [

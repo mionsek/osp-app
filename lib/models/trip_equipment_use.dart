@@ -43,10 +43,21 @@ class TripEquipmentUse extends HiveObject {
   @HiveField(2)
   String? equipmentId;
 
+  /// Kto obsługiwał urządzenie — rubryka „Nazwisko i imię obsługującego"
+  /// karty pracy sprzętu. Jak przy kierowcy: nazwisko, bo druk go wymaga,
+  /// i [operatorId], gdy osoba jest w kartotece.
+  @HiveField(3, defaultValue: '')
+  String operatorName;
+
+  @HiveField(4)
+  String? operatorId;
+
   TripEquipmentUse({
     required this.name,
     required this.minutes,
     this.equipmentId,
+    this.operatorName = '',
+    this.operatorId,
   });
 
   @override

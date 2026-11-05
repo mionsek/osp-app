@@ -1,9 +1,12 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 
 import '../providers/providers.dart';
 import '../services/bluetooth_pairing_service.dart';
+import '../core/theme/osp_theme.dart';
 import '../services/bluetooth_print_service.dart';
 import 'bluetooth_pair_sheet.dart';
 
@@ -121,4 +124,58 @@ Future<PrinterPickResult> pickBluetoothPrinter(
         btPrinterName: selected.name,
       ));
   return const PrinterPickResult.ok();
+}
+
+/// Druk dokumentu na sparowanej drukarce termicznej Bluetooth, z wyborem
+/// drukarki na miejscu, gdy żadnej jeszcze nie wybrano.
+///
+/// Wspólne dla raportu, przekazania mienia i obu kart — wcześniej każdy
+/// ekran miał własną kopię tych samych kroków i komunikatów.
+///
+/// [rotate90] — dokument w poziomie (A4 landscape) trzeba obrócić, bo
+/// drukarka podaje papier pionowo; karta pracy sprzętu jest w pionie.
+Future<void> printOnBluetoothPrinter(
+  BuildContext context,
+  WidgetRef ref,
+  Future<Uint8List> Function() pdfBytes, {
+  bool rotate90 = true,
+}) async {
+  final messenger = ScaffoldMessenger.of(context);
+  void show(String text, {bool ok = false}) {
+    messenger.showSnackBar(SnackBar(
+      content: Text(text),
+      backgroundColor: ok ? OspTheme.success : OspTheme.danger,
+    ));
+  }
+
+  var mac = ref.read(unitConfigProvider).btPrinterMac;
+  if (mac == null || mac.isEmpty) {
+    final result = await pickBluetoothPrinter(context, ref);
+    if (result.errorMessage != null) {
+      show(result.errorMessage!);
+      return;
+    }
+    if (!result.selected) return; // użytkownik zrezygnował
+    mac = ref.read(unitConfigProvider).btPrinterMac;
+    if (mac == null || mac.isEmpty) return;
+  }
+  try {
+    if (!await BluetoothPrintService.ensurePermission()) {
+      show('Brak zgody na dostęp do Bluetooth.');
+      return;
+    }
+    if (!await BluetoothPrintService.connectIfNeeded(mac)) {
+      show('Nie udało się połączyć z drukarką.');
+      return;
+    }
+    messenger.showSnackBar(const SnackBar(
+      content: Text('Wysyłanie do drukarki...'),
+      duration: Duration(seconds: 2),
+    ));
+    final ok = await BluetoothPrintService.printPdf(await pdfBytes(),
+        rotate90: rotate90);
+    show(ok ? 'Wysłano do drukarki.' : 'Drukarka odrzuciła zadanie.', ok: ok);
+  } catch (e) {
+    show('Błąd druku: $e');
+  }
 }

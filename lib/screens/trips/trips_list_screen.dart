@@ -7,10 +7,10 @@ import '../../providers/providers.dart';
 import '../../core/utils/polish_text.dart';
 import '../../services/equipment_usage.dart';
 import '../../services/trip_odometer.dart';
-import '../../services/bluetooth_print_service.dart';
 import '../../widgets/bluetooth_printer_picker.dart';
 import '../../services/trip_card_pdf.dart';
 import '../../core/theme/osp_theme.dart';
+import '../../widgets/month_picker.dart';
 import '../../widgets/navigation.dart';
 
 /// Ewidencja przejazdów pojazdu — odpowiednik miesięcznej karty drogowej.
@@ -104,6 +104,7 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
     // formularz z nagłówkiem pojazdu jest osobną, sensowną potrzebą. Pytamy
     // jednak wprost, żeby nikt nie oddał gminy pustej kartki przez pomyłkę.
     if (trips.isEmpty && !await _confirmEmptyCard()) return;
+    if (!mounted) return;
 
     final config = ref.read(unitConfigProvider);
     try {
@@ -127,7 +128,18 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
             equipment: ref.read(equipmentProvider),
           );
         case _CardOutput.bluetooth:
-          await _printViaBluetooth(vehicle, config, trips);
+          await printOnBluetoothPrinter(
+            context,
+            ref,
+            () => TripCardPdf.bytes(
+              trips: trips,
+              vehicle: vehicle,
+              config: config,
+              year: _year,
+              month: _month,
+              equipment: ref.read(equipmentProvider),
+            ),
+          );
       }
     } catch (e) {
       if (mounted) {
@@ -166,60 +178,6 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
       ),
     );
     return proceed ?? false;
-  }
-
-  /// Druk karty na sparowanej drukarce termicznej Bluetooth.
-  ///
-  /// Karta jest w A4 poziomo, ale drukarka ma szerokość A4, więc obrót o 90°
-  /// przy renderowaniu układa ją wzdłuż taśmy — dokładnie tak, jak działa to
-  /// od feature/016 dla raportu i przekazania mienia.
-  Future<void> _printViaBluetooth(
-    Vehicle vehicle,
-    UnitConfig config,
-    List<VehicleTrip> trips,
-  ) async {
-    final messenger = ScaffoldMessenger.of(context);
-    void show(String text, {bool ok = false}) {
-      messenger.showSnackBar(SnackBar(
-        content: Text(text),
-        backgroundColor: ok ? OspTheme.success : OspTheme.danger,
-      ));
-    }
-
-    var mac = config.btPrinterMac;
-    if (mac == null || mac.isEmpty) {
-      final result = await pickBluetoothPrinter(context, ref);
-      if (result.errorMessage != null) {
-        show(result.errorMessage!);
-        return;
-      }
-      if (!result.selected) return;
-      mac = ref.read(unitConfigProvider).btPrinterMac;
-      if (mac == null || mac.isEmpty) return;
-    }
-
-    if (!await BluetoothPrintService.ensurePermission()) {
-      show('Brak zgody na dostęp do Bluetooth.');
-      return;
-    }
-    if (!await BluetoothPrintService.connectIfNeeded(mac)) {
-      show('Nie udało się połączyć z drukarką.');
-      return;
-    }
-    messenger.showSnackBar(const SnackBar(
-      content: Text('Wysyłanie do drukarki...'),
-      duration: Duration(seconds: 2),
-    ));
-    final bytes = await TripCardPdf.bytes(
-      trips: trips,
-      vehicle: vehicle,
-      config: ref.read(unitConfigProvider),
-      year: _year,
-      month: _month,
-      equipment: ref.read(equipmentProvider),
-    );
-    final ok = await BluetoothPrintService.printPdf(bytes);
-    show(ok ? 'Wysłano do drukarki.' : 'Drukarka odrzuciła zadanie.', ok: ok);
   }
 
   Widget _noVehicles(BuildContext context) {
@@ -580,38 +538,10 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
   }
 
   Future<void> _pickMonth() async {
-    final months = ref.read(tripMonthsProvider(_vehicleId!));
-    final now = DateTime.now();
-
-    // Zawsze bieżący miesiąc na liście, nawet gdy jeszcze pusty — bez tego
-    // nie dałoby się wrócić do „teraz" po zajrzeniu do archiwum.
-    final options = <({int year, int month})>[
-      if (!months.any((m) => m.year == now.year && m.month == now.month))
-        (year: now.year, month: now.month),
-      ...months,
-    ];
-
-    final picked = await showModalBottomSheet<({int year, int month})>(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: ListView(
-          shrinkWrap: true,
-          children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Text('Wybierz miesiąc',
-                  style:
-                      TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            ),
-            for (final m in options)
-              ListTile(
-                title: Text(PolishText.monthLabel(m.month, m.year)),
-                selected: m.year == _year && m.month == _month,
-                onTap: () => Navigator.pop(ctx, m),
-              ),
-          ],
-        ),
-      ),
+    final picked = await pickCardMonth(
+      context,
+      months: ref.read(tripMonthsProvider(_vehicleId!)),
+      selected: (year: _year, month: _month),
     );
 
     if (picked != null && mounted) {

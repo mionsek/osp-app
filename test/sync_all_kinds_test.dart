@@ -138,6 +138,39 @@ void main() {
     expect(db.getTrip('t-w')?.routeTo, 'Gdynia');
   });
 
+  test('rozruch sprzętu od kolegi trafia do equipment_work i do drugiego '
+      'telefonu; usunięcie też', () async {
+    await unit();
+    var b = await phone('wojtek');
+    final at = DateTime(2026, 11, 1, 10);
+    await db.addEquipmentWork(EquipmentWork(
+      id: 'w-rozruch',
+      equipmentId: 'e-niagara',
+      equipmentName: 'Motopompa pływająca',
+      date: DateTime(2026, 11, 1),
+      minutes: 15,
+      isStartup: true,
+      purpose: EquipmentWork.startupPurpose,
+      operatorName: 'Wojtek Kolega',
+      createdAt: at,
+      updatedAt: at,
+      createdBy: 'wojtek@gmail.com',
+    ));
+    await b.syncAll();
+    expect(drive.jsonIn('equipment_work').map((j) => j['id']), ['w-rozruch']);
+
+    var a = await phone('ospkielno');
+    await a.syncAll();
+    expect(db.getEquipmentWork('w-rozruch')?.operatorName, 'Wojtek Kolega');
+
+    b = await phone('wojtek');
+    await db.deleteEquipmentWork('w-rozruch');
+    await b.syncAll();
+    a = await phone('ospkielno');
+    await a.syncAll();
+    expect(db.getEquipmentWork('w-rozruch'), isNull);
+  });
+
   test('ratownik i pojazd od administratora docierają do kolegi', () async {
     await unit();
     var a = await phone('ospkielno');

@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:osp_app/models/models.dart';
 import 'package:osp_app/screens/trips/trip_form_screen.dart';
 import 'package:osp_app/services/database_service.dart';
@@ -284,6 +285,63 @@ void main() {
 
       expect(find.widgetWithText(TextFormField, 'Nazwa urządzenia'),
           findsOneWidget);
+    });
+
+    testWidgets('sprzęt z własnym silnikiem pyta o obsługującego (karta '
+        'pracy) i zapisuje go w przejeździe', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(testRouterApp(GoRouter(
+        initialLocation: '/new',
+        routes: [
+          GoRoute(
+            path: '/',
+            builder: (c, s) => const Text('LISTA'),
+            routes: [
+              GoRoute(
+                path: 'new',
+                builder: (c, s) =>
+                    const TripFormScreen(initialVehicleId: withHistory),
+              ),
+            ],
+          ),
+        ],
+      )));
+      await tester.pumpAndSettle();
+      await addDevice(tester);
+
+      final operator = find.widgetWithText(TextFormField, 'Obsługujący');
+      expect(operator, findsNothing, reason: 'autopompa — z silnika wozu');
+
+      await tester.tap(find.text('Autopompa A16/8'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Pilarka').last);
+      await tester.pumpAndSettle();
+      expect(operator, findsOneWidget);
+
+      await tester.enterText(operator, 'Kowalski Jan');
+      await tester.enterText(
+          find.widgetWithText(TextFormField, 'Minuty'), '25');
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('Dodaj przejazd'));
+      await tester.runAsync(() async {
+        await tester.tap(find.text('Dodaj przejazd'));
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+      });
+      await tester.pumpAndSettle();
+
+      final use = db
+          .getAllTrips()
+          .firstWhere((t) => t.id != 'trip_0')
+          .equipmentUse
+          .single;
+      expect(use.equipmentId, 'e-saw');
+      expect(use.minutes, 25);
+      expect(use.operatorName, 'Kowalski Jan');
+      expect(use.operatorId, 'ff1', reason: 'nazwisko z kartoteki');
     });
   });
 

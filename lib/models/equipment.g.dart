@@ -26,13 +26,14 @@ class EquipmentAdapter extends TypeAdapter<Equipment> {
       model: fields[6] == null ? '' : fields[6] as String,
       serialNumber: fields[7] == null ? '' : fields[7] as String,
       updatedAt: fields[8] as DateTime?,
+      brand: fields[9] == null ? '' : fields[9] as String,
     );
   }
 
   @override
   void write(BinaryWriter writer, Equipment obj) {
     writer
-      ..writeByte(9)
+      ..writeByte(10)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -50,7 +51,9 @@ class EquipmentAdapter extends TypeAdapter<Equipment> {
       ..writeByte(7)
       ..write(obj.serialNumber)
       ..writeByte(8)
-      ..write(obj.updatedAt);
+      ..write(obj.updatedAt)
+      ..writeByte(9)
+      ..write(obj.brand);
   }
 
   @override

@@ -97,16 +97,6 @@ class TripCardPdf {
   /// na papierowej karcie taka rubryka też zostaje pusta.
   static String _hhmm(DateTime? t) => t == null ? '' : TimeFormat.hhmm(t);
 
-  /// Liczba po polsku: przecinek dziesiętny, bez zbędnych zer.
-  static String _n(num? v, {int decimals = 2}) {
-    if (v == null) return '';
-    final s = v.toDouble().toStringAsFixed(decimals);
-    return s
-        .replaceAll(RegExp(r'0+$'), '')
-        .replaceAll(RegExp(r'\.$'), '')
-        .replaceAll('.', ',');
-  }
-
   static Future<pw.Document> _build(
     List<VehicleTrip> trips,
     Vehicle vehicle,
@@ -249,21 +239,21 @@ class TripCardPdf {
                 'Norma zużycia paliwa na 100 km',
                 vehicle.fuelPer100Km == null
                     ? ''
-                    : '${_n(vehicle.fuelPer100Km)} l',
+                    : '${PdfOutput.number(vehicle.fuelPer100Km)} l',
                 'Norma zużycia paliwa autopompy',
                 vehicle.pumpFuelPerHour == null
                     ? ''
-                    : '${_n(vehicle.pumpFuelPerHour)} l/godz.',
+                    : '${PdfOutput.number(vehicle.pumpFuelPerHour)} l/godz.',
               ),
               infoRow(
                 'Praca na postoju silnika',
                 vehicle.idleFuelPerMinute == null
                     ? ''
-                    : '${_n(vehicle.idleFuelPerMinute)} l/min',
+                    : '${PdfOutput.number(vehicle.idleFuelPerMinute)} l/min',
                 'Rozruch silnika',
                 vehicle.startupFuelPerMonth == null
                     ? ''
-                    : '${_n(vehicle.startupFuelPerMonth)} l/m-c',
+                    : '${PdfOutput.number(vehicle.startupFuelPerMonth)} l/m-c',
               ),
               pw.TableRow(children: [
                 cell('Stan autopompy', size: 7),
@@ -431,19 +421,19 @@ class TripCardPdf {
                     _settle(2, 'Pobrano w ciągu miesiąca bieżącego', '', cell),
                     _settle(3, 'razem', '', cell),
                     _settle(4, 'Przebyto km', '$totalKm km', cell,
-                        fuel: _n(kmFuel)),
+                        fuel: PdfOutput.number(kmFuel)),
                     _settle(5, 'Przepracowano godz. urządzeń',
-                        equipmentMinutes == 0 ? '' : '${_n(equipmentHours)} godz.',
+                        equipmentMinutes == 0 ? '' : '${PdfOutput.number(equipmentHours)} godz.',
                         cell,
-                        fuel: _n(pumpFuel)),
+                        fuel: PdfOutput.number(pumpFuel)),
                     _settle(6, 'Dodatek zimowy', '', cell),
                     _settle(7, 'Praca na postoju',
                         idleMinutes == 0 ? '' : '$idleMinutes min', cell,
-                        fuel: _n(idleFuel)),
+                        fuel: PdfOutput.number(idleFuel)),
                     _settle(8, 'Wyk. rozruch.', '', cell,
-                        fuel: _n(startupFuel)),
+                        fuel: PdfOutput.number(startupFuel)),
                     _settle(9, 'Zużyto paliwa w ciągu miesiąca razem', '', cell,
-                        fuel: _n(totalFuel), boldRow: true),
+                        fuel: PdfOutput.number(totalFuel), boldRow: true),
                     _settle(10, 'Przysługuje wg norm wraz z dodat.', '', cell),
                     _settle(11, 'Pozostało na miesiąc następny', '', cell),
                     _settle(12, 'Oszczędzono - przechowano', '', cell),
@@ -456,8 +446,8 @@ class TripCardPdf {
           pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
             children: [
-              _signature('Obliczył', '(imię i nazwisko)'),
-              _signature('Sprawdził', '(imię i nazwisko, podpis, data)'),
+              PdfOutput.signatureLine('Obliczył', '(imię i nazwisko)'),
+              PdfOutput.signatureLine('Sprawdził', '(imię i nazwisko, podpis, data)'),
             ],
           ),
         ],
@@ -513,23 +503,4 @@ class TripCardPdf {
         cell(fuel, align: pw.Alignment.centerRight, boldText: boldRow),
         cell(''),
       ]);
-
-  static pw.Widget _signature(String label, String hint) => pw.Column(
-        children: [
-          pw.Container(
-            width: 190,
-            decoration: const pw.BoxDecoration(
-              border: pw.Border(top: pw.BorderSide(width: 0.7)),
-            ),
-            padding: const pw.EdgeInsets.only(top: 2),
-            child: pw.Text(hint,
-                style: const pw.TextStyle(fontSize: 6),
-                textAlign: pw.TextAlign.center),
-          ),
-          pw.SizedBox(height: 2),
-          pw.Text(label,
-              style:
-                  pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold)),
-        ],
-      );
 }

@@ -9,6 +9,7 @@ import '../../providers/providers.dart';
 import '../../services/equipment_usage.dart';
 import '../../core/theme/osp_theme.dart';
 import '../../widgets/navigation.dart';
+import '../../widgets/person_field.dart';
 
 /// Dodawanie i edycja jednego przejazdu — jednego wiersza karty drogowej.
 ///
@@ -133,7 +134,11 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
         _equipment
           ..clear()
           ..addAll(trip.equipmentUse.map((e) => TripEquipmentUse(
-              name: e.name, minutes: e.minutes, equipmentId: e.equipmentId)));
+              name: e.name,
+              minutes: e.minutes,
+              equipmentId: e.equipmentId,
+              operatorName: e.operatorName,
+              operatorId: e.operatorId)));
         // Przejazd sprzed listy urzadzen ma tylko liczbe minut — pokazujemy
         // ja jako jedna pozycje bez nazwy, zeby dalo sie ja uzupelnic zamiast
         // tracic.
@@ -938,9 +943,36 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
             const SizedBox(height: 8),
             _customEquipmentName(item),
           ],
+          // Sprzęt z własnym silnikiem ma kartę pracy z rubryką
+          // „Nazwisko i imię obsługującego".
+          if (device != null && device.hasWorkCard) ...[
+            const SizedBox(height: 8),
+            PersonField(
+              key: ValueKey('operator_${device.id}'),
+              label: 'Obsługujący',
+              initialName: item.operatorName,
+              people: _operatorCandidates(),
+              dense: true,
+              onChanged: (name, id) {
+                item
+                  ..operatorName = name
+                  ..operatorId = id;
+              },
+            ),
+          ],
         ],
       ),
     );
+  }
+
+  /// Zastęp z wyjazdu na górze, potem reszta kartoteki.
+  List<Firefighter> _operatorCandidates() {
+    final crew = _crewOfLinkedReport;
+    final crewIds = crew.map((f) => f.id).toSet();
+    return [
+      ...crew,
+      ...ref.watch(firefightersProvider).where((f) => !crewIds.contains(f.id)),
+    ];
   }
 
   Widget _equipmentMinutes(TripEquipmentUse item) => TextFormField(
