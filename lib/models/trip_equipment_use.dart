@@ -36,7 +36,18 @@ class TripEquipmentUse extends HiveObject {
   @HiveField(1)
   int minutes;
 
-  TripEquipmentUse({required this.name, required this.minutes});
+  /// Urządzenie z listy sprzętu jednostki ([Equipment]); `null` we wpisach
+  /// sprzed tej listy i przy nazwie wpisanej spoza niej. [name] zostaje
+  /// kopią nazwy z chwili wpisu — zmiana nazwy na liście nie zmienia
+  /// historii, a starsze wersje aplikacji czytają samą nazwę.
+  @HiveField(2)
+  String? equipmentId;
+
+  TripEquipmentUse({
+    required this.name,
+    required this.minutes,
+    this.equipmentId,
+  });
 
   @override
   String toString() => '$name $minutes min';

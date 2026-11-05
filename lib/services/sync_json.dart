@@ -12,6 +12,7 @@ class SyncKind {
   static const String trip = 'trip';
   static const String firefighter = 'firefighter';
   static const String vehicle = 'vehicle';
+  static const String equipment = 'equipment';
 }
 
 /// Zapis rekordów na Dysk i odczyt z powrotem.
@@ -141,6 +142,32 @@ class SyncJson {
         updatedAt: stampOf(j),
       );
 
+  // ── Sprzęt ──────────────────────────────────────────────────────────
+
+  static Map<String, dynamic> equipmentToJson(Equipment e) => {
+        'id': e.id,
+        'name': e.name,
+        'vehicleId': e.vehicleId,
+        'poweredByVehicle': e.poweredByVehicle,
+        'fuelType': e.fuelType,
+        'fuelPerHour': e.fuelPerHour,
+        'model': e.model,
+        'serialNumber': e.serialNumber,
+        'updatedAt': e.updatedAt?.toIso8601String(),
+      };
+
+  static Equipment equipmentFromJson(Map<String, dynamic> j) => Equipment(
+        id: j['id'] as String,
+        name: j['name'] as String,
+        vehicleId: j['vehicleId'] as String?,
+        poweredByVehicle: j['poweredByVehicle'] as bool? ?? false,
+        fuelType: j['fuelType'] as String? ?? '',
+        fuelPerHour: (j['fuelPerHour'] as num?)?.toDouble(),
+        model: j['model'] as String? ?? '',
+        serialNumber: j['serialNumber'] as String? ?? '',
+        updatedAt: stampOf(j),
+      );
+
   // ── Słownik zagrożeń ────────────────────────────────────────────────
 
   static Map<String, dynamic> threatToJson(ThreatEntry t) => {
@@ -240,7 +267,14 @@ class SyncJson {
         'odometerStartManual': t.odometerStartManual,
         'specialEquipmentMinutes': t.specialEquipmentMinutes,
         'equipmentUse': [
-          for (final e in t.equipmentUse) {'name': e.name, 'minutes': e.minutes},
+          for (final e in t.equipmentUse)
+            {
+              'name': e.name,
+              'minutes': e.minutes,
+              // Tylko gdy jest — wpisy sprzed listy sprzętu zachowują ten
+              // sam skrót treści, więc nie są wysyłane ponownie.
+              if (e.equipmentId != null) 'equipmentId': e.equipmentId,
+            },
         ],
         'idleMinutes': t.idleMinutes,
         'overriddenFields': t.overriddenFields,
@@ -278,6 +312,7 @@ class SyncJson {
             TripEquipmentUse(
               name: (e as Map)['name'] as String? ?? '',
               minutes: (e['minutes'] as num?)?.toInt() ?? 0,
+              equipmentId: e['equipmentId'] as String?,
             ),
         ],
         overriddenFields: [

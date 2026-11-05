@@ -11,6 +11,7 @@ import 'package:osp_app/models/models.dart';
 import 'package:osp_app/models/sync_state.dart';
 import 'package:osp_app/providers/providers.dart';
 import 'package:osp_app/services/database_service.dart';
+import 'package:osp_app/services/google_auth_service.dart';
 import 'package:osp_app/services/sync_service.dart';
 
 /// Fundament testów widoków.
@@ -47,10 +48,17 @@ Future<void> disposeTestHive(Directory tempDir) async {
 ///
 /// Kreator wyjazdu woła `pullReportsOnly()` w `initState`, więc bez tego
 /// każdy test próbowałby sięgnąć na Dysk Google.
+/// Konto Google bez nazwy i adresu — ekran główny pyta o imię do powitania.
+class FakeAuthService extends Mock implements GoogleAuthService {}
+
 FakeSyncService fakeSync() {
   registerFallbackValue(<Report>[]);
   registerFallbackValue(<PropertyHandover>[]);
+  final auth = FakeAuthService();
+  when(() => auth.displayName).thenReturn(null);
+  when(() => auth.userEmail).thenReturn(null);
   final sync = FakeSyncService();
+  when(() => sync.authService).thenReturn(auth);
   when(() => sync.pullReportsOnly()).thenAnswer((_) async => true);
   when(() => sync.state).thenReturn(const SyncState());
   // Każdy zapis przez provider zgłasza zmianę do wysłania.

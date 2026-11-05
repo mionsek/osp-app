@@ -7,6 +7,7 @@ import '../core/utils/file_names.dart';
 import '../core/utils/polish_text.dart';
 import '../core/utils/time_format.dart';
 import '../models/models.dart';
+import 'equipment_usage.dart';
 import 'pdf_output.dart';
 
 /// Miesięczna karta drogowa pożarniczego pojazdu samochodowego.
@@ -29,8 +30,9 @@ class TripCardPdf {
     required UnitConfig config,
     required int year,
     required int month,
+    List<Equipment> equipment = const [],
   }) async {
-    final doc = await _build(trips, vehicle, config, year, month);
+    final doc = await _build(trips, vehicle, config, year, month, equipment);
     await PdfOutput.layoutPdf(
       doc,
       _fileName(vehicle, year, month),
@@ -44,8 +46,9 @@ class TripCardPdf {
     required UnitConfig config,
     required int year,
     required int month,
+    List<Equipment> equipment = const [],
   }) async {
-    final doc = await _build(trips, vehicle, config, year, month);
+    final doc = await _build(trips, vehicle, config, year, month, equipment);
     await PdfOutput.sharePdf(doc, _fileName(vehicle, year, month));
   }
 
@@ -61,8 +64,9 @@ class TripCardPdf {
     required UnitConfig config,
     required int year,
     required int month,
+    List<Equipment> equipment = const [],
   }) async {
-    final doc = await _build(trips, vehicle, config, year, month);
+    final doc = await _build(trips, vehicle, config, year, month, equipment);
     return Uint8List.fromList(await doc.save());
   }
 
@@ -109,6 +113,7 @@ class TripCardPdf {
     UnitConfig config,
     int year,
     int month,
+    List<Equipment> equipment,
   ) async {
     final theme = await PdfOutput.theme();
 
@@ -125,7 +130,7 @@ class TripCardPdf {
     for (final t in trips) {
       final d = t.distance;
       if (d != null && d > 0) totalKm += d;
-      equipmentMinutes += t.totalEquipmentMinutes;
+      equipmentMinutes += EquipmentUsage.vehicleCardMinutes(t, equipment);
       idleMinutes += t.idleMinutes ?? 0;
     }
     final equipmentHours = equipmentMinutes / 60.0;
@@ -329,7 +334,8 @@ class TripCardPdf {
                 hdr('Podpis\ndysponenta'),
               ]),
               for (var i = 0; i < trips.length; i++)
-                _tripRow(trips[i], i + 1, cell),
+                _tripRow(trips[i], i + 1, cell,
+                    EquipmentUsage.vehicleCardMinutes(trips[i], equipment)),
               for (var i = trips.length; i < minRows; i++)
                 pw.TableRow(children: [
                   cell('${i + 1}', align: pw.Alignment.center),
@@ -467,6 +473,7 @@ class TripCardPdf {
     pw.Widget Function(String,
             {pw.Alignment align, double height, double size, bool boldText})
         cell,
+    int equipmentMinutes,
   ) =>
       pw.TableRow(children: [
         cell('$lp', align: pw.Alignment.center),
@@ -480,7 +487,7 @@ class TripCardPdf {
             align: pw.Alignment.centerRight),
         cell(_hhmm(t.returnTime), align: pw.Alignment.center),
         cell(t.odometerEnd?.toString() ?? '', align: pw.Alignment.centerRight),
-        cell(t.totalEquipmentMinutes == 0 ? '' : '${t.totalEquipmentMinutes}',
+        cell(equipmentMinutes == 0 ? '' : '$equipmentMinutes',
             align: pw.Alignment.center),
         cell(t.extras),
         cell(t.idleMinutes?.toString() ?? '', align: pw.Alignment.center),

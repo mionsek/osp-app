@@ -201,14 +201,15 @@ void main() {
     await a.syncAll();
     expect(drive.writes, 0, reason: 'nic się nie zmieniło');
 
-    // Czytane są tylko 4 małe pliki konfiguracji (dane jednostki, ratownicy,
-    // pojazdy, słownik) — dokumenty, których nikt nie zmienił, już nie.
+    // Czytane są tylko małe pliki konfiguracji (dane jednostki, ratownicy,
+    // pojazdy, sprzęt, słownik) — dokumenty, których nikt nie zmienił, już
+    // nie.
     await db.addReport(report('r2')..reportNumber = '0002/2026');
     await db.addReport(report('r3')..reportNumber = '0003/2026');
     await a.syncAll();
     drive.resetCounters();
     await a.syncAll();
-    expect(drive.reads, 4);
+    expect(drive.reads, 5);
   });
 
   test('zmiana jednego raportu wysyla tylko ten raport', () async {

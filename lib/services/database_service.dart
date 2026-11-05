@@ -17,6 +17,7 @@ class DatabaseService {
   static const String _settingsBox = 'settings';
   static const String _handoversBox = 'property_handovers';
   static const String _tripsBox = 'vehicle_trips';
+  static const String _equipmentBox = 'equipment';
 
   static Future<void> initialize() async {
     await Hive.initFlutter();
@@ -42,6 +43,7 @@ class DatabaseService {
     register(PropertyHandoverAdapter());
     register(VehicleTripAdapter());
     register(TripEquipmentUseAdapter());
+    register(EquipmentAdapter());
   }
 
   /// Otwiera wszystkie boksy aplikacji. Testy otwierają je tym samym
@@ -56,6 +58,7 @@ class DatabaseService {
       Hive.openBox<dynamic>(_settingsBox),
       Hive.openBox<PropertyHandover>(_handoversBox),
       Hive.openBox<VehicleTrip>(_tripsBox),
+      Hive.openBox<Equipment>(_equipmentBox),
     ]);
   }
 
@@ -184,6 +187,8 @@ class DatabaseService {
         await firefightersBox.delete(id);
       case SyncKind.vehicle:
         await vehiclesBox.delete(id);
+      case SyncKind.equipment:
+        await equipmentBox.delete(id);
     }
     await saveTombstone(kind, id, tombstone);
   }
@@ -199,6 +204,7 @@ class DatabaseService {
     final Box box = switch (kind) {
       SyncKind.firefighter => firefightersBox,
       SyncKind.vehicle => vehiclesBox,
+      SyncKind.equipment => equipmentBox,
       _ => throw ArgumentError.value(kind, 'kind'),
     };
     await box.deleteAll(box.keys.where((k) => !ids.contains(k)).toList());
@@ -233,6 +239,7 @@ class DatabaseService {
     final config = getConfig();
     await Future.wait([
       vehiclesBox.clear(),
+      equipmentBox.clear(),
       firefightersBox.clear(),
       reportsBox.clear(),
       handoversBox.clear(),
@@ -271,6 +278,30 @@ class DatabaseService {
   }
 
   Vehicle? getVehicle(String id) => vehiclesBox.get(id);
+
+  // --- Sprzęt ---
+
+  Box<Equipment> get equipmentBox => Hive.box<Equipment>(_equipmentBox);
+
+  /// Cały sprzęt, alfabetycznie.
+  List<Equipment> getAllEquipment() => equipmentBox.values.toList()
+    ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+  Equipment? getEquipment(String id) => equipmentBox.get(id);
+
+  Future<void> addEquipment(Equipment equipment) =>
+      equipmentBox.put(equipment.id, equipment);
+
+  Future<void> updateEquipment(Equipment equipment) =>
+      equipmentBox.put(equipment.id, equipment);
+
+  Future<void> deleteEquipment(String id) async {
+    final e = equipmentBox.get(id);
+    if (e != null) {
+      await _tombstone(SyncKind.equipment, id, SyncJson.equipmentToJson(e));
+    }
+    await equipmentBox.delete(id);
+  }
 
   // --- Firefighters ---
 

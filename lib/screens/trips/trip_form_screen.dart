@@ -6,6 +6,7 @@ import '../../core/utils/bottom_inset.dart';
 import '../../core/utils/time_format.dart';
 import '../../models/models.dart';
 import '../../providers/providers.dart';
+import '../../services/equipment_usage.dart';
 import '../../core/theme/osp_theme.dart';
 import '../../widgets/navigation.dart';
 
@@ -131,8 +132,8 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
         _odometerEndCtrl.text = trip.odometerEnd?.toString() ?? '';
         _equipment
           ..clear()
-          ..addAll(trip.equipmentUse.map(
-              (e) => TripEquipmentUse(name: e.name, minutes: e.minutes)));
+          ..addAll(trip.equipmentUse.map((e) => TripEquipmentUse(
+              name: e.name, minutes: e.minutes, equipmentId: e.equipmentId)));
         // Przejazd sprzed listy urzadzen ma tylko liczbe minut — pokazujemy
         // ja jako jedna pozycje bez nazwy, zeby dalo sie ja uzupelnic zamiast
         // tracic.
@@ -823,8 +824,8 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton.icon(
-              onPressed: () => setState(() => _equipment.add(
-                  TripEquipmentUse(name: SpecialEquipment.pump, minutes: 0))),
+              onPressed: () =>
+                  setState(() => _equipment.add(_newEquipmentEntry())),
               icon: const Icon(Icons.add, size: 18),
               label: const Text('Dodaj urządzenie'),
               style: TextButton.styleFrom(
@@ -842,7 +843,141 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
   int _totalEquipmentMinutes() =>
       _equipment.fold(0, (sum, e) => sum + e.minutes);
 
+  /// Pozycja listy dla nazwy wpisanej spoza listy sprzętu.
+  static const _customEquipment = '__spoza_listy__';
+
+  /// Nagłówek „Inne" na liście — nie do wybrania.
+  static const _othersHeader = '__inne__';
+
+  /// Urządzenie z listy sprzętu jednostki: najpierw sprzęt wozu tego
+  /// przejazdu, pod „Inne" nieprzypisany i z innych wozów, na końcu nazwa
+  /// spoza listy. Bez listy sprzętu — dawna stała lista nazw.
   Widget _equipmentRow(int index) {
+    final devices = ref.watch(equipmentProvider);
+    if (devices.isEmpty) return _fixedListEquipmentRow(index);
+
+    final item = _equipment[index];
+    final vehicles = ref.watch(vehiclesProvider);
+    final device =
+        EquipmentUsage.resolve(item, devices, vehicleId: _vehicleId);
+    final own = devices.where((e) => e.vehicleId == _vehicleId).toList();
+    final others = devices.where((e) => e.vehicleId != _vehicleId).toList();
+    String label(Equipment e) {
+      final vehicle =
+          vehicles.where((v) => v.id == e.vehicleId).firstOrNull?.name;
+      return vehicle == null ? e.name : '${e.name} ($vehicle)';
+    }
+
+    return Padding(
+      key: ObjectKey(item),
+      padding: const EdgeInsets.only(top: 10),
+      child: Column(
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: 3,
+                child: DropdownButtonFormField<String>(
+                  initialValue: device?.id ?? _customEquipment,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                    labelText: 'Urządzenie',
+                  ),
+                  items: [
+                    for (final e in own)
+                      DropdownMenuItem(
+                        value: e.id,
+                        child: Text(e.name, overflow: TextOverflow.ellipsis),
+                      ),
+                    if (others.isNotEmpty)
+                      DropdownMenuItem(
+                        value: _othersHeader,
+                        enabled: false,
+                        child: Text(
+                          'Inne',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ),
+                    for (final e in others)
+                      DropdownMenuItem(
+                        value: e.id,
+                        child:
+                            Text(label(e), overflow: TextOverflow.ellipsis),
+                      ),
+                    const DropdownMenuItem(
+                      value: _customEquipment,
+                      child: Text('Spoza listy — wpisz nazwę',
+                          overflow: TextOverflow.ellipsis),
+                    ),
+                  ],
+                  onChanged: (v) => setState(() {
+                    if (v == _customEquipment) {
+                      item.equipmentId = null;
+                      if (device != null) item.name = '';
+                      return;
+                    }
+                    final chosen = devices.firstWhere((e) => e.id == v);
+                    item
+                      ..equipmentId = chosen.id
+                      ..name = chosen.name;
+                  }),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(flex: 2, child: _equipmentMinutes(item)),
+              _removeEquipment(index),
+            ],
+          ),
+          if (device == null) ...[
+            const SizedBox(height: 8),
+            _customEquipmentName(item),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _equipmentMinutes(TripEquipmentUse item) => TextFormField(
+        initialValue: item.minutes == 0 ? '' : item.minutes.toString(),
+        keyboardType: TextInputType.number,
+        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        decoration: const InputDecoration(
+          border: OutlineInputBorder(),
+          isDense: true,
+          labelText: 'Minuty',
+        ),
+        onChanged: (v) =>
+            setState(() => item.minutes = int.tryParse(v.trim()) ?? 0),
+      );
+
+  Widget _removeEquipment(int index) => IconButton(
+        icon: const Icon(Icons.close, size: 20),
+        tooltip: 'Usuń',
+        visualDensity: VisualDensity.compact,
+        onPressed: () => setState(() => _equipment.removeAt(index)),
+      );
+
+  /// Nowa pozycja: pierwszy sprzęt wozu przejazdu, a bez listy sprzętu —
+  /// autopompa ze stałej listy, jak dotąd.
+  TripEquipmentUse _newEquipmentEntry() {
+    final devices = ref.read(equipmentProvider);
+    if (devices.isEmpty) {
+      return TripEquipmentUse(name: SpecialEquipment.pump, minutes: 0);
+    }
+    final first = devices.where((e) => e.vehicleId == _vehicleId).firstOrNull ??
+        devices.first;
+    return TripEquipmentUse(
+        name: first.name, minutes: 0, equipmentId: first.id);
+  }
+
+  /// Dawna stała lista nazw — dopóki jednostka nie ma listy sprzętu.
+  Widget _fixedListEquipmentRow(int index) {
     final item = _equipment[index];
     final isCustom = !SpecialEquipment.all.contains(item.name);
 
@@ -1063,7 +1198,15 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
       odometerStartManual: manual,
       // Zapisujemy rozbicie ORAZ sume w starym polu: karta drukuje sume,
       // a starsze wersje aplikacji u kolegow czytaja tylko stare pole.
-      equipmentUse: _equipment.where((e) => e.minutes > 0).toList(),
+      // Wpis sprzed listy sprzetu dostaje urzadzenie, gdy nazwa pasuje.
+      equipmentUse: [
+        for (final e in _equipment.where((e) => e.minutes > 0))
+          e
+            ..equipmentId ??= EquipmentUsage.resolve(
+                    e, ref.read(equipmentProvider),
+                    vehicleId: _vehicleId)
+                ?.id,
+      ],
       specialEquipmentMinutes:
           _totalEquipmentMinutes() == 0 ? null : _totalEquipmentMinutes(),
       idleMinutes: int.tryParse(_idleCtrl.text.trim()),

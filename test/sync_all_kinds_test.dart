@@ -260,6 +260,70 @@ void main() {
     expect(b.handoversAwaitingUpload(db.getAllHandovers()), isEmpty);
   });
 
+  group('sprzęt', () {
+    Equipment saw({String name = 'Pilarka Stihl'}) => Equipment(
+          id: 'e-saw',
+          name: name,
+          vehicleId: 'v1',
+          fuelType: EquipmentFuel.mix,
+          fuelPerHour: 1.2,
+          updatedAt: DateTime(2026, 11, 5, 12),
+        );
+
+    test('sprzęt od administratora — dodanie, zmiana i usunięcie — dociera '
+        'do kolegi', () async {
+      await unit();
+      var a = await phone('ospkielno');
+      await db.addEquipment(saw());
+      await a.syncAll();
+
+      var b = await phone('wojtek');
+      await b.syncAll();
+      expect(db.getEquipment('e-saw')?.fuelType, EquipmentFuel.mix);
+
+      a = await phone('ospkielno');
+      await db.updateEquipment(saw(name: 'Pilarka Stihl MS 462')
+        ..updatedAt = DateTime(2026, 11, 5, 13));
+      await a.syncAll();
+      b = await phone('wojtek');
+      await b.syncAll();
+      expect(db.getEquipment('e-saw')?.name, 'Pilarka Stihl MS 462');
+
+      a = await phone('ospkielno');
+      await db.deleteEquipment('e-saw');
+      await a.syncAll();
+      b = await phone('wojtek');
+      await b.syncAll();
+      expect(db.getEquipment('e-saw'), isNull);
+    });
+
+    test('telefon bez uprawnień nie wysyła swojej listy sprzętu', () async {
+      await unit();
+      final b = await phone('wojtek');
+      await db.addEquipment(saw());
+      await b.syncAll();
+
+      final a = await phone('ospkielno');
+      await a.syncAll();
+      expect(db.getEquipment('e-saw'), isNull);
+    });
+
+    test('przy dołączaniu ostrzeżenie wymienia sprzęt z telefonu, który '
+        'zastąpi lista jednostki', () async {
+      final a = await phone('ospkielno');
+      final code = await a.createUnit('OSP Kielno');
+
+      final b = await phone('wojtek');
+      await db.addEquipment(saw(name: 'Testowa piła'));
+      final unitFound = (await b.lookupUnit(code) as UnitFound).unit;
+      expect((await b.localOnlyListEntries(unitFound.folderId)).equipment,
+          ['Testowa piła']);
+
+      await b.joinFoundUnit(unitFound, code);
+      expect(db.getAllEquipment(), isEmpty);
+    });
+  });
+
   test('własny podtyp zagrożenia od kolegi trafia do jednostki', () async {
     await unit();
     final b = await phone('wojtek');

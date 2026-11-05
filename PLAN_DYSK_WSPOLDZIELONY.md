@@ -183,7 +183,8 @@ krokiem 6 niczego nie psuje; kod zaproszenia prowadzi do nowego folderu.
 3. Przeniesienie w spokojnym momencie, z telefonu Menedżera z dobrym zasięgiem.
 4. Sprawdzenie na drugim telefonie: przełączenie, raporty, druk.
 
-Wersja `1.8.0` — nowy format danych.
+Nowa wersja drugorzędna (np. `1.9.0`) — nowy format danych. `1.8.0` zajęła
+lista sprzętu (feature/051).
 
 ## Ryzyka
 - **Koszt Workspace albo weryfikacja non-profit** — decyzja zarządu.

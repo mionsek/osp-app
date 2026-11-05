@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../models/models.dart';
 import '../../providers/providers.dart';
 import '../../core/utils/polish_text.dart';
+import '../../services/equipment_usage.dart';
 import '../../services/trip_odometer.dart';
 import '../../services/bluetooth_print_service.dart';
 import '../../widgets/bluetooth_printer_picker.dart';
@@ -114,6 +115,7 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
             config: config,
             year: _year,
             month: _month,
+            equipment: ref.read(equipmentProvider),
           );
         case _CardOutput.share:
           await TripCardPdf.generateAndShare(
@@ -122,6 +124,7 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
             config: config,
             year: _year,
             month: _month,
+            equipment: ref.read(equipmentProvider),
           );
         case _CardOutput.bluetooth:
           await _printViaBluetooth(vehicle, config, trips);
@@ -213,6 +216,7 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
       config: ref.read(unitConfigProvider),
       year: _year,
       month: _month,
+      equipment: ref.read(equipmentProvider),
     );
     final ok = await BluetoothPrintService.printPdf(bytes);
     show(ok ? 'Wysłano do drukarki.' : 'Drukarka odrzuciła zadanie.', ok: ok);
@@ -346,8 +350,10 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
   /// na węższym telefonie.
   Widget _summary(BuildContext context, List<VehicleTrip> trips, int km) {
     final open = trips.where((t) => !t.isClosed).length;
-    final equipment =
-        trips.fold(0, (sum, t) => sum + t.totalEquipmentMinutes);
+    // Jak w kolumnie 10 karty — tylko sprzęt zasilany z wozu.
+    final devices = ref.watch(equipmentProvider);
+    final equipment = trips.fold(
+        0, (sum, t) => sum + EquipmentUsage.vehicleCardMinutes(t, devices));
     final idle = trips.fold(0, (sum, t) => sum + (t.idleMinutes ?? 0));
 
     return Padding(

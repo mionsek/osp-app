@@ -58,6 +58,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget build(BuildContext context) {
     final config = ref.watch(unitConfigProvider);
     final vehicles = ref.watch(vehiclesProvider);
+    final equipment = ref.watch(equipmentProvider);
     final firefighters = ref.watch(firefightersProvider);
     final reports = ref.watch(reportsProvider);
     final handovers = ref.watch(handoversProvider);
@@ -115,7 +116,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const SizedBox(height: 16),
+              _Greeting(
+                displayName: ref.read(syncStateProvider.notifier).displayName,
+                syncState: syncState,
+                unitLabel: config.fullName.trim().isEmpty
+                    ? ''
+                    : _shortUnitLabel(config.fullName),
+              ),
+              const SizedBox(height: 20),
               // Podpowiedź pierwszych kroków — znika sama, gdy jednostka ma
               // już wprowadzone pojazdy i ratowników, więc nie wymaga
               // zapamiętywania „zamknięcia" ani nie zawadza na stałe.
@@ -176,6 +184,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 label: 'Pojazdy (${vehicles.length})',
                 color: OspTheme.sectionVehicles,
                 onTap: () => context.push('/vehicles'),
+              ),
+              const SizedBox(height: 12),
+              _MenuButton(
+                icon: Icons.handyman,
+                label: 'Sprzęt (${equipment.length})',
+                color: OspTheme.neutral,
+                onTap: () => context.push('/equipment'),
               ),
               const SizedBox(height: 12),
               _MenuButton(
@@ -287,6 +302,68 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 ///
 /// Klikalna jest cała karta, nie osobny przycisk w środku — większy cel
 /// i mniej elementów na ekranie, który i tak jest długi.
+/// „Witaj, Dawid" i do jakiej jednostki należy ten telefon.
+///
+/// Zgłoszenie Dawida: na ekranie głównym nie było widać, kto jest
+/// zalogowany i z jakimi uprawnieniami — pasek pokazuje nazwę jednostki
+/// zapisaną w telefonie, także gdy telefon nie jest połączony z żadną.
+/// „Administrator" i „członek jednostki" zamiast „jesteś administratorem":
+/// aplikacja nie wie, czy pisze do kobiety, czy do mężczyzny.
+class _Greeting extends StatelessWidget {
+  /// Nazwa z konta Google („Dawid Mionskowski").
+  final String? displayName;
+  final SyncState syncState;
+
+  /// „OSP w Kielnie"; puste, gdy jednostka nie ma nazwy.
+  final String unitLabel;
+
+  const _Greeting({
+    required this.displayName,
+    required this.syncState,
+    required this.unitLabel,
+  });
+
+  /// Pierwsze słowo nazwy konta — imię.
+  static String? firstName(String? displayName) {
+    final first = displayName?.trim().split(RegExp(r'\s+')).first ?? '';
+    return first.isEmpty ? null : first;
+  }
+
+  String get _role {
+    if (!syncState.isConnected) return 'Dane tylko na tym telefonie';
+    if (syncState.unitFolderId == null) {
+      return 'Dane tylko na tym telefonie — dołącz do jednostki '
+          'w Ustawieniach';
+    }
+    final role = syncState.isCurrentUserAdmin
+        ? 'administrator'
+        : 'członek jednostki';
+    return unitLabel.isEmpty ? role : '$unitLabel · $role';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final name = firstName(displayName) ?? syncState.userEmail;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          name == null ? 'Witaj' : 'Witaj, $name',
+          style: Theme.of(context)
+              .textTheme
+              .titleLarge
+              ?.copyWith(fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          _role,
+          style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+        ),
+      ],
+    );
+  }
+}
+
 class _CoffeeCard extends StatelessWidget {
   final VoidCallback onTap;
 

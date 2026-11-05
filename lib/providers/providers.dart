@@ -32,6 +32,7 @@ final syncServiceProvider = Provider<SyncService>((ref) {
     ref.read(vehicleTripsProvider.notifier).refresh();
     ref.read(firefightersProvider.notifier).refresh();
     ref.read(vehiclesProvider.notifier).refresh();
+    ref.read(equipmentProvider.notifier).refresh();
     ref.read(threatsProvider.notifier).refresh();
     ref.read(unitConfigProvider.notifier).refresh();
   };
@@ -292,6 +293,49 @@ class VehiclesNotifier extends StateNotifier<List<Vehicle>> {
 
   void refresh() {
     state = _db.getAllVehicles();
+  }
+}
+
+// --- Sprzęt (agregaty, pilarki, autopompy…) ---
+
+final equipmentProvider =
+    StateNotifierProvider<EquipmentNotifier, List<Equipment>>((ref) {
+      return EquipmentNotifier(
+        ref.watch(databaseServiceProvider),
+        onChanged: _sendSoon(ref),
+      );
+    });
+
+class EquipmentNotifier extends StateNotifier<List<Equipment>> {
+  final DatabaseService _db;
+  final void Function() _onChanged;
+  EquipmentNotifier(this._db, {void Function()? onChanged})
+      : _onChanged = onChanged ?? _noop,
+        super(_db.getAllEquipment());
+
+  Future<void> add(Equipment equipment) async {
+    equipment.updatedAt = DateTime.now();
+    await _db.addEquipment(equipment);
+    state = _db.getAllEquipment();
+    _onChanged();
+  }
+
+  Future<void> update(Equipment equipment) async {
+    // Stempel rozstrzyga przy synchronizacji, czyja wersja wygrywa.
+    equipment.updatedAt = DateTime.now();
+    await _db.updateEquipment(equipment);
+    state = _db.getAllEquipment();
+    _onChanged();
+  }
+
+  Future<void> delete(String id) async {
+    await _db.deleteEquipment(id);
+    state = _db.getAllEquipment();
+    _onChanged();
+  }
+
+  void refresh() {
+    state = _db.getAllEquipment();
   }
 }
 

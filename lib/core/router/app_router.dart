@@ -6,6 +6,8 @@ import '../../screens/onboarding/onboarding_screen.dart';
 import '../../screens/home/home_screen.dart';
 import '../../screens/vehicles/vehicles_screen.dart';
 import '../../screens/vehicles/vehicle_form_screen.dart';
+import '../../screens/equipment/equipment_screen.dart';
+import '../../screens/equipment/equipment_form_screen.dart';
 import '../../screens/firefighters/firefighters_screen.dart';
 import '../../screens/firefighters/firefighter_form_screen.dart';
 import '../../screens/reports/report_wizard_screen.dart';
@@ -66,6 +68,21 @@ final List<RouteBase> appRoutes = [
             path: 'edit/:id',
             builder: (context, state) =>
                 VehicleFormScreen(vehicleId: state.pathParameters['id']!),
+          ),
+        ],
+      ),
+      GoRoute(
+        path: 'equipment',
+        builder: (context, state) => const EquipmentScreen(),
+        routes: [
+          GoRoute(
+            path: 'add',
+            builder: (context, state) => const EquipmentFormScreen(),
+          ),
+          GoRoute(
+            path: 'edit/:id',
+            builder: (context, state) =>
+                EquipmentFormScreen(equipmentId: state.pathParameters['id']!),
           ),
         ],
       ),

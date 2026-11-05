@@ -36,13 +36,16 @@ String describeSyncError(Object e) {
 class LocalListEntries {
   final List<String> firefighters;
   final List<String> vehicles;
+  final List<String> equipment;
 
   const LocalListEntries({
     this.firefighters = const [],
     this.vehicles = const [],
+    this.equipment = const [],
   });
 
-  bool get isEmpty => firefighters.isEmpty && vehicles.isEmpty;
+  bool get isEmpty =>
+      firefighters.isEmpty && vehicles.isEmpty && equipment.isEmpty;
 }
 
 /// Orchestrates bidirectional sync between local Hive and Google Drive.
@@ -271,10 +274,14 @@ class SyncService {
     // Pull remote data to local
     await _pullAllData();
 
-    // Ratownicy i pojazdy pochodzą od jednostki. Wyjazdy, przekazania
-    // i przejazdy z tego telefonu zostają i pojadą na Dysk — to praca tej
-    // osoby, a nie lista, którą prowadzi administrator.
-    for (final kind in const [SyncKind.firefighter, SyncKind.vehicle]) {
+    // Ratownicy, pojazdy i sprzęt pochodzą od jednostki. Wyjazdy,
+    // przekazania i przejazdy z tego telefonu zostają i pojadą na Dysk — to
+    // praca tej osoby, a nie lista, którą prowadzi administrator.
+    for (final kind in const [
+      SyncKind.firefighter,
+      SyncKind.vehicle,
+      SyncKind.equipment,
+    ]) {
       final ids = _remoteListIds[kind];
       if (ids != null) await _db.keepOnlyListEntries(kind, ids);
     }
@@ -301,7 +308,13 @@ class SyncService {
 
     final firefighterIds = await idsIn('firefighters.json');
     final vehicleIds = await idsIn('vehicles.json');
+    final equipmentIds = await idsIn('equipment.json');
     return LocalListEntries(
+      equipment: [
+        if (equipmentIds != null)
+          for (final e in _db.getAllEquipment())
+            if (!equipmentIds.contains(e.id)) e.name,
+      ]..sort(),
       firefighters: [
         if (firefighterIds != null)
           for (final f in _db.getAllFirefighters())
@@ -851,6 +864,13 @@ class SyncService {
     _remoteConfigHashes['vehicles.json'] =
         await _mergeList(SyncKind.vehicle, vData?['data']);
 
+    final eData = await _driveService.readJsonFileByName(
+      dataFolderId,
+      'equipment.json',
+    );
+    _remoteConfigHashes['equipment.json'] =
+        await _mergeList(SyncKind.equipment, eData?['data']);
+
     // Pull threat types (new name: threat_types.json, fallback: threats.json)
     var tData = await _driveService.readJsonFileByName(
       dataFolderId,
@@ -966,9 +986,12 @@ class SyncService {
       return entry;
     }
 
-    final canonical = kind == SyncKind.firefighter
-        ? SyncJson.firefighterToJson(SyncJson.firefighterFromJson(entry))
-        : SyncJson.vehicleToJson(SyncJson.vehicleFromJson(entry));
+    final canonical = switch (kind) {
+      SyncKind.firefighter =>
+        SyncJson.firefighterToJson(SyncJson.firefighterFromJson(entry)),
+      SyncKind.vehicle => SyncJson.vehicleToJson(SyncJson.vehicleFromJson(entry)),
+      _ => SyncJson.equipmentToJson(SyncJson.equipmentFromJson(entry)),
+    };
 
     final tomb = _db.tombstoneOf(kind, id);
     final tombAt = tomb == null ? null : SyncJson.stampOf(tomb);
@@ -984,22 +1007,34 @@ class SyncService {
     if (takeRemote) {
       // Wpisy bez stempli brane są z Dysku przy każdym przebiegu — zmianą
       // są tylko wtedy, gdy faktycznie różnią się od tego, co już tu jest.
-      final localFf = _db.getFirefighter(id);
-      final localVehicle = _db.getVehicle(id);
-      final before = kind == SyncKind.firefighter
-          ? (localFf == null ? null : SyncJson.firefighterToJson(localFf))
-          : (localVehicle == null ? null : SyncJson.vehicleToJson(localVehicle));
+      final before = switch (kind) {
+        SyncKind.firefighter => switch (_db.getFirefighter(id)) {
+            final f? => SyncJson.firefighterToJson(f),
+            null => null,
+          },
+        SyncKind.vehicle => switch (_db.getVehicle(id)) {
+            final v? => SyncJson.vehicleToJson(v),
+            null => null,
+          },
+        _ => switch (_db.getEquipment(id)) {
+            final e? => SyncJson.equipmentToJson(e),
+            null => null,
+          },
+      };
       if (before == null ||
           SyncJson.contentHash(before) != SyncJson.contentHash(canonical)) {
         _receivedChanges++;
       }
-      if (kind == SyncKind.firefighter) {
-        await _db.addFirefighter(SyncJson.firefighterFromJson(
-          entry,
-          local: _db.getFirefighter(id),
-        ));
-      } else {
-        await _db.addVehicle(SyncJson.vehicleFromJson(entry));
+      switch (kind) {
+        case SyncKind.firefighter:
+          await _db.addFirefighter(SyncJson.firefighterFromJson(
+            entry,
+            local: _db.getFirefighter(id),
+          ));
+        case SyncKind.vehicle:
+          await _db.addVehicle(SyncJson.vehicleFromJson(entry));
+        default:
+          await _db.addEquipment(SyncJson.equipmentFromJson(entry));
       }
       if (tomb != null) await _db.removeTombstone(kind, id);
     }
@@ -1074,6 +1109,12 @@ class SyncService {
       await pushList('vehicles.json', [
         ..._db.getAllVehicles().map(SyncJson.vehicleToJson),
         ..._db.tombstonesOf(SyncKind.vehicle),
+      ]);
+      // W jednostce sprzed listy sprzętu pusta lista ma ten sam skrót co
+      // brak pliku — plik powstaje dopiero z pierwszym sprzętem.
+      await pushList('equipment.json', [
+        ..._db.getAllEquipment().map(SyncJson.equipmentToJson),
+        ..._db.tombstonesOf(SyncKind.equipment),
       ]);
     }
 
@@ -1401,6 +1442,7 @@ class SyncService {
         SyncKind.trip => _db.getTrip(id) != null,
         SyncKind.firefighter => _db.getFirefighter(id) != null,
         SyncKind.vehicle => _db.getVehicle(id) != null,
+        SyncKind.equipment => _db.getEquipment(id) != null,
         _ => false,
       };
 
@@ -1412,6 +1454,7 @@ class SyncService {
         SyncKind.trip => _db.getTrip(id)?.updatedAt,
         SyncKind.firefighter => _db.getFirefighter(id)?.updatedAt,
         SyncKind.vehicle => _db.getVehicle(id)?.updatedAt,
+        SyncKind.equipment => _db.getEquipment(id)?.updatedAt,
         _ => null,
       };
 

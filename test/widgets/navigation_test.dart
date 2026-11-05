@@ -76,6 +76,7 @@ void main() {
         updatedAt: at,
       ),
     );
+    await db.addEquipment(Equipment(id: 'e1', name: 'Pilarka'));
     await db.ensureDefaultThreats();
   });
 
@@ -169,6 +170,9 @@ void main() {
       '/vehicles',
       '/vehicles/add',
       '/vehicles/edit/v1',
+      '/equipment',
+      '/equipment/add',
+      '/equipment/edit/e1',
       '/firefighters',
       '/firefighters/add',
       '/firefighters/edit/f1',

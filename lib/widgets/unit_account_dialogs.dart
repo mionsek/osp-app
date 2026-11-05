@@ -45,6 +45,7 @@ void refreshLocalDataProviders(WidgetRef ref) {
   ref.read(unitConfigProvider.notifier).refresh();
   ref.read(threatsProvider.notifier).refresh();
   ref.read(vehiclesProvider.notifier).refresh();
+  ref.read(equipmentProvider.notifier).refresh();
   ref.read(firefightersProvider.notifier).refresh();
   ref.read(reportsProvider.notifier).refresh();
   ref.read(handoversProvider.notifier).refresh();
@@ -179,9 +180,9 @@ class _ListReplacementNotice extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Ratownicy i pojazdy spoza tej jednostki zostaną usunięci '
-            'z telefonu — obowiązuje lista jednostki, którą prowadzi '
-            'administrator:',
+            'Ratownicy, pojazdy i sprzęt spoza tej jednostki zostaną '
+            'usunięci z telefonu — obowiązuje lista jednostki, którą '
+            'prowadzi administrator:',
             style: TextStyle(fontSize: 13),
           ),
           if (entries.firefighters.isNotEmpty) ...[
@@ -193,6 +194,12 @@ class _ListReplacementNotice extends StatelessWidget {
           if (entries.vehicles.isNotEmpty) ...[
             const SizedBox(height: 6),
             Text('Pojazdy: ${_names(entries.vehicles)}',
+                style: const TextStyle(
+                    fontSize: 13, fontWeight: FontWeight.w600)),
+          ],
+          if (entries.equipment.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text('Sprzęt: ${_names(entries.equipment)}',
                 style: const TextStyle(
                     fontSize: 13, fontWeight: FontWeight.w600)),
           ],

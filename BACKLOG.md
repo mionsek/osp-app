@@ -322,32 +322,22 @@ Analiza z 26.10.2026 (gałąź `claude/raporty-osp-analysis-1wbpj3`, na wersji
 ### Zaproszenie i widoczność jednostki
 Zgłoszone po teście na dwóch telefonach 27.10.2026 (wersja 1.7.4).
 - [ ] **Zaproszenie do jednostki i do instalacji aplikacji** — dziś kolega dostaje standardowy e-mail Google „… udostępnił Ci folder" z doklejonym naszym tekstem (kod, instrukcja). Układu tego maila nie da się zmienić, to szablon Google, a w nim główny przycisk otwiera folder na Dysku, nie aplikację. Oczekiwanie: zaproszenie, które prowadzi do instalacji aplikacji i dołączenia, najlepiej z linkiem do Sklepu Play. Do rozważenia: przycisk „Wyślij zaproszenie" otwierający udostępnianie Androida (e-mail, SMS, Messenger, WhatsApp) z gotową wiadomością — nazwa jednostki, kod, link do instalacji — a folder udostępniany jak dziś. Link do Play po publikacji, do tego czasu link do APK. Później: link, który otwiera aplikację z wpisanym kodem
-- [ ] **Na ekranie głównym: kto jest zalogowany i do jakiej jednostki** — np. „Witaj, Wojciech" (imię z konta Google, a bez niego e-mail), nazwa jednostki i wyraźny stan: połączono z jednostką / dane tylko na telefonie / błąd synchronizacji. Dziś pasek pokazuje skróconą nazwę jednostki z ustawień telefonu, także wtedy, gdy telefon nie jest połączony z żadną jednostką na Dysku
+- [x] **Na ekranie głównym: kto jest zalogowany i do jakiej jednostki** — zrobione w feature/051
 
-### Urządzenia specjalne per pojazd + rozbicie minut pracy
-Dziś minuty pracy urządzeń specjalnych to **jedna liczba** (`VehicleTrip.specialEquipmentMinutes`)
-— tyle, ile ma kolumna 10 papierowej karty. Propozycja: rozbić na pozycje,
-np. `Agregat 30 min`, `Autopompa 60 min`, wybierane z listy urządzeń danego pojazdu.
+### Sprzęt i karty pracy urządzeń
+Ustalenia Dawida po rozmowie z Deringiem (listopad 2026): **każde urządzenie
+z własnym silnikiem ma w gminie osobną kartę pracy**. Karta drogowa wozu
+(druk Kielna, zdjęcia z 7.08.2026) nie rozróżnia urządzeń — ma jedną kolumnę
+„Minuty pracy urządzeń specjalistycznych" i pozycję 5 rozliczenia liczoną
+normą autopompy. Lista sprzętu, wybór w przejeździe i poprawka karty drogowej
+— zrobione w feature/051. Zostaje to, co zależy od wzoru karty urządzenia:
 
-**Argument za jest mocniejszy, niż się wydaje.** Przy analizie druków wyszło,
-że gminy mają **osobne normy dla różnych urządzeń** — zarządzenie Świętajna
-rozlicza osobno postój, rozruch i autopompę. Jeśli wydruk karty ma sam liczyć
-zużycie według norm, jedna zbiorcza liczba minut do tego nie wystarczy.
-
-**Dlaczego nie teraz.** To zmiana modelu danych (pole w Hive), a ewidencja już
-zbiera realne wpisy. Zrobiona osobno wymusi migrację teraz i **drugą migrację**
-po ustaleniach z Deringiem i po dobraniu norm do wydruku. Lepiej raz, razem
-z normami per pojazd, które i tak są warunkiem wydruku karty.
-
-Do rozstrzygnięcia przed implementacją:
-- lista urządzeń **stała** (autopompa, agregat, pilarka, wyciągarka…) czy
-  definiowana per pojazd? Stała jest prostsza i pewnie wystarczy, ale nie każdy
-  pojazd ma autopompę — pokazywanie jej przy GLM byłoby mylące,
-- czy wydruk potrzebuje sumy minut, czy rozbicia na urządzenia — zależy od
-  wzoru druku obowiązującego w gminie Kielno,
-- czy normy zużycia trzymamy przy urządzeniu, czy przy pojeździe.
-
-Do potwierdzenia u Deringa. Do tego czasu jedna liczba zostaje i działa.
+- [ ] **Wydruk karty pracy urządzenia** — osobna dla każdego urządzenia. **Czeka na wzór druku**: zdjęcie pustej i wypełnionej karty, jak przy karcie drogowej (feature/033 pokazał, że wydruk „z głowy" to zmyślona tabela). Przy okazji do ustalenia: okres karty (miesiąc?), czy wpisuje się rozruchy kontrolne i ćwiczenia, czas w minutach czy godzinach, czy jest paliwo pobrane z kanistrów, motogodziny, osoba obsługująca, numer fabryczny / inwentarzowy
+- [ ] **Praca sprzętu bez wyjazdu** — rozruchy kontrolne agregatu, ćwiczenia, prace przy remizie. Dziś minuty pracy da się wpisać tylko przy przejeździe wozu. Wpis: data, urządzenie, czas, cel (akcja, ćwiczenia, rozruch kontrolny, prace gospodarcze). Zakres zależy od wzoru karty
+- [ ] **Excel „Praca sprzętu"** do pobrania (Udostępnij, jak PDF): arkusz szczegółów (data, wóz, numer wyjazdu, urządzenie, czas, norma, wyliczone paliwo, rodzaj paliwa) i zestawienie dla każdego urządzenia (godziny i paliwo osobno: benzyna, mieszanka, ON). Prawdziwy .xlsx, nie CSV — polski Excel psuje w CSV polskie znaki i przecinki dziesiętne. Dla statystyk i rozliczeń „na przyszłość"
+- [ ] **Statystyki pracy sprzętu** — godziny pracy każdego urządzenia w roku
+- [ ] **Pobrane paliwo z kanistrów** — razem z pustą dziś tabelą „Pobrano" karty drogowej (patrz feature/033)
+- [ ] **Pytanie do Deringa**: czy w kolumnie 10 karty wozu wpisuje się tylko sprzęt zasilany z wozu (autopompa, wyciągarka)? Od 1.8.0 aplikacja tak liczy — pozycja 5 mnoży te minuty przez normę autopompy, więc pilarka zawyżała paliwo z baku. Gdyby Dering odpowiedział inaczej, zmiana jest w jednym miejscu (`EquipmentUsage.countsOnVehicleCard`)
 
 ### Funkcje ratownika — możliwe rozszerzenia
 Obecnie „Ratownik" jest **wyliczany**: brak kierowcy/dowódcy/KPP = ratownik.
@@ -503,7 +493,7 @@ Trzy zgłoszenia: dwa od Wojtka, jedno od Dawida.
 Wojtek pytał, czy dysponent nie mógłby zaciągać się z powiązanego wyjazdu tak jak kierowca. **To już działa** od fix/029 — lista rozwijana bierze załogę tego zastępu, a dowódca jest podpowiadany domyślnie. Na zrzucie widać wypełnione oba pola. Prawdopodobnie testował wersję sprzed tej zmiany.
 
 ### Nadal otwarte
-- [ ] **Lista urządzeń per pojazd** — dziś jest wspólna dla wszystkich, więc przy GLM pokazuje autopompę, której ten wóz nie ma. Wymaga ustaleń z Deringiem (czy definiować urządzenia przy pojeździe, czy zostawić stałą listę)
+- [x] **Lista urządzeń per pojazd** — dziś jest wspólna dla wszystkich, więc przy GLM pokazuje autopompę, której ten wóz nie ma. **Zrobione w feature/051** (lista sprzętu jednostki z przypisaniem do wozu)
 - [ ] Rozliczenie paliwa liczy wszystkie urządzenia jedną normą autopompy — przy realnym rozbiciu na autopompę i agregat trzeba by norm per urządzenie
 
 ## Zrobione (refactor/036-paleta-testy-pdf-wersje)
@@ -1011,3 +1001,22 @@ Ekrany wyjazdu i przekazania miały domek zamiast strzałki, reszta ekranów —
 - [x] **Niezapisane dane**: kreator wyjazdu, formularze (przekazanie, przejazd, pojazd, ratownik) i dane jednostki w Ustawieniach z wpisanymi zmianami pytają „Wyjść bez zapisywania?" przy wstecz i przy domku. Pusty formularz zamyka się bez pytania, po zapisie też
 - [x] 10 nowych testów na prawdziwym drzewie tras: po zapisie przekazania wstecz do listy i do menu (aplikacja się nie zamyka), po „Lista wyjazdów" wstecz do menu, strzałka i domek na każdym z 19 ekranów, kreator cofa o krok i pyta na pierwszym, bez wpisanych danych bez pytania, „Zostań" zostawia, formularz pyta domkiem i wstecz, zapis zamyka bez pytania, Ustawienia pytają przed zapisem, a po nim nie. Łącznie **364**
 - [x] Wersja **1.7.8+21**
+
+## Zrobione (feature/051-sprzet-i-powitanie)
+Prośby Dawida z 5.11.2026: powitanie na ekranie głównym oraz lista sprzętu
+po rozmowie z Deringiem o kartach pracy urządzeń. Część zależna od wzoru
+karty urządzenia — w „Sprzęt i karty pracy urządzeń" (Do zrobienia).
+
+### Powitanie
+- [x] **„Witaj, Dawid"** na górze ekranu głównego — imię z konta Google, a bez niego adres e-mail. Pod spodem jednostka i rola: „OSP w Kielnie · administrator" / „· członek jednostki", a bez jednostki „Dane tylko na tym telefonie — dołącz do jednostki w Ustawieniach". „Administrator" zamiast „jesteś administratorem" — aplikacja nie wie, czy pisze do kobiety, czy do mężczyzny
+
+### Sprzęt
+- [x] **Lista sprzętu** w menu pod „Pojazdy" (agregat, pilarka, autopompa…): nazwa, wóz (opcjonalnie), **napędzany silnikiem wozu albo własny silnik**, rodzaj paliwa (benzyna, mieszanka, ON) i norma w l/godz. (dla własnego silnika), typ / model i numer fabryczny lub inwentarzowy. Pogrupowana według wozów; sprzęt usuniętego wozu wraca do „bez przypisanego wozu"
+- [x] Listę prowadzi administrator, jak listę pojazdów: synchronizowana przez Dysk (`config/equipment.json`) ze stemplami i znacznikami usunięcia; telefon bez uprawnień jej nie wysyła; przy dołączaniu obowiązuje lista jednostki, a ostrzeżenie wymienia sprzęt z telefonu, który zostanie usunięty; „Wyloguj i usuń dane" usuwa też sprzęt
+- [x] **Wybór w przejeździe**: najpierw sprzęt wozu tego przejazdu, pod „Inne" sprzęt nieprzypisany i z innych wozów (z nazwą wozu), na końcu „Spoza listy — wpisz nazwę". Wpis zapamiętuje urządzenie i kopię nazwy — zmiana nazwy na liście nie zmienia historii, a starsze wersje aplikacji czytają samą nazwę. Wpis sprzed listy dostaje urządzenie przy zapisie, gdy nazwa pasuje. Bez listy sprzętu — dawna stała lista, jak dotąd
+- [x] **Karta drogowa: kolumna 10 i pozycja 5 tylko ze sprzętu zasilanego z wozu.** Dotąd minuty wszystkich urządzeń (pilarka, agregat) liczyły się normą autopompy i zawyżały paliwo z baku wozu. Wpisy sprzed listy: autopompa i wyciągarka się liczą, agregat, piła i wentylator nie; nazwy wpisane ręcznie i przejazdy z jedną dawną liczbą — jak dotąd. Ta sama suma w podsumowaniu miesiąca w ewidencji. Ponowny wydruk starej karty może się więc różnić, jeśli wpisano tam pilarkę albo agregat
+- [x] Format danych na Dysku bez zmian (`syncFormat` 2) — starsze wersje działają dalej, nowy plik `equipment.json` po prostu pomijają
+
+### Testy i wersja
+- [x] 23 nowe testy: co liczy się na karcie wozu (sprzęt z wozu, z własnym silnikiem, wpisy ze starej listy, nazwa spoza listy, przejazd z jedną liczbą, rozpoznanie po nazwie), zapis sprzętu i przejazdu na Dysk (wpis bez urządzenia ma tę samą treść co dawniej — nie jest wysyłany ponownie), baza (kolejność, znacznik usunięcia, usunięcie danych, lista przy dołączaniu), dwa telefony (dodanie, zmiana i usunięcie docierają, telefon bez uprawnień nie wysyła, ostrzeżenie przy dołączaniu), ekrany (powitanie w czterech stanach, lista pogrupowana, blokada dla członka, formularz bez paliwa dla sprzętu z wozu, zapis nowego sprzętu, wybór w przejeździe z „Inne" i „Spoza listy", nawigacja na ekranach sprzętu). Łącznie **387**
+- [x] Wersja **1.8.0+22**

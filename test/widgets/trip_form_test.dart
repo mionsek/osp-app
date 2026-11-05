@@ -232,6 +232,61 @@ void main() {
     });
   });
 
+  group('lista sprzętu jednostki', () {
+    // Dane w setUp — patrz komentarz na górze pliku.
+    setUp(() async {
+      await db.addEquipment(Equipment(
+          id: 'e-pump',
+          name: 'Autopompa A16/8',
+          vehicleId: withHistory,
+          poweredByVehicle: true));
+      await db.addEquipment(
+          Equipment(id: 'e-gen', name: 'Agregat Honda', vehicleId: brandNew));
+      await db.addEquipment(Equipment(id: 'e-saw', name: 'Pilarka'));
+    });
+
+    Future<void> addDevice(WidgetTester tester) async {
+      final addButton = find.text('Dodaj urządzenie');
+      await tester.ensureVisible(addButton);
+      await tester.tap(addButton);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('nowa pozycja to sprzęt tego wozu, a pod „Inne" reszta — '
+        'z nazwą wozu', (tester) async {
+      await pumpForm(tester);
+      await addDevice(tester);
+      expect(find.text('Autopompa A16/8'), findsOneWidget);
+
+      await tester.tap(find.text('Autopompa A16/8'));
+      await tester.pumpAndSettle();
+      expect(find.text('Inne'), findsOneWidget);
+      expect(find.text('Agregat Honda (GLM 8)'), findsOneWidget);
+      expect(find.text('Pilarka'), findsOneWidget);
+      expect(find.text('Spoza listy — wpisz nazwę'), findsOneWidget);
+      expect(find.text(SpecialEquipment.pump), findsNothing,
+          reason: 'stała lista tylko bez listy sprzętu');
+
+      await tester.tap(find.text('Agregat Honda (GLM 8)').last);
+      await tester.pumpAndSettle();
+      expect(find.text('Agregat Honda (GLM 8)'), findsOneWidget);
+      expect(find.widgetWithText(TextFormField, 'Nazwa urządzenia'),
+          findsNothing);
+    });
+
+    testWidgets('„Spoza listy" — pole na własną nazwę', (tester) async {
+      await pumpForm(tester);
+      await addDevice(tester);
+      await tester.tap(find.text('Autopompa A16/8'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Spoza listy — wpisz nazwę').last);
+      await tester.pumpAndSettle();
+
+      expect(find.widgetWithText(TextFormField, 'Nazwa urządzenia'),
+          findsOneWidget);
+    });
+  });
+
   group('trasa', () {
     testWidgets('„Skąd" podpowiada adres remizy', (tester) async {
       // Z fix/029: pusty adres jednostki nie podpowiada nic zamiast zmyślać,
