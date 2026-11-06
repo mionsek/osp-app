@@ -143,6 +143,10 @@ void main() {
         find.widgetWithText(
             TextFormField, 'Norma zużycia paliwa (litry na godzinę)'),
         '1,5');
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'Marka (opcjonalnie)'), 'Honda');
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'Model (opcjonalnie)'), 'EU22i');
     await tester.pumpAndSettle();
 
     await tester.ensureVisible(find.text('Dodaj sprzęt'));
@@ -158,5 +162,7 @@ void main() {
     expect(saved.fuelType, EquipmentFuel.petrol);
     expect(saved.fuelPerHour, 1.5);
     expect(saved.poweredByVehicle, isFalse);
+    expect(saved.brand, 'Honda');
+    expect(saved.model, 'EU22i', reason: 'pole „Model" — dawniej „Typ"');
   });
 }

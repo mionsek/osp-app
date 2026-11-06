@@ -243,8 +243,8 @@ class TripCardPdf {
               3: pw.FlexColumnWidth(1.4),
             },
             children: [
-              infoRow('Marka', vehicle.make, 'Typ', vehicle.model),
-              infoRow('Rodzaj', vehicle.kind, 'Nr rej.', vehicle.plate),
+              infoRow('Marka', vehicle.make, 'Model', vehicle.model),
+              infoRow('Typ', vehicle.kind, 'Nr rej.', vehicle.plate),
               infoRow('Numer operacyjny', vehicle.operationalNumber,
                   'Rodzaj paliwa', vehicle.fuelType),
               infoRow(

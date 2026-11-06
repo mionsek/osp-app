@@ -94,15 +94,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       });
     }
 
+    final greeting = _Greeting(
+      displayName: ref.read(syncStateProvider.notifier).displayName,
+      syncState: syncState,
+      // Nazwa jednostki bywa długa („Ochotnicza Straż Pożarna
+      // w Kielnie"), więc na pasku skracamy ją do samej końcówki —
+      // pełna wersja i tak jest w Ustawieniach oraz na wydrukach.
+      unitLabel: _shortUnitLabel(config.fullName),
+    );
+
     return Scaffold(
       appBar: AppBar(
-        // Nazwa jednostki bywa długa („Ochotnicza Straż Pożarna
-        // w Kielnie"), więc na pasku skracamy ją do samej końcówki —
-        // pełna wersja i tak jest w Ustawieniach oraz na wydrukach.
-        title: Text(
-          _shortUnitLabel(config.fullName),
-          overflow: TextOverflow.ellipsis,
-        ),
+        // Powitanie na czerwonym pasku, razem z nazwą jednostki (prośba
+        // Dawida z 6.11.2026) — wcześniej nazwa była na pasku, a „Witaj"
+        // pod nim na białym tle, więc jednostka stała na ekranie dwa razy.
+        toolbarHeight: _Greeting.barHeight,
+        centerTitle: false,
+        title: greeting,
         actions: [
           _SyncIndicator(
             syncState: syncState,
@@ -116,14 +124,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _Greeting(
-                displayName: ref.read(syncStateProvider.notifier).displayName,
-                syncState: syncState,
-                unitLabel: config.fullName.trim().isEmpty
-                    ? ''
-                    : _shortUnitLabel(config.fullName),
-              ),
-              const SizedBox(height: 20),
+              if (greeting.needsUnit) ...[
+                const _JoinUnitHint(),
+                const SizedBox(height: 16),
+              ],
               // Podpowiedź pierwszych kroków — znika sama, gdy jednostka ma
               // już wprowadzone pojazdy i ratowników, więc nie wymaga
               // zapamiętywania „zamknięcia" ani nie zawadza na stałe.
@@ -290,31 +294,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 }
 
-/// Krótka podpowiedź dla nowej jednostki: co trzeba uzupełnić, zanim da
-/// się dodać pierwszy wyjazd. Znika automatycznie, gdy komplet jest już
-/// wprowadzony.
-/// Karta „postaw mi kawę" w stopce ekranu głównego.
-///
-/// Świadomie **nie** jest kafelkiem menu: kafelki to czynności (dodaj wyjazd,
-/// ewidencja, ustawienia), a prośba o wsparcie nie należy do tej samej
-/// kategorii i nie powinna stać w jednym rzędzie z „Dodaj wyjazd".
-/// Stąd miejsce na samym dole, pod przyciskiem wyjścia.
-///
-/// Klikalna jest cała karta, nie osobny przycisk w środku — większy cel
-/// i mniej elementów na ekranie, który i tak jest długi.
-/// „Witaj, Dawid" i do jakiej jednostki należy ten telefon.
+/// Pasek ekranu głównego: „Witaj, Dawid", a pod spodem jednostka i rola.
 ///
 /// Zgłoszenie Dawida: na ekranie głównym nie było widać, kto jest
-/// zalogowany i z jakimi uprawnieniami — pasek pokazuje nazwę jednostki
-/// zapisaną w telefonie, także gdy telefon nie jest połączony z żadną.
+/// zalogowany i z jakimi uprawnieniami. Nazwa jednostki to ta zapisana
+/// w telefonie, także gdy telefon nie jest połączony z żadną.
 /// „Administrator" i „członek jednostki" zamiast „jesteś administratorem":
 /// aplikacja nie wie, czy pisze do kobiety, czy do mężczyzny.
 class _Greeting extends StatelessWidget {
+  /// Wysokość paska z dwiema liniami (zwykły pasek ma 56).
+  static const double barHeight = 72;
+
   /// Nazwa z konta Google („Dawid Mionskowski").
   final String? displayName;
   final SyncState syncState;
 
-  /// „OSP w Kielnie"; puste, gdy jednostka nie ma nazwy.
+  /// „OSP w Kielnie" — skrócona nazwa jednostki.
   final String unitLabel;
 
   const _Greeting({
@@ -329,41 +324,77 @@ class _Greeting extends StatelessWidget {
     return first.isEmpty ? null : first;
   }
 
+  /// Zalogowany, ale bez jednostki — dane zostają na telefonie, a nikt
+  /// poza nim ich nie zobaczy. Podpowiedź, gdzie dołączyć, jest pod paskiem.
+  bool get needsUnit =>
+      syncState.isConnected && syncState.unitFolderId == null;
+
   String get _role {
-    if (!syncState.isConnected) return 'Dane tylko na tym telefonie';
-    if (syncState.unitFolderId == null) {
-      return 'Dane tylko na tym telefonie — dołącz do jednostki '
-          'w Ustawieniach';
+    if (!syncState.isConnected || syncState.unitFolderId == null) {
+      return 'dane tylko na tym telefonie';
     }
-    final role = syncState.isCurrentUserAdmin
-        ? 'administrator'
-        : 'członek jednostki';
-    return unitLabel.isEmpty ? role : '$unitLabel · $role';
+    return syncState.isCurrentUserAdmin ? 'administrator' : 'członek jednostki';
   }
 
   @override
   Widget build(BuildContext context) {
     final name = firstName(displayName) ?? syncState.userEmail;
     return Column(
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           name == null ? 'Witaj' : 'Witaj, $name',
-          style: Theme.of(context)
-              .textTheme
-              .titleLarge
-              ?.copyWith(fontWeight: FontWeight.bold),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 2),
         Text(
-          _role,
-          style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+          '$unitLabel · $_role',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 14,
+            color: Colors.white.withValues(alpha: 0.85),
+          ),
         ),
       ],
     );
   }
 }
 
+/// Zalogowany bez jednostki: gdzie dołączyć. Na pasku zmieści się tylko
+/// „dane tylko na tym telefonie", więc wskazówka stoi pod nim i od razu
+/// prowadzi do Ustawień.
+class _JoinUnitHint extends StatelessWidget {
+  const _JoinUnitHint();
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: EdgeInsets.zero,
+      color: Colors.blue[50],
+      child: ListTile(
+        leading: Icon(Icons.group_add, color: Colors.blue[700]),
+        title: const Text('Dołącz do jednostki w Ustawieniach'),
+        subtitle: const Text('Wtedy wyjazdy zobaczą też inni z jednostki'),
+        trailing: Icon(Icons.chevron_right, color: Colors.grey[500]),
+        onTap: () => context.push('/settings'),
+      ),
+    );
+  }
+}
+
+/// Karta „postaw mi kawę" w stopce ekranu głównego.
+///
+/// Świadomie **nie** jest kafelkiem menu: kafelki to czynności (dodaj wyjazd,
+/// ewidencja, ustawienia), a prośba o wsparcie nie należy do tej samej
+/// kategorii i nie powinna stać w jednym rzędzie z „Dodaj wyjazd".
+/// Stąd miejsce na samym dole, pod przyciskiem wyjścia.
+///
+/// Klikalna jest cała karta, nie osobny przycisk w środku — większy cel
+/// i mniej elementów na ekranie, który i tak jest długi.
 class _CoffeeCard extends StatelessWidget {
   final VoidCallback onTap;
 
@@ -432,6 +463,9 @@ class _CoffeeCard extends StatelessWidget {
   }
 }
 
+/// Krótka podpowiedź dla nowej jednostki: co trzeba uzupełnić, zanim da
+/// się dodać pierwszy wyjazd. Znika automatycznie, gdy komplet jest już
+/// wprowadzony.
 class _GettingStartedCard extends StatelessWidget {
   final bool hasVehicles;
   final bool hasFirefighters;

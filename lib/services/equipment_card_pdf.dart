@@ -166,7 +166,7 @@ class EquipmentCardPdf {
           pw.SizedBox(height: 12),
           pw.Row(children: [
             pw.Expanded(child: field('Marka', device.brand)),
-            pw.Expanded(child: field('Typ', device.model)),
+            pw.Expanded(child: field('Model', device.model)),
           ]),
           pw.SizedBox(height: 6),
           pw.Row(children: [

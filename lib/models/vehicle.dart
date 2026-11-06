@@ -23,11 +23,13 @@ class Vehicle extends HiveObject {
   @HiveField(3, defaultValue: '')
   String make;
 
-  /// Typ, np. „L200".
+  /// Model, np. „L200" (na starych drukach rubryka „Typ").
   @HiveField(4, defaultValue: '')
   String model;
 
-  /// Rodzaj pojazdu w nomenklaturze pożarniczej, np. „SLRr", „GBA".
+  /// Typ pojazdu w nomenklaturze pożarniczej, np. „GCBA", „SLRt" (na starych
+  /// drukach rubryka „Rodzaj"). Pole nazywa się `kind` od pierwszej wersji —
+  /// zmiana nazwy zmieniłaby format na Dysku.
   @HiveField(5, defaultValue: '')
   String kind;
 

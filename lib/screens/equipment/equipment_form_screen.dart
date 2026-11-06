@@ -219,7 +219,7 @@ class _EquipmentFormScreenState extends ConsumerState<EquipmentFormScreen> {
                   ),
                 ],
                 const SizedBox(height: 16),
-                // Marka i typ osobno — tak jak w nagłówku karty pracy.
+                // Marka i model osobno, tak jak w pojeździe.
                 TextFormField(
                   controller: _brandCtrl,
                   textCapitalization: TextCapitalization.words,
@@ -233,7 +233,7 @@ class _EquipmentFormScreenState extends ConsumerState<EquipmentFormScreen> {
                 TextFormField(
                   controller: _modelCtrl,
                   decoration: const InputDecoration(
-                    labelText: 'Typ (opcjonalnie)',
+                    labelText: 'Model (opcjonalnie)',
                     hintText: 'np. MS 462',
                     prefixIcon: Icon(Icons.label_outline),
                   ),

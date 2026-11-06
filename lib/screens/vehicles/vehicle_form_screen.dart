@@ -222,7 +222,7 @@ class _VehicleFormScreenState extends ConsumerState<VehicleFormScreen> {
         leading: const Icon(Icons.description_outlined),
         title: const Text('Dane do karty drogowej'),
         subtitle: const Text(
-          'Marka, numer rejestracyjny i normy zużycia paliwa',
+          'Marka, model, numer rejestracyjny i normy zużycia paliwa',
           style: TextStyle(fontSize: 12),
         ),
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -236,11 +236,11 @@ class _VehicleFormScreenState extends ConsumerState<VehicleFormScreen> {
           Row(children: [
             Expanded(child: _text(_makeCtrl, 'Marka', 'np. MITSUBISHI')),
             const SizedBox(width: 12),
-            Expanded(child: _text(_modelCtrl, 'Typ', 'np. L200')),
+            Expanded(child: _text(_modelCtrl, 'Model', 'np. L200')),
           ]),
           const SizedBox(height: 12),
           Row(children: [
-            Expanded(child: _text(_kindCtrl, 'Rodzaj', 'np. SLRr')),
+            Expanded(child: _text(_kindCtrl, 'Typ', 'np. GCBA, SLRt')),
             const SizedBox(width: 12),
             Expanded(child: _text(_plateCtrl, 'Nr rej.', 'np. GWE 2998X')),
           ]),

@@ -53,8 +53,8 @@ class Equipment extends HiveObject {
   @HiveField(5)
   double? fuelPerHour;
 
-  /// Typ, np. „MS 462" — rubryka „Typ" karty pracy. Sprzęt dodany przed
-  /// rubryką [brand] ma tu markę i typ razem („Stihl MS 462").
+  /// Model, np. „MS 462" (na papierowej karcie pracy rubryka „Typ"). Sprzęt
+  /// dodany przed rubryką [brand] ma tu markę i model razem („Stihl MS 462").
   @HiveField(6, defaultValue: '')
   String model;
 
