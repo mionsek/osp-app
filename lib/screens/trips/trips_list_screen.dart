@@ -117,6 +117,7 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
             year: _year,
             month: _month,
             equipment: ref.read(equipmentProvider),
+            reportOf: ref.read(databaseServiceProvider).getReport,
           );
         case _CardOutput.share:
           await TripCardPdf.generateAndShare(
@@ -126,6 +127,7 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
             year: _year,
             month: _month,
             equipment: ref.read(equipmentProvider),
+            reportOf: ref.read(databaseServiceProvider).getReport,
           );
         case _CardOutput.bluetooth:
           await printOnBluetoothPrinter(
@@ -138,6 +140,7 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
               year: _year,
               month: _month,
               equipment: ref.read(equipmentProvider),
+              reportOf: ref.read(databaseServiceProvider).getReport,
             ),
           );
       }
@@ -481,6 +484,10 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
               const Text('Licznik po powrocie mniejszy niż przed wyjazdem',
                   style: TextStyle(
                       color: OspTheme.danger, fontWeight: FontWeight.w600)),
+            if (trip.hasSceneOdometerConflict)
+              const Text('Licznik na miejscu poza zakresem przejazdu',
+                  style: TextStyle(
+                      color: OspTheme.attention, fontWeight: FontWeight.w600)),
           ],
         ),
         isThreeLine: true,

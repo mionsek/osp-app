@@ -315,6 +315,13 @@ class SyncJson {
             },
         ],
         'idleMinutes': t.idleMinutes,
+        // Pobyt na miejscu tylko, gdy wpisany — przejazdy bez niego mają tę
+        // samą treść co dawniej i nie są wysyłane ponownie.
+        if (t.sceneArrivalTime != null)
+          'sceneArrivalTime': t.sceneArrivalTime!.toIso8601String(),
+        if (t.sceneOdometer != null) 'sceneOdometer': t.sceneOdometer,
+        if (t.sceneDepartureTime != null)
+          'sceneDepartureTime': t.sceneDepartureTime!.toIso8601String(),
         'overriddenFields': t.overriddenFields,
         'extras': t.extras,
         'notes': t.notes,
@@ -345,6 +352,13 @@ class SyncJson {
         specialEquipmentMinutes:
             (j['specialEquipmentMinutes'] as num?)?.toInt(),
         idleMinutes: (j['idleMinutes'] as num?)?.toInt(),
+        sceneArrivalTime: j['sceneArrivalTime'] == null
+            ? null
+            : DateTime.parse(j['sceneArrivalTime'] as String),
+        sceneOdometer: (j['sceneOdometer'] as num?)?.toInt(),
+        sceneDepartureTime: j['sceneDepartureTime'] == null
+            ? null
+            : DateTime.parse(j['sceneDepartureTime'] as String),
         equipmentUse: [
           for (final e in (j['equipmentUse'] as List? ?? const []))
             TripEquipmentUse(

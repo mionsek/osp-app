@@ -40,15 +40,19 @@ class ReportLinkedField {
   static const List<String> all = [departure, returnTime, routeTo, driver];
 }
 
-/// Jeden przejazd pojazdu — jeden wiersz miesięcznej karty drogowej.
+/// Jeden przejazd pojazdu — dwa wiersze miesięcznej karty drogowej.
 ///
 /// Karta to nie osobny byt, tylko widok: para *pojazd + miesiąc* nad zbiorem
 /// przejazdów. Dzięki temu nie trzeba niczego „zakładać" na początku miesiąca
 /// ani „zamykać" na końcu.
 ///
-/// Na papierze jeden wiersz obejmuje odjazd (godzina + licznik) i przyjazd
-/// (godzina + licznik), czyli **całą jazdę tam i z powrotem**, a nie jedną
-/// stronę trasy — potwierdzone na drukach z trzech gmin.
+/// Wypełniona karta Kielna (zdjęcie z 7.08.2026, wyjaśnione przez Dawida
+/// 5.11.2026) ma na każdy wyjazd **dwa wiersze**: „OSP – Kielno · MZ"
+/// (odjazd z remizy, przyjazd na miejsce) i „Kielno – OSP · Powrót" (wyjazd
+/// z miejsca, przyjazd do remizy). Wcześniej zakładaliśmy jeden wiersz na
+/// całą jazdę — tak wyglądały puste druki z trzech gmin. Pobyt na miejscu
+/// ([sceneArrivalTime], [sceneOdometer], [sceneDepartureTime]) jest
+/// opcjonalny: nieznany zostaje na wydruku pusty.
 @HiveType(typeId: 7)
 class VehicleTrip extends HiveObject {
   @HiveField(0)
@@ -177,6 +181,19 @@ class VehicleTrip extends HiveObject {
   @HiveField(24, defaultValue: <String>[])
   List<String> overriddenFields;
 
+  /// Przyjazd na miejsce — „Przyjazdy, godz." wiersza wyjazdu.
+  @HiveField(25)
+  DateTime? sceneArrivalTime;
+
+  /// Stan licznika na miejscu — „Przyjazdy, stan licznika" wiersza wyjazdu
+  /// i „Odjazdy, stan licznika" wiersza „Powrót".
+  @HiveField(26)
+  int? sceneOdometer;
+
+  /// Wyjazd z miejsca w drogę powrotną — „Odjazdy, godz." wiersza „Powrót".
+  @HiveField(27)
+  DateTime? sceneDepartureTime;
+
   VehicleTrip({
     required this.id,
     required this.vehicleId,
@@ -203,6 +220,9 @@ class VehicleTrip extends HiveObject {
     this.idleMinutes,
     List<TripEquipmentUse>? equipmentUse,
     List<String>? overriddenFields,
+    this.sceneArrivalTime,
+    this.sceneOdometer,
+    this.sceneDepartureTime,
   })  : equipmentUse = equipmentUse ?? <TripEquipmentUse>[],
         overriddenFields = overriddenFields ?? <String>[];
 
@@ -232,6 +252,17 @@ class VehicleTrip extends HiveObject {
   bool get hasOdometerConflict {
     final d = distance;
     return d != null && d < 0;
+  }
+
+  /// Licznik na miejscu poza zakresem „przed wyjazdem – po powrocie" —
+  /// ostrzeżenie jak przy [hasOdometerConflict], bez blokady.
+  bool get hasSceneOdometerConflict =>
+      sceneOdometerOutOfRange(sceneOdometer, odometerStart, odometerEnd);
+
+  /// To samo dla wartości jeszcze niezapisanych — formularz przejazdu.
+  static bool sceneOdometerOutOfRange(int? scene, int? start, int? end) {
+    if (scene == null) return false;
+    return (start != null && scene < start) || (end != null && scene > end);
   }
 
   /// Łączny czas pracy urządzeń specjalnych — kolumna 10 karty drogowej.

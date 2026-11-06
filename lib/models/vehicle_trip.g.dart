@@ -45,13 +45,16 @@ class VehicleTripAdapter extends TypeAdapter<VehicleTrip> {
           : (fields[23] as List?)?.cast<TripEquipmentUse>(),
       overriddenFields:
           fields[24] == null ? [] : (fields[24] as List?)?.cast<String>(),
+      sceneArrivalTime: fields[25] as DateTime?,
+      sceneOdometer: fields[26] as int?,
+      sceneDepartureTime: fields[27] as DateTime?,
     );
   }
 
   @override
   void write(BinaryWriter writer, VehicleTrip obj) {
     writer
-      ..writeByte(25)
+      ..writeByte(28)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -101,7 +104,13 @@ class VehicleTripAdapter extends TypeAdapter<VehicleTrip> {
       ..writeByte(23)
       ..write(obj.equipmentUse)
       ..writeByte(24)
-      ..write(obj.overriddenFields);
+      ..write(obj.overriddenFields)
+      ..writeByte(25)
+      ..write(obj.sceneArrivalTime)
+      ..writeByte(26)
+      ..write(obj.sceneOdometer)
+      ..writeByte(27)
+      ..write(obj.sceneDepartureTime);
   }
 
   @override

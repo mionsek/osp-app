@@ -43,6 +43,11 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
   late DateTime _date;
   TimeOfDay? _departure;
   TimeOfDay? _return;
+
+  /// Pobyt na miejscu — drugi i trzeci punkt dwóch wierszy karty drogowej
+  /// (przyjazd na miejsce, wyjazd z miejsca).
+  TimeOfDay? _sceneArrival;
+  TimeOfDay? _sceneDeparture;
   String _purpose = TripPurposes.economic;
 
   final _dispatcherCtrl = TextEditingController();
@@ -51,6 +56,7 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
   final _driverCtrl = TextEditingController();
   final _odometerEndCtrl = TextEditingController();
   final _odometerStartCtrl = TextEditingController();
+  final _sceneOdometerCtrl = TextEditingController();
   final _idleCtrl = TextEditingController();
   final _extrasCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
@@ -85,6 +91,7 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
     _driverCtrl.dispose();
     _odometerEndCtrl.dispose();
     _odometerStartCtrl.dispose();
+    _sceneOdometerCtrl.dispose();
     _idleCtrl.dispose();
     _extrasCtrl.dispose();
     _notesCtrl.dispose();
@@ -122,6 +129,13 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
         _return = trip.returnTime == null
             ? null
             : TimeOfDay.fromDateTime(trip.returnTime!);
+        _sceneArrival = trip.sceneArrivalTime == null
+            ? null
+            : TimeOfDay.fromDateTime(trip.sceneArrivalTime!);
+        _sceneDeparture = trip.sceneDepartureTime == null
+            ? null
+            : TimeOfDay.fromDateTime(trip.sceneDepartureTime!);
+        _sceneOdometerCtrl.text = trip.sceneOdometer?.toString() ?? '';
         _purpose = trip.purpose;
         _dispatcherCtrl.text = trip.dispatcherName;
         _routeFromCtrl.text = trip.routeFrom;
@@ -228,8 +242,12 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
     return DateTime(_date.year, _date.month, _date.day, t.hour, t.minute);
   }
 
-  DateTime? get _returnDateTime {
-    final t = _return;
+  DateTime? get _returnDateTime => _afterDeparture(_return);
+  DateTime? get _sceneArrivalDateTime => _afterDeparture(_sceneArrival);
+  DateTime? get _sceneDepartureDateTime => _afterDeparture(_sceneDeparture);
+
+  /// Godzina po odjeździe — przez północ na następny dzień, jak powrót.
+  DateTime? _afterDeparture(TimeOfDay? t) {
     if (t == null) return null;
     return OvernightReturn.adjust(
       _departureDateTime,
@@ -388,50 +406,103 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
           ),
         ),
         const SizedBox(height: 14),
+        // Kolejność jak dwa wiersze karty drogowej: wyjazd (odjazd z OSP,
+        // przyjazd na miejsce) i powrót (wyjazd z miejsca, przyjazd do OSP).
         Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: InkWell(
-                onTap: () => _pickTime(isDeparture: true),
-                child: InputDecorator(
-                  decoration: const InputDecoration(
-                    labelText: 'Odjazd',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
-                  child: Text(_departure?.format(context) ?? '—'),
-                ),
+              child: _timeBox(
+                label: 'Odjazd',
+                value: _departure,
+                onPick: (t) => _departure = t,
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: InkWell(
-                onTap: () => _pickTime(isDeparture: false),
-                child: InputDecorator(
-                  decoration: InputDecoration(
-                    labelText: 'Przyjazd',
-                    border: const OutlineInputBorder(),
-                    isDense: true,
-                    helperText: _return == null ? 'jeszcze nie wrócił' : null,
-                    // Bez tego raz wpisanej godziny nie dało się cofnąć do
-                    // „jeszcze nie wrócił".
-                    suffixIcon: _return == null
-                        ? null
-                        : IconButton(
-                            icon: const Icon(Icons.close, size: 18),
-                            tooltip: 'Wyczyść godzinę przyjazdu',
-                            visualDensity: VisualDensity.compact,
-                            onPressed: () => setState(() => _return = null),
-                          ),
-                  ),
-                  child: Text(_return?.format(context) ?? '—'),
-                ),
+              child: _timeBox(
+                label: 'Na miejscu',
+                value: _sceneArrival,
+                onPick: (t) => _sceneArrival = t,
+                onClear: () => _sceneArrival = null,
+                clearTooltip: 'Wyczyść godzinę przyjazdu na miejsce',
               ),
             ),
           ],
         ),
+        const SizedBox(height: 12),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: _timeBox(
+                label: 'Z miejsca',
+                value: _sceneDeparture,
+                onPick: (t) => _sceneDeparture = t,
+                onClear: () => _sceneDeparture = null,
+                clearTooltip: 'Wyczyść godzinę wyjazdu z miejsca',
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _timeBox(
+                label: 'Przyjazd',
+                value: _return,
+                onPick: (t) => _return = t,
+                // Bez tego raz wpisanej godziny nie dało się cofnąć do
+                // „jeszcze nie wrócił".
+                onClear: () => _return = null,
+                clearTooltip: 'Wyczyść godzinę przyjazdu',
+                emptyHelper: 'jeszcze nie wrócił',
+              ),
+            ),
+          ],
+        ),
+        Padding(
+          padding: const EdgeInsets.only(top: 6, left: 4, right: 4),
+          child: Text(
+            'Na karcie drogowej: wiersz wyjazdu (OSP → miejsce) i wiersz '
+            '„Powrót". Godzin na miejscu nie trzeba wpisywać — puste '
+            'zostaną puste na wydruku.',
+            style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+          ),
+        ),
         if (_linkedReport != null) _linkedReportNote(_linkedReport!),
       ],
+    );
+  }
+
+  /// Godzina do wybrania z zegara; [onClear] — krzyżyk czyszczący wpis.
+  Widget _timeBox({
+    required String label,
+    required TimeOfDay? value,
+    required void Function(TimeOfDay) onPick,
+    VoidCallback? onClear,
+    String? clearTooltip,
+    String? emptyHelper,
+  }) {
+    return InkWell(
+      onTap: () => _pickTime(value, onPick),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+          isDense: true,
+          helperText: value == null ? emptyHelper : null,
+          suffixIcon: value == null || onClear == null
+              ? null
+              : IconButton(
+                  icon: const Icon(Icons.close, size: 18),
+                  tooltip: clearTooltip,
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () {
+                    _markDirty();
+                    setState(onClear);
+                  },
+                ),
+        ),
+        child: Text(value?.format(context) ?? '—'),
+      ),
     );
   }
 
@@ -534,6 +605,30 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
 
           const SizedBox(height: 12),
           TextFormField(
+            controller: _sceneOdometerCtrl,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            decoration: const InputDecoration(
+              labelText: 'Na miejscu (km, opcjonalnie)',
+              border: OutlineInputBorder(),
+              isDense: true,
+              helperText: 'Koniec wiersza wyjazdu i początek wiersza „Powrót" '
+                  'na karcie drogowej',
+              helperMaxLines: 2,
+            ),
+            onChanged: (_) => setState(() {}),
+          ),
+          if (_sceneOdometerOutOfRange) ...[
+            const SizedBox(height: 6),
+            const Text(
+              'Licznik na miejscu jest poza zakresem przed wyjazdem – po powrocie',
+              style: TextStyle(
+                  fontWeight: FontWeight.w600, color: OspTheme.attention),
+            ),
+          ],
+
+          const SizedBox(height: 12),
+          TextFormField(
             controller: _odometerEndCtrl,
             keyboardType: TextInputType.number,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
@@ -604,6 +699,12 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
     if (end == null || start == null) return null;
     return end - start;
   }
+
+  bool get _sceneOdometerOutOfRange => VehicleTrip.sceneOdometerOutOfRange(
+        int.tryParse(_sceneOdometerCtrl.text.trim()),
+        _effectiveStart,
+        int.tryParse(_odometerEndCtrl.text.trim()),
+      );
 
   Widget _purposeField() {
     return DropdownButtonFormField<String>(
@@ -1146,19 +1247,17 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
     if (picked != null) setState(() => _date = picked);
   }
 
-  Future<void> _pickTime({required bool isDeparture}) async {
+  Future<void> _pickTime(
+    TimeOfDay? initial,
+    void Function(TimeOfDay) apply,
+  ) async {
     final picked = await showTimePicker(
       context: context,
-      initialTime: (isDeparture ? _departure : _return) ?? TimeOfDay.now(),
+      initialTime: initial ?? TimeOfDay.now(),
     );
     if (picked == null) return;
-    setState(() {
-      if (isDeparture) {
-        _departure = picked;
-      } else {
-        _return = picked;
-      }
-    });
+    _markDirty();
+    setState(() => apply(picked));
   }
 
   Future<void> _confirmDelete() async {
@@ -1225,6 +1324,9 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
       driverId: _driverId,
       departureTime: _departureDateTime,
       returnTime: _returnDateTime,
+      sceneArrivalTime: _sceneArrivalDateTime,
+      sceneDepartureTime: _sceneDepartureDateTime,
+      sceneOdometer: int.tryParse(_sceneOdometerCtrl.text.trim()),
       odometerStart: odometerStart,
       odometerEnd: odometerEnd,
       odometerStartManual: manual,

@@ -1,5 +1,6 @@
 import '../models/models.dart';
 import 'equipment_usage.dart';
+import 'trip_labels.dart';
 
 /// Wiersz miesięcznej karty pracy sprzętu silnikowego: Data, Nazwisko i imię
 /// obsługującego, Minut pracy, Cel użycia.
@@ -78,6 +79,7 @@ class EquipmentCard {
     required Iterable<EquipmentWork> work,
     required List<Equipment> equipment,
     Report? Function(String reportId)? reportOf,
+    String stationAddress = '',
   }) {
     bool inMonth(DateTime d) => d.year == year && d.month == month;
 
@@ -93,7 +95,7 @@ class EquipmentCard {
                 date: t.departureTime,
                 operatorName: use.operatorName,
                 minutes: use.minutes,
-                purpose: _tripPurpose(t, reportOf),
+                purpose: _tripPurpose(t, reportOf, stationAddress),
                 tripId: t.id,
               ),
       for (final w in work)
@@ -113,16 +115,20 @@ class EquipmentCard {
     return rows;
   }
 
-  /// „Pożar, Kielno" przy wyjeździe alarmowym, inaczej cel przejazdu
-  /// i miejsce („Ćwiczenia, Szemud").
+  /// „MZ, Kielno" przy wyjeździe alarmowym, inaczej cel przejazdu i miejsce
+  /// („Ćwiczenia, Szemud") — skróty jak na karcie drogowej ([TripLabels]).
   static String _tripPurpose(
     VehicleTrip t,
     Report? Function(String reportId)? reportOf,
+    String stationAddress,
   ) {
     final report = t.reportId == null ? null : reportOf?.call(t.reportId!);
     final parts = report != null
-        ? [report.threatCategory, report.addressLocality]
-        : [t.purpose, t.routeTo];
+        ? [TripLabels.threatShort(report.threatCategory), report.addressLocality]
+        : [
+            t.purpose,
+            TripLabels.place(t.routeTo, stationAddress: stationAddress),
+          ];
     return parts.map((s) => s.trim()).where((s) => s.isNotEmpty).join(', ');
   }
 

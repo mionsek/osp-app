@@ -110,10 +110,11 @@ void main() {
           ['w-rozruch', 't-akcja', 't-cwiczenia']);
     });
 
-    test('cel użycia: zdarzenie z wyjazdu, cel przejazdu, rozruch', () {
+    test('cel użycia: skrót zdarzenia z wyjazdu (jak na karcie drogowej), '
+        'cel przejazdu, rozruch', () {
       expect(rows().map((r) => r.purpose), [
         'Rozruch kontrolny',
-        'Miejscowe zagrożenie, Kielno',
+        'MZ, Kielno',
         'Ćwiczenia, Szemud',
       ]);
     });

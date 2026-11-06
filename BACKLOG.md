@@ -330,15 +330,19 @@ z własnym silnikiem ma w gminie osobną kartę pracy**. Lista sprzętu, wybór
 w przejeździe i poprawka karty drogowej — feature/051. Wzór karty
 („Miesięczna karta pracy sprzętu silnikowego", zdjęcia motopompy pływającej
 Niagara z 5.11.2026) i odpowiedzi Deringa — wydruk karty, rozruchy i osoba
-obsługująca w feature/052. Zostaje:
+obsługująca w feature/052.
 
-- [ ] **Paliwo z kanistrów na karcie urządzenia** — Dering: paliwo z kanistrów „jest rozpisane na wszystkie urządzenia", nie pobiera się go osobno na urządzenie. Dziś tabela „Pobrano w litrach" i pozycje 1–3 i 8 rozliczenia zostają puste do wypełnienia długopisem. **Do ustalenia**: według jakiej reguły dzieli się kanister — po równo, według zużycia z normy, tak żeby „pobrano" = „zużyto"? Jeśli według zużycia, aplikacja może wpisywać to sama: tankowanie kanistrów (data, nr kwitu, litry paliwa i oleju) i podział na urządzenia na koniec miesiąca
-- [ ] **„Pozostało z ubiegłego miesiąca"** (pozycja 1) z pozycji 8 poprzedniej karty — ma sens dopiero razem z pobranym paliwem
-- [ ] **Licznik motogodzin** — rubryka „Stan licznika" na przodzie karty i tabela „Data / Stan licznika / Minuty pracy / Stan licznika / Zużycie paliwa" z tyłu zostają puste. Do ustalenia, czy któreś urządzenie ma licznik i co dokładnie wpisuje się w tę tabelę
+Rozstrzygnięte przez Dawida 5.11.2026 — **bez zmian w aplikacji**:
+- paliwo z kanistrów aplikacji nie dotyczy — tabela „Pobrano w litrach" i pozycje 1–3 i 8 rozliczenia karty urządzenia zostają do wypełnienia długopisem (rozpisuje się je „pewnie według norm", poza aplikacją);
+- licznik motogodzin ma tylko jedno urządzenie — rubryki licznika zostają puste i uzupełnia je jednostka; normy urządzeń (od Deringa) wpisuje administrator na liście sprzętu;
+- na karcie wozu są wszystkie przejazdy (akcje, tankowanie, ćwiczenia), bez pilarek i agregatów — tak, jak liczy aplikacja.
+
+Zostaje:
+
+- [ ] **Przybycie na miejsce w kreatorze wyjazdu** — wyjazd alarmowy dopisuje się do ewidencji z odjazdem i powrotem z raportu, ale bez godzin na miejscu, więc w wierszach wyjazdu i „Powrót" karty drogowej te rubryki zostają puste, dopóki ktoś nie uzupełni przejazdu. Do rozważenia: godzina przybycia na miejsce i zakończenia działań w raporcie (przyda się też PSP)
 - [ ] **Excel „Praca sprzętu"** do pobrania (Udostępnij, jak PDF): arkusz szczegółów (data, wóz, numer wyjazdu, urządzenie, czas, obsługujący, norma, wyliczone paliwo, rodzaj paliwa) i zestawienie dla każdego urządzenia (godziny i paliwo osobno: benzyna, mieszanka, ON). Prawdziwy .xlsx, nie CSV — polski Excel psuje w CSV polskie znaki i przecinki dziesiętne. Mniej pilne, odkąd jest wydruk karty
 - [ ] **Statystyki pracy sprzętu** — godziny pracy i paliwo każdego urządzenia w roku
 - [ ] **Pobrane paliwo na karcie drogowej wozu** — pusta dziś tabela „Pobrano" (patrz feature/033)
-- [ ] **Do potwierdzenia z Deringiem**: „w karcie samochodu wpisujesz tylko wyjazdy z akcji, km, minuty postoju i minuty pompy" — rozumiemy, że na karcie wozu nie ma sprzętu z własnym silnikiem, a nie, że pomija się przejazdy na ćwiczenia, tankowanie czy przegląd. Aplikacja wpisuje na kartę wozu wszystkie jego przejazdy
 
 ### Funkcje ratownika — możliwe rozszerzenia
 Obecnie „Ratownik" jest **wyliczany**: brak kierowcy/dowódcy/KPP = ratownik.
@@ -1013,7 +1017,7 @@ nierozstrzygnięta — w „Sprzęt i karty pracy urządzeń" (Do zrobienia).
 
 ### Karta pracy urządzenia
 - [x] **Wydruk karty** dla każdego urządzenia z własnym silnikiem — A4 w pionie, dwie strony jak na papierze. Przód: jednostka, miesiąc, marka, typ, rodzaj (nazwa z listy sprzętu), stan licznika, norma na godzinę pracy, tabela „Data / Nazwisko i imię obsługującego / Minut pracy / Cel użycia / Podpis dysponenta". Tył: tabela licznika, „Pobrano w litrach" (dnia, nr kwitu, paliwa, oleju, podpisy) i rozliczenie w litrach ET / ON w ośmiu pozycjach, „Obliczył" i „Sprawdził". Drukarka systemowa, Bluetooth (bez obrotu — strona jest w pionie) i udostępnianie
-- [x] **Wypełnia się samo**: praca przy akcjach i ćwiczeniach z ewidencji przejazdów (także wpisy sprzed listy sprzętu — po nazwie), rozruchy z nowych wpisów. „Cel użycia": rodzaj zdarzenia i miejscowość z wyjazdu alarmowego („Miejscowe zagrożenie, Kielno"), inaczej cel i miejsce przejazdu („Ćwiczenia, Szemud"), przy rozruchu „Rozruch kontrolny"
+- [x] **Wypełnia się samo**: praca przy akcjach i ćwiczeniach z ewidencji przejazdów (także wpisy sprzed listy sprzętu — po nazwie), rozruchy z nowych wpisów. „Cel użycia": skrót zdarzenia i miejscowość z wyjazdu alarmowego („MZ, Kielno"), inaczej cel i miejsce przejazdu („Ćwiczenia, Szemud"), przy rozruchu „Rozruch kontrolny"
 - [x] **Rozliczenie**: pozycja 4 (przepracowano godz. i min.) i 5 (zużyto) z pracy, pozycja 6 (zużyto na rozruchy i kontrole) z rozruchów, 7 — suma; litry normą urządzenia, w kolumnie ET (benzyna, mieszanka) albo ON. Bez normy albo rodzaju paliwa — puste i ostrzeżenie na ekranie przed drukiem. Pobrane paliwo, stany z poprzedniego miesiąca i licznik — puste, do wypełnienia długopisem (zasada karty drogowej: lepiej puste niż zmyślone)
 - [x] **Ekran karty**: dotknięcie urządzenia z własnym silnikiem na liście sprzętu; wybór miesiąca, podsumowanie (praca, rozruchy, paliwo), wiersze z przejściem do przejazdu albo wpisu, „Dodaj pracę". Sprzęt zasilany z wozu nie ma karty — jego minuty są na karcie drogowej
 
@@ -1025,12 +1029,23 @@ nierozstrzygnięta — w „Sprzęt i karty pracy urządzeń" (Do zrobienia).
 - [x] **„Obsługujący"** przy urządzeniu z własnym silnikiem w przejeździe — podpowiada najpierw zastęp z wyjazdu, potem resztę kartoteki; można wpisać nazwisko spoza niej. W pliku przejazdu tylko gdy wpisany — wpisy bez niego mają tę samą treść co dawniej. Uwaga: przejazd poprawiony na telefonie z 1.8.0 lub starszą traci obsługującego
 - [x] **Marka** sprzętu osobno od typu — jak w nagłówku karty („Niagara", „GXV160KN/5")
 
+### Karta drogowa wozu: dwa wiersze na wyjazd, jak na papierze
+Wypełniona karta Kielna (zdjęcie z 7.08.2026, wyjaśnione przez Dawida
+5.11.2026) ma na każdy wyjazd dwa wiersze: „OSP – Kielno · MZ" i „Kielno –
+OSP · Powrót". Aplikacja drukowała jeden wiersz z pełnymi adresami i celem
+„Wyjazd alarmowy". Dawid wybrał wersję jak na papierze.
+- [x] **Dwa wiersze na przejazd**: wyjazd (odjazd z OSP i licznik przed wyjazdem → przyjazd na miejsce i licznik na miejscu) i „Powrót" (wyjazd z miejsca i licznik na miejscu → przyjazd do OSP i licznik po powrocie). Minuty sprzętu, dodatki i postój w wierszu wyjazdu — tak jest na wypełnionej karcie. Data wiersza „Powrót" z wyjazdu z miejsca albo powrotu (akcja po północy). Lp. tylko przy wierszu wyjazdu
+- [x] **Skróty jak w Kielnie**: „OSP" zamiast adresu remizy, sama miejscowość zamiast adresu („Kielno, Szkolna 5" → „Kielno"), cel wyjazdu alarmowego z raportu jako MZ / P / AF; pozostałe cele bez zmian („Ćwiczenia", „Tankowanie", „Wyjazd gospodarczy"). Te same skróty w „Celu użycia" karty pracy sprzętu (`TripLabels`)
+- [x] **Pobyt na miejscu w przejeździe** — nowe, nieobowiązkowe pola: godzina przyjazdu na miejsce, godzina wyjazdu z miejsca i licznik na miejscu. Godziny ułożone w formularzu jak wiersze karty (Odjazd · Na miejscu / Z miejsca · Przyjazd). Puste zostają puste na wydruku — także we wszystkich przejazdach sprzed tej wersji. Licznik na miejscu spoza zakresu przejazdu ostrzega (formularz i lista), nie blokuje. Na Dysk tylko gdy wpisane — przejazdy bez nich mają tę samą treść co dawniej. Uwaga: przejazd poprawiony na telefonie z wersją sprzed 1.9.1 traci pobyt na miejscu
+- [x] Szersze kolumny godzin — nagłówki „Odjazdy / Godz.Min." i „Przyjazdy" łamały się w połowie słowa
+
 ### Porządki
 - [x] Druk przez Bluetooth w jednym miejscu (`printOnBluetoothPrinter`) — raport, przekazanie mienia i karta drogowa miały trzy kopie tych samych kroków; liczby z przecinkiem i linie podpisu wspólne dla obu kart (`PdfOutput`); wybór miesiąca wspólny dla obu kart
 
 ### Testy i wersja
 - [x] 24 nowe testy: wiersze karty (praca z przejazdów i rozruchy, tylko tego urządzenia i miesiąca, wpis sprzed listy po nazwie, cel użycia, obsługujący), rozliczenie z normą i bez, miesiące, kolumna ET / ON, zapis na Dysk (praca sprzętu, obsługujący, marka), baza (kolejność, znacznik usunięcia, usunięcie danych), dwa telefony (rozruch dociera, usunięcie też), wydruk (pusta karta, sprzęt bez danych, przejście na kolejne strony), ekrany (karta z podsumowaniem, ostrzeżenie o braku normy, rozruch całego sprzętu, inna praca z karty, otwarcie karty z listy, obsługujący w przejeździe, nawigacja). Łącznie **411**
-- [x] Wersja **1.9.0+23**
+- [x] Karta drogowa w dwóch wierszach — 10 testów: skróty zdarzeń i miejsc, oba wiersze z pobytem na miejscu i bez, ćwiczenia w remizie, akcja po północy, ostrzeżenie o liczniku na miejscu, zapis na Dysk (przejazd bez pobytu ma tę samą treść), formularz (układ godzin, licznik na miejscu z ostrzeżeniem i zapisem). Łącznie **421**
+- [x] Wersja **1.9.1+24** (1.9.0 zbudowana wcześniej tego dnia, bez dwóch wierszy)
 
 ## Zrobione (feature/051-sprzet-i-powitanie)
 Prośby Dawida z 5.11.2026: powitanie na ekranie głównym oraz lista sprzętu

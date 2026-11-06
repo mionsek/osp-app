@@ -91,6 +91,9 @@ void main() {
           driverId: 'f1',
           departureTime: DateTime(2026, 8, 10, 14, 30),
           returnTime: DateTime(2026, 8, 10, 16, 0),
+          sceneArrivalTime: DateTime(2026, 8, 10, 14, 45),
+          sceneOdometer: 1021,
+          sceneDepartureTime: DateTime(2026, 8, 10, 15, 40),
           odometerStart: 1000,
           odometerEnd: 1042,
           odometerStartManual: true,
@@ -126,6 +129,9 @@ void main() {
       expect(back.driverId, t.driverId);
       expect(back.departureTime, t.departureTime);
       expect(back.returnTime, t.returnTime);
+      expect(back.sceneArrivalTime, t.sceneArrivalTime);
+      expect(back.sceneOdometer, t.sceneOdometer);
+      expect(back.sceneDepartureTime, t.sceneDepartureTime);
       expect(back.odometerStart, t.odometerStart);
       expect(back.odometerEnd, t.odometerEnd);
       expect(back.odometerStartManual, t.odometerStartManual);
@@ -195,6 +201,7 @@ void main() {
           'specialEquipmentMinutes', 'idleMinutes', 'extras', 'notes',
           'reportId', 'createdAt', 'updatedAt', 'createdBy', 'syncStatus',
           'equipmentUse', 'overriddenFields',
+          'sceneArrivalTime', 'sceneOdometer', 'sceneDepartureTime',
         },
       );
     });

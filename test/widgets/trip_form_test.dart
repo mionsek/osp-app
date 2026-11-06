@@ -64,8 +64,10 @@ void main() {
 
   tearDown(() async => disposeTestHive(tempDir));
 
+  /// [routed] — formularz pod trasą, z której wraca po zapisie
+  /// (`context.pop`); potrzebne w testach, które zapisują.
   Future<void> pumpForm(WidgetTester tester,
-      {String vehicleId = withHistory}) async {
+      {String vehicleId = withHistory, bool routed = false}) async {
     // Domyślne okno testowe to 800×600 — formularz przejazdu jest znacznie
     // dłuższy, więc `ensureVisible` przewijało cel pod pasek tytułu i kliknięcia
     // trafiały w `AppBar` zamiast w przycisk. Wymiary telefonu, na którym
@@ -75,9 +77,32 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    await tester.pumpWidget(
-        testApp(TripFormScreen(initialVehicleId: vehicleId)));
+    final form = TripFormScreen(initialVehicleId: vehicleId);
+    await tester.pumpWidget(routed
+        ? testRouterApp(GoRouter(
+            initialLocation: '/new',
+            routes: [
+              GoRoute(
+                path: '/',
+                builder: (c, s) => const Text('LISTA'),
+                routes: [GoRoute(path: 'new', builder: (c, s) => form)],
+              ),
+            ],
+          ))
+        : testApp(form));
     await tester.pumpAndSettle();
+  }
+
+  /// „Dodaj przejazd" i nowy przejazd z bazy. Zapis Hive to prawdziwe
+  /// operacje na dysku — na prawdziwym czasie.
+  Future<VehicleTrip> saveNewTrip(WidgetTester tester) async {
+    await tester.ensureVisible(find.text('Dodaj przejazd'));
+    await tester.runAsync(() async {
+      await tester.tap(find.text('Dodaj przejazd'));
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    });
+    await tester.pumpAndSettle();
+    return db.getAllTrips().firstWhere((t) => t.id != 'trip_0');
   }
 
   Future<void> enterInto(
@@ -289,27 +314,7 @@ void main() {
 
     testWidgets('sprzęt z własnym silnikiem pyta o obsługującego (karta '
         'pracy) i zapisuje go w przejeździe', (tester) async {
-      tester.view.physicalSize = const Size(1080, 2400);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      await tester.pumpWidget(testRouterApp(GoRouter(
-        initialLocation: '/new',
-        routes: [
-          GoRoute(
-            path: '/',
-            builder: (c, s) => const Text('LISTA'),
-            routes: [
-              GoRoute(
-                path: 'new',
-                builder: (c, s) =>
-                    const TripFormScreen(initialVehicleId: withHistory),
-              ),
-            ],
-          ),
-        ],
-      )));
-      await tester.pumpAndSettle();
+      await pumpForm(tester, routed: true);
       await addDevice(tester);
 
       final operator = find.widgetWithText(TextFormField, 'Obsługujący');
@@ -326,22 +331,45 @@ void main() {
           find.widgetWithText(TextFormField, 'Minuty'), '25');
       await tester.pumpAndSettle();
 
-      await tester.ensureVisible(find.text('Dodaj przejazd'));
-      await tester.runAsync(() async {
-        await tester.tap(find.text('Dodaj przejazd'));
-        await Future<void>.delayed(const Duration(milliseconds: 300));
-      });
-      await tester.pumpAndSettle();
-
-      final use = db
-          .getAllTrips()
-          .firstWhere((t) => t.id != 'trip_0')
-          .equipmentUse
-          .single;
+      final use = (await saveNewTrip(tester)).equipmentUse.single;
       expect(use.equipmentId, 'e-saw');
       expect(use.minutes, 25);
       expect(use.operatorName, 'Kowalski Jan');
       expect(use.operatorId, 'ff1', reason: 'nazwisko z kartoteki');
+    });
+  });
+
+  group('pobyt na miejscu (dwa wiersze karty)', () {
+    testWidgets('godziny ułożone jak wiersze karty: odjazd, na miejscu, '
+        'z miejsca, przyjazd — na miejscu opcjonalne', (tester) async {
+      await pumpForm(tester);
+      for (final label in ['Odjazd', 'Na miejscu', 'Z miejsca', 'Przyjazd']) {
+        expect(find.widgetWithText(InputDecorator, label), findsOneWidget,
+            reason: label);
+      }
+      expect(find.textContaining('wiersz wyjazdu (OSP → miejsce)'),
+          findsOneWidget);
+    });
+
+    testWidgets('licznik na miejscu ostrzega poza zakresem i zapisuje się',
+        (tester) async {
+      await pumpForm(tester, routed: true);
+      const warning =
+          'Licznik na miejscu jest poza zakresem przed wyjazdem – po powrocie';
+
+      await enterInto(tester, 'Na miejscu (km, opcjonalnie)', '1030');
+      expect(find.text(warning), findsOneWidget,
+          reason: 'mniej niż 1042 przed wyjazdem');
+
+      await enterInto(tester, 'Na miejscu (km, opcjonalnie)', '1050');
+      await enterInto(tester, 'Po powrocie (km)', '1060');
+      expect(find.text(warning), findsNothing);
+
+      final trip = await saveNewTrip(tester);
+      expect(trip.sceneOdometer, 1050);
+      expect(trip.odometerStart, 1042);
+      expect(trip.odometerEnd, 1060);
+      expect(trip.sceneArrivalTime, isNull, reason: 'nikt nie wpisał');
     });
   });
 

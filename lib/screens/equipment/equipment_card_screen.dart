@@ -54,6 +54,7 @@ class _EquipmentCardScreenState extends ConsumerState<EquipmentCardScreen> {
       work: ref.watch(equipmentWorkProvider),
       equipment: ref.watch(equipmentProvider),
       reportOf: db.getReport,
+      stationAddress: ref.watch(unitConfigProvider).stationAddress,
     );
   }
 

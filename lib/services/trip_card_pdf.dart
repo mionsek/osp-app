@@ -9,6 +9,7 @@ import '../core/utils/time_format.dart';
 import '../models/models.dart';
 import 'equipment_usage.dart';
 import 'pdf_output.dart';
+import 'trip_labels.dart';
 
 /// Miesięczna karta drogowa pożarniczego pojazdu samochodowego.
 ///
@@ -16,6 +17,10 @@ import 'pdf_output.dart';
 /// z wzoru innej gminy. Trzy części, tak jak na papierze:
 /// nagłówek z danymi pojazdu i normami, tabela przejazdów (13 kolumn),
 /// rozliczenie materiałów pędnych (12 pozycji + „Pobrano").
+///
+/// Tabela jak na wypełnionej karcie Kielna: dwa wiersze na przejazd
+/// (wyjazd i „Powrót"), „OSP" zamiast adresu remizy, sama miejscowość
+/// i skrót zdarzenia w celu jazdy (MZ, P, AF) — [TripLabels].
 ///
 /// **Zasada wypełniania:** wpisujemy tylko to, co aplikacja naprawdę wie.
 /// Pozycje, których nie zna — ilości pobranego paliwa, dodatek zimowy —
@@ -31,8 +36,10 @@ class TripCardPdf {
     required int year,
     required int month,
     List<Equipment> equipment = const [],
+    Report? Function(String reportId)? reportOf,
   }) async {
-    final doc = await _build(trips, vehicle, config, year, month, equipment);
+    final doc = await _build(
+        trips, vehicle, config, year, month, equipment, reportOf);
     await PdfOutput.layoutPdf(
       doc,
       _fileName(vehicle, year, month),
@@ -47,8 +54,10 @@ class TripCardPdf {
     required int year,
     required int month,
     List<Equipment> equipment = const [],
+    Report? Function(String reportId)? reportOf,
   }) async {
-    final doc = await _build(trips, vehicle, config, year, month, equipment);
+    final doc = await _build(
+        trips, vehicle, config, year, month, equipment, reportOf);
     await PdfOutput.sharePdf(doc, _fileName(vehicle, year, month));
   }
 
@@ -65,8 +74,10 @@ class TripCardPdf {
     required int year,
     required int month,
     List<Equipment> equipment = const [],
+    Report? Function(String reportId)? reportOf,
   }) async {
-    final doc = await _build(trips, vehicle, config, year, month, equipment);
+    final doc = await _build(
+        trips, vehicle, config, year, month, equipment, reportOf);
     return Uint8List.fromList(await doc.save());
   }
 
@@ -104,6 +115,7 @@ class TripCardPdf {
     int year,
     int month,
     List<Equipment> equipment,
+    Report? Function(String reportId)? reportOf,
   ) async {
     final theme = await PdfOutput.theme();
 
@@ -291,14 +303,14 @@ class TripCardPdf {
               0: pw.FixedColumnWidth(16),   // Lp.
               1: pw.FixedColumnWidth(34),   // Data
               2: pw.FlexColumnWidth(1.4),   // Dysponent
-              3: pw.FlexColumnWidth(2.4),   // Trasa
-              4: pw.FlexColumnWidth(1.5),   // Cel
+              3: pw.FlexColumnWidth(1.9),   // Trasa — „OSP – Kielno"
+              4: pw.FlexColumnWidth(1.1),   // Cel — „MZ", „Powrót"
               5: pw.FlexColumnWidth(1.4),   // Kierowca
-              6: pw.FixedColumnWidth(28),   // Odjazd godz.
+              6: pw.FixedColumnWidth(36),   // Odjazd godz.
               7: pw.FixedColumnWidth(36),   // Odjazd licznik
-              8: pw.FixedColumnWidth(28),   // Przyjazd godz.
+              8: pw.FixedColumnWidth(36),   // Przyjazd godz.
               9: pw.FixedColumnWidth(36),   // Przyjazd licznik
-              10: pw.FixedColumnWidth(30),  // Minuty urządzeń
+              10: pw.FixedColumnWidth(38),  // Minuty urządzeń
               11: pw.FixedColumnWidth(34),  // Dodatki
               12: pw.FixedColumnWidth(30),  // Postój
               13: pw.FlexColumnWidth(1.1),  // Podpis
@@ -324,13 +336,22 @@ class TripCardPdf {
                 hdr('Podpis\ndysponenta'),
               ]),
               for (var i = 0; i < trips.length; i++)
-                _tripRow(trips[i], i + 1, cell,
-                    EquipmentUsage.vehicleCardMinutes(trips[i], equipment)),
-              for (var i = trips.length; i < minRows; i++)
-                pw.TableRow(children: [
-                  cell('${i + 1}', align: pw.Alignment.center),
-                  for (var c = 0; c < 13; c++) cell(''),
-                ]),
+                for (final texts in tripRowTexts(
+                  trips[i],
+                  i + 1,
+                  equipmentMinutes:
+                      EquipmentUsage.vehicleCardMinutes(trips[i], equipment),
+                  stationAddress: config.stationAddress,
+                  report: trips[i].reportId == null
+                      ? null
+                      : reportOf?.call(trips[i].reportId!),
+                ))
+                  pw.TableRow(children: [
+                    for (var c = 0; c < texts.length; c++)
+                      cell(texts[c], align: _columnAlign[c]),
+                  ]),
+              for (var i = trips.length * 2; i < minRows; i++)
+                pw.TableRow(children: [for (var c = 0; c < 14; c++) cell('')]),
             ],
           ),
           pw.SizedBox(height: 3),
@@ -457,32 +478,82 @@ class TripCardPdf {
     return pdf;
   }
 
-  static pw.TableRow _tripRow(
+  /// Przejazd jako dwa wiersze, jak na karcie Kielna: wyjazd
+  /// („OSP – Kielno · MZ": odjazd z remizy, przyjazd na miejsce) i powrót
+  /// („Kielno – OSP · Powrót": wyjazd z miejsca, przyjazd do remizy) —
+  /// teksty 14 kolumn tabeli.
+  ///
+  /// Minuty sprzętu, dodatki i postój — w wierszu wyjazdu, bo to praca na
+  /// miejscu (tak jest na wypełnionej karcie). Pobyt na miejscu, którego
+  /// nikt nie wpisał, zostaje pusty do uzupełnienia długopisem.
+  static List<List<String>> tripRowTexts(
     VehicleTrip t,
-    int lp,
-    pw.Widget Function(String,
-            {pw.Alignment align, double height, double size, bool boldText})
-        cell,
-    int equipmentMinutes,
-  ) =>
-      pw.TableRow(children: [
-        cell('$lp', align: pw.Alignment.center),
-        cell(DateFormat('dd.MM').format(t.date), align: pw.Alignment.center),
-        cell(t.dispatcherName),
-        cell(t.routeLabel),
-        cell(t.purpose),
-        cell(t.driverName),
-        cell(_hhmm(t.departureTime), align: pw.Alignment.center),
-        cell(t.odometerStart?.toString() ?? '',
-            align: pw.Alignment.centerRight),
-        cell(_hhmm(t.returnTime), align: pw.Alignment.center),
-        cell(t.odometerEnd?.toString() ?? '', align: pw.Alignment.centerRight),
-        cell(equipmentMinutes == 0 ? '' : '$equipmentMinutes',
-            align: pw.Alignment.center),
-        cell(t.extras),
-        cell(t.idleMinutes?.toString() ?? '', align: pw.Alignment.center),
-        cell(''),
-      ]);
+    int lp, {
+    required int equipmentMinutes,
+    required String stationAddress,
+    Report? report,
+  }) {
+    final from = TripLabels.place(t.routeFrom, stationAddress: stationAddress);
+    final to = report != null
+        ? report.addressLocality.trim()
+        : TripLabels.place(t.routeTo, stationAddress: stationAddress);
+    final sceneOdometer = t.sceneOdometer?.toString() ?? '';
+    String day(DateTime d) => DateFormat('dd.MM').format(d);
+
+    return [
+      [
+        '$lp',
+        day(t.date),
+        t.dispatcherName,
+        TripLabels.route(from, to),
+        TripLabels.purpose(t, report),
+        t.driverName,
+        _hhmm(t.departureTime),
+        t.odometerStart?.toString() ?? '',
+        _hhmm(t.sceneArrivalTime),
+        sceneOdometer,
+        equipmentMinutes == 0 ? '' : '$equipmentMinutes',
+        t.extras,
+        t.idleMinutes?.toString() ?? '',
+        '',
+      ],
+      [
+        '',
+        day(t.sceneDepartureTime ?? t.returnTime ?? t.date),
+        t.dispatcherName,
+        TripLabels.route(to, from),
+        TripLabels.returnLeg,
+        t.driverName,
+        _hhmm(t.sceneDepartureTime),
+        sceneOdometer,
+        _hhmm(t.returnTime),
+        t.odometerEnd?.toString() ?? '',
+        '',
+        '',
+        '',
+        '',
+      ],
+    ];
+  }
+
+  /// Wyrównanie kolejnych kolumn tabeli przejazdów: godziny i minuty na
+  /// środku, liczniki do prawej, teksty do lewej.
+  static const List<pw.Alignment> _columnAlign = [
+    pw.Alignment.center, // Lp.
+    pw.Alignment.center, // Data
+    pw.Alignment.centerLeft, // Dysponent
+    pw.Alignment.centerLeft, // Trasa
+    pw.Alignment.centerLeft, // Cel
+    pw.Alignment.centerLeft, // Kierowca
+    pw.Alignment.center, // Odjazd godz.
+    pw.Alignment.centerRight, // Odjazd licznik
+    pw.Alignment.center, // Przyjazd godz.
+    pw.Alignment.centerRight, // Przyjazd licznik
+    pw.Alignment.center, // Minuty urządzeń
+    pw.Alignment.centerLeft, // Dodatki
+    pw.Alignment.center, // Postój
+    pw.Alignment.centerLeft, // Podpis
+  ];
 
   /// Wiersz rozliczenia. [amount] to wielkość (km, godziny, minuty),
   /// [fuel] to wyliczone zużycie w litrach — puste, gdy pojazd nie ma normy.
