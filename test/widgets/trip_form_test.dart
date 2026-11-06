@@ -362,7 +362,25 @@ void main() {
           reason: 'mniej niż 1042 przed wyjazdem');
 
       await enterInto(tester, 'Na miejscu (km, opcjonalnie)', '1050');
-      await enterInto(tester, 'Po powrocie (km)', '1060');
+
+      // Cyfra po cyfrze, jak na telefonie: ostrzeżenie pojawia się
+      // i znika, a pole „Po powrocie" nie może przy tym tracić kursora —
+      // na emulatorze dalsze cyfry trafiały do innego pola.
+      final end = find.widgetWithText(TextFormField, 'Po powrocie (km)');
+      await tester.ensureVisible(end);
+      await tester.tap(end);
+      await tester.pump();
+      bool endFocused() => tester
+          .widget<EditableText>(
+              find.descendant(of: end, matching: find.byType(EditableText)))
+          .focusNode
+          .hasFocus;
+      for (final typed in ['1', '10', '106', '1060']) {
+        await tester.enterText(end, typed);
+        await tester.pump();
+        expect(endFocused(), isTrue, reason: 'po wpisaniu „$typed"');
+      }
+      await tester.pumpAndSettle();
       expect(find.text(warning), findsNothing);
 
       final trip = await saveNewTrip(tester);

@@ -604,28 +604,30 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
             ),
 
           const SizedBox(height: 12),
+          // Ostrzeżenie w podpisie pola, a nie osobnym wierszem pod nim:
+          // wstawiony między pola wiersz przebudowywał pole „Po powrocie",
+          // które traciło kursor w trakcie pisania (sprawdzone na emulatorze).
           TextFormField(
             controller: _sceneOdometerCtrl,
             keyboardType: TextInputType.number,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               labelText: 'Na miejscu (km, opcjonalnie)',
-              border: OutlineInputBorder(),
+              border: const OutlineInputBorder(),
               isDense: true,
-              helperText: 'Koniec wiersza wyjazdu i początek wiersza „Powrót" '
-                  'na karcie drogowej',
+              helperText: _sceneOdometerOutOfRange
+                  ? 'Licznik na miejscu jest poza zakresem przed wyjazdem – '
+                      'po powrocie'
+                  : 'Koniec wiersza wyjazdu i początek wiersza „Powrót" '
+                      'na karcie drogowej',
+              helperStyle: _sceneOdometerOutOfRange
+                  ? const TextStyle(
+                      fontWeight: FontWeight.w600, color: OspTheme.attention)
+                  : null,
               helperMaxLines: 2,
             ),
             onChanged: (_) => setState(() {}),
           ),
-          if (_sceneOdometerOutOfRange) ...[
-            const SizedBox(height: 6),
-            const Text(
-              'Licznik na miejscu jest poza zakresem przed wyjazdem – po powrocie',
-              style: TextStyle(
-                  fontWeight: FontWeight.w600, color: OspTheme.attention),
-            ),
-          ],
 
           const SizedBox(height: 12),
           TextFormField(
