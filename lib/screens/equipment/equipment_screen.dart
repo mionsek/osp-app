@@ -5,6 +5,7 @@ import '../../core/theme/osp_theme.dart';
 import '../../core/utils/bottom_inset.dart';
 import '../../models/models.dart';
 import '../../providers/providers.dart';
+import '../../widgets/action_strip.dart';
 import '../../widgets/admin_only_notice.dart';
 import '../../widgets/navigation.dart';
 
@@ -26,15 +27,19 @@ class EquipmentScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Sprzęt'),
-        actions: [
-          if (withCards > 0)
-            IconButton(
-              icon: const Icon(Icons.power_settings_new),
-              tooltip: 'Rozruch kontrolny',
-              onPressed: () => context.push('/equipment/work/new?startup=all'),
-            ),
-          const HomeButton(),
-        ],
+        actions: const [HomeButton()],
+        bottom: withCards == 0
+            ? null
+            : ActionStrip([
+                StripAction(
+                  icon: Icons.power_settings_new,
+                  label: 'Rozruch kontrolny',
+                  tooltip: 'Rozruch kontrolny — wpis na kartach pracy '
+                      'wszystkich urządzeń naraz',
+                  onPressed: () =>
+                      context.push('/equipment/work/new?startup=all'),
+                ),
+              ]),
       ),
       floatingActionButton: isAdmin
           ? FloatingActionButton.extended(

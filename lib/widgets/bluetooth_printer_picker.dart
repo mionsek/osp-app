@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 
+import '../models/unit_config.dart';
 import '../providers/providers.dart';
 import '../services/bluetooth_pairing_service.dart';
 import '../core/theme/osp_theme.dart';
@@ -124,6 +125,14 @@ Future<PrinterPickResult> pickBluetoothPrinter(
         btPrinterName: selected.name,
       ));
   return const PrinterPickResult.ok();
+}
+
+/// Podpis przycisku „Bluetooth" po przytrzymaniu: nazwa wybranej drukarki
+/// albo zapowiedź, że najpierw będzie wybór.
+String bluetoothTooltip(UnitConfig config) {
+  final mac = config.btPrinterMac;
+  if (mac == null || mac.isEmpty) return 'Drukuj na drukarce Bluetooth…';
+  return 'Drukuj na ${config.btPrinterName ?? 'drukarce Bluetooth'}';
 }
 
 /// Druk dokumentu na sparowanej drukarce termicznej Bluetooth, z wyborem

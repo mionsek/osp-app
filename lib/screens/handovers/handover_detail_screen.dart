@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../models/models.dart';
 import '../../providers/providers.dart';
 import '../../services/handover_pdf.dart';
+import '../../widgets/action_strip.dart';
 import '../../widgets/bluetooth_printer_picker.dart';
 import '../../widgets/upload_status.dart';
 import '../../core/theme/osp_theme.dart';
@@ -38,27 +39,51 @@ class HandoverDetailScreen extends ConsumerWidget {
 
     final handoverFF = findFF(handover.handoverFirefighterId);
 
+    // Cudze przekazania poprawia i usuwa tylko administrator.
+    final canEdit =
+        ref.watch(syncStateProvider).canEditDocument(handover.createdBy);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Przekazanie mienia'),
-        actions: [
-          // Cudze przekazania poprawia i usuwa tylko administrator.
-          if (ref
-              .watch(syncStateProvider)
-              .canEditDocument(handover.createdBy)) ...[
-            IconButton(
-              icon: const Icon(Icons.edit),
+        actions: const [HomeButton()],
+        bottom: ActionStrip([
+          StripAction(
+            icon: Icons.print,
+            label: 'Drukuj',
+            onPressed: () =>
+                HandoverPdf.generateAndPrint(handover, config, handoverFF),
+          ),
+          // Także bez wybranej drukarki — wybór odbywa się wtedy od razu,
+          // zamiast odsyłać do Ustawień.
+          StripAction(
+            icon: Icons.bluetooth,
+            label: 'Bluetooth',
+            tooltip: bluetoothTooltip(config),
+            onPressed: () => printOnBluetoothPrinter(context, ref,
+                () => HandoverPdf.bytes(handover, config, handoverFF)),
+          ),
+          StripAction(
+            icon: Icons.share,
+            label: 'Wyślij',
+            tooltip: 'Udostępnij / wyślij (PDF)',
+            onPressed: () =>
+                HandoverPdf.generateAndShare(handover, config, handoverFF),
+          ),
+          if (canEdit) ...[
+            StripAction(
+              icon: Icons.edit,
+              label: 'Edytuj',
               onPressed: () => context.push('/handovers/edit/${handover.id}'),
-              tooltip: 'Edytuj',
             ),
-            IconButton(
-              icon: const Icon(Icons.delete),
+            StripAction(
+              icon: Icons.delete,
+              label: 'Usuń',
+              danger: true,
               onPressed: () => _confirmDelete(context, ref, handover),
-              tooltip: 'Usuń',
             ),
           ],
-          const HomeButton(),
-        ],
+        ]),
       ),
       body: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + context.bottomInset()),
@@ -151,36 +176,6 @@ class HandoverDetailScreen extends ConsumerWidget {
               ),
             ),
 
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: () => HandoverPdf.generateAndPrint(
-                  handover, config, handoverFF),
-              icon: const Icon(Icons.print),
-              label: const Text('Drukuj'),
-            ),
-            const SizedBox(height: 8),
-            // Przycisk jest widoczny również wtedy, gdy drukarka nie jest
-            // jeszcze wybrana — wybór odbywa się wtedy od razu tutaj,
-            // zamiast odsyłać użytkownika do Ustawień.
-            Builder(builder: (context) {
-              final hasPrinter = config.btPrinterMac != null &&
-                  config.btPrinterMac!.isNotEmpty;
-              return OutlinedButton.icon(
-                onPressed: () => printOnBluetoothPrinter(context, ref,
-                    () => HandoverPdf.bytes(handover, config, handoverFF)),
-                icon: const Icon(Icons.bluetooth),
-                label: Text(hasPrinter
-                    ? 'Drukuj na ${config.btPrinterName ?? "drukarce Bluetooth"}'
-                    : 'Drukuj na drukarce Bluetooth...'),
-              );
-            }),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: () => HandoverPdf.generateAndShare(
-                  handover, config, handoverFF),
-              icon: const Icon(Icons.share),
-              label: const Text('Udostępnij / Wyślij'),
-            ),
             const SizedBox(height: 16),
             const Divider(),
             const SizedBox(height: 8),

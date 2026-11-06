@@ -340,7 +340,7 @@ Rozstrzygnięte przez Dawida 5.11.2026 — **bez zmian w aplikacji**:
 Zostaje:
 
 - [ ] **Przybycie na miejsce w kreatorze wyjazdu** — wyjazd alarmowy dopisuje się do ewidencji z odjazdem i powrotem z raportu, ale bez godzin na miejscu, więc w wierszach wyjazdu i „Powrót" karty drogowej te rubryki zostają puste, dopóki ktoś nie uzupełni przejazdu. Do rozważenia: godzina przybycia na miejsce i zakończenia działań w raporcie (przyda się też PSP)
-- [ ] **Excel „Praca sprzętu"** do pobrania (Udostępnij, jak PDF): arkusz szczegółów (data, wóz, numer wyjazdu, urządzenie, czas, obsługujący, norma, wyliczone paliwo, rodzaj paliwa) i zestawienie dla każdego urządzenia (godziny i paliwo osobno: benzyna, mieszanka, ON). Prawdziwy .xlsx, nie CSV — polski Excel psuje w CSV polskie znaki i przecinki dziesiętne. Mniej pilne, odkąd jest wydruk karty
+- [ ] **Excel „Praca sprzętu"** do pobrania (Udostępnij, jak PDF): arkusz szczegółów (data, wóz, numer wyjazdu, urządzenie, czas, obsługujący, norma, wyliczone paliwo, rodzaj paliwa) i zestawienie dla każdego urządzenia (godziny i paliwo osobno: benzyna, mieszanka, ON). Prawdziwy .xlsx, nie CSV — polski Excel psuje w CSV polskie znaki i przecinki dziesiętne. Mniej pilne, odkąd jest wydruk karty, a od feature/053 każda karta urządzenia jest też w Excelu — zostaje zestawienie wszystkich urządzeń naraz (generator .xlsx jest gotowy: `services/xlsx_writer.dart`)
 - [ ] **Statystyki pracy sprzętu** — godziny pracy i paliwo każdego urządzenia w roku
 - [ ] **Pobrane paliwo na karcie drogowej wozu** — pusta dziś tabela „Pobrano" (patrz feature/033)
 
@@ -1006,6 +1006,50 @@ Ekrany wyjazdu i przekazania miały domek zamiast strzałki, reszta ekranów —
 - [x] **Niezapisane dane**: kreator wyjazdu, formularze (przekazanie, przejazd, pojazd, ratownik) i dane jednostki w Ustawieniach z wpisanymi zmianami pytają „Wyjść bez zapisywania?" przy wstecz i przy domku. Pusty formularz zamyka się bez pytania, po zapisie też
 - [x] 10 nowych testów na prawdziwym drzewie tras: po zapisie przekazania wstecz do listy i do menu (aplikacja się nie zamyka), po „Lista wyjazdów" wstecz do menu, strzałka i domek na każdym z 19 ekranów, kreator cofa o krok i pyta na pierwszym, bez wpisanych danych bez pytania, „Zostań" zostawia, formularz pyta domkiem i wstecz, zapis zamyka bez pytania, Ustawienia pytają przed zapisem, a po nim nie. Łącznie **364**
 - [x] Wersja **1.7.8+21**
+
+## Zrobione (feature/053-powitanie-na-pasku)
+Uwagi Dawida z testów 1.9.1 (6.11.2026): „Witaj, Dawid" ma stać na samej
+górze, na czerwonym pasku, razem z nazwą jednostki — nie pod nim na białym;
+w pojeździe „Marka — Mitsubishi, Model — L200, Typ — GCBA / SLRt", a marka
+i model tak samo w sprzęcie.
+
+- [x] **Marka, Model, Typ w pojeździe** — dotąd model był podpisany „Typ" („np. L200"), a typ — „Rodzaj" („np. SLRr"), jak na starych drukach, gdzie „typ" znaczył model (Star 244). Teraz: Marka (np. MITSUBISHI), Model (np. L200), Typ (np. GCBA, SLRt). Tak samo w nagłówku karty drogowej. Pola w bazie i na Dysku bez zmian (`make`, `model`, `kind`) — pojazdy wpisane wcześniej same pokazują się pod nowymi podpisami, starsze wersje aplikacji czytają je jak dotąd
+- [x] **Marka i Model w sprzęcie** — „Typ (opcjonalnie)" to teraz „Model (opcjonalnie)", także w nagłówku karty pracy urządzenia („Rodzaj" na karcie urządzenia to dalej jego nazwa z listy, np. „Motopompa pływająca")
+- [x] **Powitanie na pasku ekranu głównego** — wyższy pasek z dwiema liniami: „Witaj, Dawid", a pod spodem „OSP w Kielnie · administrator" / „· członek jednostki" / „· dane tylko na tym telefonie". Nazwa jednostki stoi na ekranie raz, nie dwa (dotąd była na pasku i pod nim); bez nazwy — „OSP". Za długie imię lub adres e-mail kończy się wielokropkiem, ikona synchronizacji zostaje po prawej
+- [x] Zalogowany bez jednostki: wskazówka „Dołącz do jednostki w Ustawieniach" pod paskiem — teraz kafelek, który od razu otwiera Ustawienia (na pasku się nie mieści)
+- [x] Porządek w opisach w kodzie ekranu głównego — opisy karty „postaw mi kawę" i „Pierwszych kroków" stały nad powitaniem, wróciły nad swoje klasy
+- [x] Testy powitania sprawdzają, że napis jest na pasku i że nazwa jednostki nie powtarza się pod nim; nowe: kafelek prowadzi do Ustawień, jednostka bez nazwy. Nowe testy formularza pojazdu (Marka / Model / Typ trafiają do swoich pól, pojazd wpisany wcześniej pokazuje je pod nowymi podpisami) i sprzętu (marka i model zapisane)
+- [x] Wersja **1.9.2+25**
+
+Dalsze uwagi z testów 1.9.2 (6.11.2026, zrzuty „Ewidencja przejazdów"
+i „Przekazanie mienia"): ikony obok tytułu ucinały go („Ewidencj…",
+„Przekazanie …"), a druk był raz w ikonach na górze, raz w przyciskach na dole
+treści. Z trzech pokazanych układów Dawid wybrał A — tytuł na górze, niżej
+podpisane przyciski, wszędzie tak samo. Do tego eksport do Excela: „może
+trzeba będzie to wysłać, lub ewentualnie poprawić przed wysłaniem (bo paliwo
+się nie zgadza czy coś)" — na początek ewidencja przejazdów i spalanie.
+
+- [x] **Pasek akcji pod tytułem** (`widgets/action_strip.dart`) — na czerwonym pasku zostają tylko strzałka wstecz, tytuł i domek, więc tytuł się nie ucina. Pod nim jasny pasek z ikonami podpisanymi pod spodem, zawsze w tej kolejności: Drukuj · Bluetooth · Wyślij · Excel · Edytuj · Usuń (czerwone). Pasek nie przewija się z treścią
+  - wyjazd i przekazanie mienia: druk przeszedł z dołu przewijanej treści na pasek; Edytuj i Usuń jak dotąd tylko dla autora i administratora. Pod treścią zostały „Lista wyjazdów" / „Lista przekazań" i „Wróć do menu głównego"
+  - ewidencja przejazdów i karta pracy urządzenia: ikony z paska tytułu na pasek akcji, z nowym przyciskiem Excel
+  - statystyki: przyciski z dołu na pasek, **nowy druk przez Bluetooth** (w pionie, bez obrotu); w roku bez wyjazdów przyciski zostają na miejscu, wyszarzone
+  - lista sprzętu: „Rozruch kontrolny" z podpisem zamiast samej ikony
+  - formularz przejazdu i pracy sprzętu: „Usuń przejazd" / „Usuń wpis" pod przyciskiem zapisu zamiast kosza obok tytułu
+  - dłuższy opis przycisku po przytrzymaniu, np. „Drukuj (2 egzemplarze)", „Drukuj na <nazwa drukarki>"
+  - pusty miesiąc: przy „Wyślij" i „Excel" okno pyta „Wyślij pustą kartę" zamiast „Drukuj pustą kartę"
+  - ostrzeżenie o zdublowanym numerze wyjazdu odsyła do „Usuń" pod tytułem zamiast do „kosza u góry ekranu"
+- [x] **Ekran „O aplikacji" aktualny** — dopisana karta pracy sprzętu silnikowego (dokumenty), „Dodaj sprzęt" i „Karta w Excelu" (jak korzystać); pojazd z marką, modelem, typem i normami paliwa; druk i wysyłka opisane jako pasek pod tytułem („Drukuj", „Bluetooth", „Wyślij", „Edytuj", „Usuń") zamiast „przycisku na górze" i „Udostępnij / Wyślij"; statystyki także przez Bluetooth; karta pracy drukuje się w pionie
+- [x] **Karta drogowa w Excelu** (`services/trip_card_xlsx.dart`) — przycisk Excel w ewidencji wysyła plik `karta_drogowa_<wóz>_<rrrr-mm>.xlsx` tym samym oknem „Udostępnij" co PDF. Treść jak na wydruku (te same wiersze z `TripCardPdf.tripRowTexts`, liczniki, minuty i postój jako liczby), ale rozliczenie materiałów pędnych to formuły: poprawiony licznik, minuty urządzeń, postój albo norma w nagłówku przeliczają kilometry i litry same. Kolumna pomocnicza „Przebyto km" liczy kilometry każdego przejazdu z liczników i nie drukuje się (obszar wydruku A–N). Arkusz liczy też to, czego wydruk nie zna: pozycję 2 z tabeli „Pobrano", 3 (1 + 2) i 11 (3 − 9); dopóki nikt nie wpisze stanu z poprzedniego miesiąca ani kwitów, zostają puste. Wydruk z Excela: A4 w poziomie, rozliczenie od nowej strony (skala zamiast „dopasuj do strony", bo przy dopasowaniu Excel pomija ręczny podział strony)
+- [x] **Karta pracy sprzętu w Excelu** (`services/equipment_card_xlsx.dart`) — to samo dla urządzenia z własnym silnikiem: A4 w pionie, litry w kolumnie ET albo ON według rodzaju paliwa, godziny jako „1 godz. 30 min". Ukryta przed wydrukiem kolumna „Rozruch" (tak / puste) rozdziela minuty na pozycję 4 i 6 — dopisany w Excelu wiersz z „tak" liczy się jako rozruch kontrolny
+- [x] Plik .xlsx składany z ręki (`services/xlsx_writer.dart`: tekst, liczby, formuły z policzonym wynikiem dla podglądu w poczcie, ramki, scalenia, obszar wydruku, podział strony) na `archive`, który już był w aplikacji przez bibliotekę PDF. Wysyłka przez nowy pakiet `share_plus` — `Printing.sharePdf` oznacza każdy plik jako PDF. Tło nagłówków tabel w palecie (`OspTheme.spreadsheetHeader`)
+- [x] Sprawdzone poza testami: oba pliki otwiera `openpyxl` bez ostrzeżeń, a silnik formuł `pycel` liczy te same liczby co aplikacja i przelicza je po poprawce (licznik po powrocie +10 km → 110 km i 35,2 l; dopisany rozruch → pozycja 6)
+- [x] Testy: zapis arkusza (litery kolumn, części pliku, polskie znaki i znaki specjalne, jeden styl dla wielu komórek, ramka scalonych), karta drogowa (wiersze jak w PDF, liczby zamiast tekstu, kilometry z liczników, normy w komórkach, rozliczenie, „Pobrano" i „pozostało", pojazd bez norm, pusty miesiąc, ustawienia wydruku, nagłówek, nazwa pliku), karta pracy (wiersze i rozruchy, ET/ON, bez rodzaju paliwa, wydruk). Widok: pasek na wyjeździe (autor i kolega), przekazaniu, statystykach (pusty rok wyszarzony), ewidencji (z Excelem) i „Usuń przejazd" pod zapisem
+- [x] Wersja **1.9.3+26**
+
+Na później: raport z wyjazdu i przekazanie mienia w Wordzie — na razie nie,
+bo poprawka w Wordzie nie wraca do aplikacji ani na Dysk; poprawia się
+w aplikacji („Edytuj") i drukuje jeszcze raz. Do powrotu, jeśli gmina zacznie
+wymagać pliku .docx.
 
 ## Zrobione (feature/052-karta-pracy-sprzetu)
 Wzór „Miesięcznej karty pracy sprzętu silnikowego" z OSP Kielno (zdjęcia

@@ -135,15 +135,26 @@ class InfoScreen extends StatelessWidget {
                     'i czasem pracy urządzeń specjalnych. Jedna karta '
                     'na pojazd i miesiąc, do wydruku dla gminy.',
               ),
+              const _DocumentItem(
+                title: 'Miesięczna karta pracy sprzętu silnikowego',
+                description:
+                    'Osobna karta dla każdego urządzenia z własnym silnikiem '
+                    '(pilarka, agregat, motopompa): praca przy akcjach '
+                    'i ćwiczeniach zbiera się sama z przejazdów, rozruchy '
+                    'kontrolne dopisujesz jednym wpisem dla całego sprzętu.',
+              ),
               const SizedBox(height: 12),
               const Text(
                 'Dokumenty powstają w układzie zgodnym z papierowymi '
                 'formularzami. Potwierdzenia drukują się po dwa identyczne '
                 'egzemplarze A5 obok siebie na kartce A4, do rozcięcia wzdłuż '
                 'przerywanej linii: jeden zostaje w jednostce, drugi trafia '
-                'do drugiej strony. Karta drogowa drukuje się na A4 poziomo.\n\n'
+                'do drugiej strony. Karta drogowa drukuje się na A4 poziomo, '
+                'karta pracy sprzętu — w pionie. Obie karty możesz też wysłać '
+                'w Excelu, żeby przed oddaniem w gminie poprawić je na '
+                'komputerze.\n\n'
                 'Aplikacja prowadzi też ewidencję ratowników (z terminami '
-                'badań lekarskich) i pojazdów, liczy roczne statystyki '
+                'badań lekarskich), pojazdów i sprzętu, liczy roczne statystyki '
                 'i potrafi synchronizować dane między telefonami całej '
                 'jednostki przez Dysk Google.\n\n'
                 'Jest darmowa, nie wyświetla reklam i nie zbiera danych — '
@@ -186,8 +197,19 @@ class InfoScreen extends StatelessWidget {
                 icon: Icons.fire_truck,
                 title: 'Dodaj pojazdy',
                 description:
-                    'Wprowadź pojazdy swojej jednostki '
-                    '(numer operacyjny, typ, rejestracja).',
+                    'Wprowadź pojazdy swojej jednostki (marka, model, typ, '
+                    'numer operacyjny, rejestracja). Normy zużycia paliwa '
+                    'z „Danych do karty drogowej" wypełnią rozliczenie '
+                    'paliwa na karcie.',
+              ),
+              const _HowToItem(
+                icon: Icons.handyman,
+                title: 'Dodaj sprzęt',
+                description:
+                    'Pilarki, agregaty, autopompy — przypisane do wozów. '
+                    'Sprzęt z własnym silnikiem dostaje miesięczną kartę '
+                    'pracy, a zasilany z wozu liczy się na karcie drogowej. '
+                    'W formularzu przejazdu wybierzesz, co pracowało.',
               ),
               const _HowToItem(
                 icon: Icons.people,
@@ -224,16 +246,28 @@ class InfoScreen extends StatelessWidget {
                     'Gospodarcze i tankowanie dodajesz ręcznie. Stan licznika '
                     'przed wyjazdem podstawia się z poprzedniego przejazdu, '
                     'więc wpisujesz tylko jedną liczbę. Kartę za dany miesiąc '
-                    'wydrukujesz przyciskiem na górze ekranu.',
+                    'wydrukujesz albo wyślesz przyciskami pod tytułem ekranu.',
               ),
               const _HowToItem(
                 icon: Icons.print,
                 title: 'Drukuj lub wyślij',
                 description:
-                    'Z każdego dokumentu: „Drukuj" (drukarki widoczne '
-                    'w systemie Android), druk przez Bluetooth albo '
-                    '„Udostępnij / Wyślij" — PDF-em mailem lub '
-                    'komunikatorem.',
+                    'Przyciski są zawsze w tym samym miejscu — na jasnym '
+                    'pasku pod tytułem dokumentu: „Drukuj" (drukarki '
+                    'widoczne w systemie Android), „Bluetooth" i „Wyślij" '
+                    '— PDF-em mailem lub komunikatorem. Tam też „Edytuj" '
+                    'i „Usuń".',
+              ),
+              const _HowToItem(
+                icon: Icons.table_view,
+                title: 'Karta w Excelu',
+                description:
+                    'Kartę drogową i kartę pracy sprzętu wyślesz też '
+                    'przyciskiem „Excel" — np. sobie na maila, żeby poprawić '
+                    'ją na komputerze przed oddaniem w gminie. Po poprawce '
+                    'licznika, minut albo normy kilometry i litry w rozliczeniu '
+                    'przeliczą się same; stan z poprzedniego miesiąca i paliwo '
+                    'z kwitów dopiszesz w arkuszu.',
               ),
               const _HowToItem(
                 icon: Icons.bar_chart,
@@ -241,7 +275,8 @@ class InfoScreen extends StatelessWidget {
                 description:
                     'Przeglądaj roczne statystyki wyjazdów — '
                     'udział strażaków, kategorie zagrożeń i łączny czas '
-                    'działań. Zestawienie wydrukujesz jako PDF.',
+                    'działań. Zestawienie wydrukujesz (także przez '
+                    'Bluetooth) albo wyślesz jako PDF.',
               ),
               const _HowToItem(
                 icon: Icons.cloud_sync,
@@ -255,8 +290,8 @@ class InfoScreen extends StatelessWidget {
                 title: 'Druk na drukarce Bluetooth',
                 description:
                     'Dokument możesz wysłać wprost na przenośną drukarkę '
-                    'termiczną — przycisk znajdziesz przy każdym raporcie '
-                    'i przekazaniu mienia. Drukarkę wybiera się raz, '
+                    'termiczną — przycisk „Bluetooth" jest na pasku pod '
+                    'tytułem każdego dokumentu. Drukarkę wybiera się raz, '
                     'a nową można wyszukać i sparować wprost z aplikacji.',
               ),
               const SizedBox(height: 16),
@@ -286,7 +321,7 @@ class InfoScreen extends StatelessWidget {
                         'najlepiej dopytaj autora aplikacji.\n\n'
                         'Niezależnie od tego zawsze działa zwykły przycisk '
                         '„Drukuj" (drukarki widoczne w systemie Android) '
-                        'oraz „Udostępnij / Wyślij".',
+                        'oraz „Wyślij".',
                         style: TextStyle(
                             fontSize: 12, color: Colors.orange[900]),
                       ),

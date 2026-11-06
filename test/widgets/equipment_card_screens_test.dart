@@ -221,7 +221,8 @@ void main() {
     )));
     await tester.pumpAndSettle();
 
-    expect(find.byTooltip('Rozruch kontrolny'), findsOneWidget);
+    // Podpis pod ikoną na pasku akcji, a nie sama ikona obok tytułu.
+    expect(find.text('Rozruch kontrolny'), findsOneWidget);
     await tester.tap(find.text('Autopompa'));
     await tester.pumpAndSettle();
     expect(find.textContaining('KARTA'), findsNothing);

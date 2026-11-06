@@ -6,6 +6,7 @@ import '../../models/models.dart';
 import '../../providers/providers.dart';
 import '../../services/report_numbers.dart';
 import '../../services/report_pdf.dart';
+import '../../widgets/action_strip.dart';
 import '../../widgets/bluetooth_printer_picker.dart';
 import '../../widgets/upload_status.dart';
 import '../../core/theme/osp_theme.dart';
@@ -38,26 +39,51 @@ class ReportDetailScreen extends ConsumerWidget {
     }
 
 
+    // Cudze raporty poprawia i usuwa tylko administrator — autor zawsze może
+    // zmienić swój własny.
+    final canEdit =
+        ref.watch(syncStateProvider).canEditDocument(report.createdBy);
+
     return Scaffold(
       appBar: AppBar(
         title: Text('Wyjazd ${report.reportNumber}'),
-        actions: [
-          // Cudze raporty poprawia i usuwa tylko administrator — autor
-          // zawsze może zmienić swój własny.
-          if (ref.watch(syncStateProvider).canEditDocument(report.createdBy)) ...[
-            IconButton(
-              icon: const Icon(Icons.edit),
+        actions: const [HomeButton()],
+        bottom: ActionStrip([
+          StripAction(
+            icon: Icons.print,
+            label: 'Drukuj',
+            tooltip: 'Drukuj (2 egzemplarze)',
+            onPressed: () =>
+                ReportPdf.generateAndPrint(report, config, firefighters),
+          ),
+          StripAction(
+            icon: Icons.bluetooth,
+            label: 'Bluetooth',
+            tooltip: bluetoothTooltip(config),
+            onPressed: () => printOnBluetoothPrinter(context, ref,
+                () => ReportPdf.bytes(report, config, firefighters)),
+          ),
+          StripAction(
+            icon: Icons.share,
+            label: 'Wyślij',
+            tooltip: 'Udostępnij / wyślij (PDF)',
+            onPressed: () =>
+                ReportPdf.generateAndShare(report, config, firefighters),
+          ),
+          if (canEdit) ...[
+            StripAction(
+              icon: Icons.edit,
+              label: 'Edytuj',
               onPressed: () => context.push('/reports/edit/${report.id}'),
-              tooltip: 'Edytuj',
             ),
-            IconButton(
-              icon: const Icon(Icons.delete),
+            StripAction(
+              icon: Icons.delete,
+              label: 'Usuń',
+              danger: true,
               onPressed: () => _confirmDelete(context, ref, report),
-              tooltip: 'Usuń',
             ),
           ],
-          const HomeButton(),
-        ],
+        ]),
       ),
       body: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + context.bottomInset()),
@@ -137,34 +163,6 @@ class ReportDetailScreen extends ConsumerWidget {
                   ),
                 )),
 
-            const SizedBox(height: 24),
-
-            ElevatedButton.icon(
-              onPressed: () =>
-                  ReportPdf.generateAndPrint(report, config, firefighters),
-              icon: const Icon(Icons.print),
-              label: const Text('Drukuj (2 egzemplarze)'),
-            ),
-            const SizedBox(height: 8),
-            Builder(builder: (context) {
-              final hasPrinter = config.btPrinterMac != null &&
-                  config.btPrinterMac!.isNotEmpty;
-              return OutlinedButton.icon(
-                onPressed: () => printOnBluetoothPrinter(context, ref,
-                    () => ReportPdf.bytes(report, config, firefighters)),
-                icon: const Icon(Icons.bluetooth),
-                label: Text(hasPrinter
-                    ? 'Drukuj na ${config.btPrinterName ?? "drukarce Bluetooth"}'
-                    : 'Drukuj na drukarce Bluetooth...'),
-              );
-            }),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: () =>
-                  ReportPdf.generateAndShare(report, config, firefighters),
-              icon: const Icon(Icons.share),
-              label: const Text('Udostępnij / Wyślij'),
-            ),
             const SizedBox(height: 16),
             const Divider(),
             const SizedBox(height: 8),
@@ -306,9 +304,9 @@ class _DuplicateNumberNotice extends ConsumerWidget {
             Text(
               [
                 sameIncident
-                    ? 'Jeśli to ta sama akcja, usuń jeden z wyjazdów (kosz '
-                        'u góry ekranu). Jeśli to różne wyjazdy, nadaj temu '
-                        'nowy numer.'
+                    ? 'Jeśli to ta sama akcja, usuń jeden z wyjazdów '
+                        '(„Usuń" pod tytułem ekranu). Jeśli to różne '
+                        'wyjazdy, nadaj temu nowy numer.'
                     : 'Późniejszy z wyjazdów dostanie nowy numer sam, przy '
                         'synchronizacji telefonu, z którego go dodano.',
                 if (!canEdit)

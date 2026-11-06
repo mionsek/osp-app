@@ -9,7 +9,11 @@ import '../../services/equipment_usage.dart';
 import '../../services/trip_odometer.dart';
 import '../../widgets/bluetooth_printer_picker.dart';
 import '../../services/trip_card_pdf.dart';
+import '../../services/trip_card_xlsx.dart';
+import '../../services/file_share.dart';
+import '../../services/xlsx_writer.dart';
 import '../../core/theme/osp_theme.dart';
+import '../../widgets/action_strip.dart';
 import '../../widgets/month_picker.dart';
 import '../../widgets/navigation.dart';
 
@@ -54,26 +58,36 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Ewidencja przejazdów'),
-        actions: [
-          if (vehicles.isNotEmpty) ...[
-            IconButton(
-              icon: const Icon(Icons.print),
-              tooltip: 'Drukuj kartę drogową',
-              onPressed: () => _printCard(vehicles, _CardOutput.system),
-            ),
-            IconButton(
-              icon: const Icon(Icons.bluetooth),
-              tooltip: 'Drukuj na drukarce Bluetooth',
-              onPressed: () => _printCard(vehicles, _CardOutput.bluetooth),
-            ),
-            IconButton(
-              icon: const Icon(Icons.share),
-              tooltip: 'Udostępnij / wyślij kartę',
-              onPressed: () => _printCard(vehicles, _CardOutput.share),
-            ),
-          ],
-          const HomeButton(),
-        ],
+        actions: const [HomeButton()],
+        bottom: vehicles.isEmpty
+            ? null
+            : ActionStrip([
+                StripAction(
+                  icon: Icons.print,
+                  label: 'Drukuj',
+                  tooltip: 'Drukuj kartę drogową',
+                  onPressed: () => _printCard(vehicles, _CardOutput.system),
+                ),
+                StripAction(
+                  icon: Icons.bluetooth,
+                  label: 'Bluetooth',
+                  tooltip: 'Drukuj na drukarce Bluetooth',
+                  onPressed: () => _printCard(vehicles, _CardOutput.bluetooth),
+                ),
+                StripAction(
+                  icon: Icons.share,
+                  label: 'Wyślij',
+                  tooltip: 'Wyślij kartę drogową (PDF)',
+                  onPressed: () => _printCard(vehicles, _CardOutput.share),
+                ),
+                StripAction(
+                  icon: Icons.table_view,
+                  label: 'Excel',
+                  tooltip: 'Wyślij kartę drogową w Excelu — do poprawienia '
+                      'na komputerze',
+                  onPressed: () => _printCard(vehicles, _CardOutput.excel),
+                ),
+              ]),
       ),
       floatingActionButton: vehicles.isEmpty
           ? null
@@ -103,7 +117,7 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
     // **na początku miesiąca** i wypełnia długopisem w trakcie, więc czysty
     // formularz z nagłówkiem pojazdu jest osobną, sensowną potrzebą. Pytamy
     // jednak wprost, żeby nikt nie oddał gminy pustej kartki przez pomyłkę.
-    if (trips.isEmpty && !await _confirmEmptyCard()) return;
+    if (trips.isEmpty && !await _confirmEmptyCard(output.sends)) return;
     if (!mounted) return;
 
     final config = ref.read(unitConfigProvider);
@@ -143,6 +157,20 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
               reportOf: ref.read(databaseServiceProvider).getReport,
             ),
           );
+        case _CardOutput.excel:
+          await FileShare.share(
+            TripCardXlsx.bytes(
+              trips: trips,
+              vehicle: vehicle,
+              config: config,
+              year: _year,
+              month: _month,
+              equipment: ref.read(equipmentProvider),
+              reportOf: ref.read(databaseServiceProvider).getReport,
+            ),
+            fileName: TripCardXlsx.fileName(vehicle, _year, _month),
+            mimeType: XlsxWorkbook.mimeType,
+          );
       }
     } catch (e) {
       if (mounted) {
@@ -154,7 +182,7 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
   }
 
   /// Pyta, czy naprawdę wydrukować kartę za miesiąc bez ani jednego przejazdu.
-  Future<bool> _confirmEmptyCard() async {
+  Future<bool> _confirmEmptyCard(bool send) async {
     final proceed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -166,7 +194,7 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
         content: Text(
           'W tym miesiącu (${PolishText.monthLabel(_month, _year)}) nie ma '
           'jeszcze żadnego przejazdu. Karta wyjdzie z nagłówkiem pojazdu '
-          'i pustymi wierszami — do wypełnienia długopisem.',
+          'i pustymi wierszami — do wypełnienia.',
         ),
         actions: [
           TextButton(
@@ -175,7 +203,7 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Drukuj pustą kartę'),
+            child: Text(send ? 'Wyślij pustą kartę' : 'Drukuj pustą kartę'),
           ),
         ],
       ),
@@ -562,7 +590,16 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
 
 /// Sposób wyprowadzenia karty drogowej z ekranu ewidencji.
 ///
-/// Trzy drogi, bo trzy różne sytuacje: drukarka w sieci (Mopria), przenośna
-/// drukarka termiczna sparowana przez Bluetooth i wysyłka pliku, gdy karta
-/// ma trafić do gminy mailem.
-enum _CardOutput { system, bluetooth, share }
+/// Cztery drogi, bo cztery różne sytuacje: drukarka w sieci (Mopria),
+/// przenośna drukarka termiczna sparowana przez Bluetooth, wysyłka PDF-a,
+/// gdy karta ma trafić do gminy mailem, i Excel — gdy trzeba ją jeszcze
+/// poprawić na komputerze.
+enum _CardOutput {
+  system,
+  bluetooth,
+  share,
+  excel;
+
+  /// Plik idzie dalej (poczta, Dysk), a nie na papier.
+  bool get sends => this == share || this == excel;
+}

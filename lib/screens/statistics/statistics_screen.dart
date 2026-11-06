@@ -5,6 +5,8 @@ import '../../providers/providers.dart';
 import '../../providers/statistics_provider.dart';
 import '../../services/stats_pdf.dart';
 import '../../core/theme/osp_theme.dart';
+import '../../widgets/action_strip.dart';
+import '../../widgets/bluetooth_printer_picker.dart';
 import '../../widgets/navigation.dart';
 
 class StatisticsScreen extends ConsumerWidget {
@@ -16,11 +18,42 @@ class StatisticsScreen extends ConsumerWidget {
     final availableYears = ref.watch(availableYearsProvider);
     final selectedYear = ref.watch(statisticsYearProvider);
     final config = ref.watch(unitConfigProvider);
+    final empty = stats.totalTrips == 0;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Statystyki'),
         actions: const [HomeButton()],
+        // Rok bez wyjazdów — przyciski zostają na miejscu, tylko wyszarzone.
+        bottom: ActionStrip([
+          StripAction(
+            icon: Icons.print,
+            label: 'Drukuj',
+            tooltip: 'Drukuj statystyki',
+            onPressed: empty
+                ? null
+                : () => StatsPdf.generateAndPrint(stats, config),
+          ),
+          StripAction(
+            icon: Icons.bluetooth,
+            label: 'Bluetooth',
+            tooltip: bluetoothTooltip(config),
+            // Statystyki są w pionie, jak karta pracy — bez obrotu.
+            onPressed: empty
+                ? null
+                : () => printOnBluetoothPrinter(
+                    context, ref, () => StatsPdf.bytes(stats, config),
+                    rotate90: false),
+          ),
+          StripAction(
+            icon: Icons.share,
+            label: 'Wyślij',
+            tooltip: 'Udostępnij / wyślij (PDF)',
+            onPressed: empty
+                ? null
+                : () => StatsPdf.generateAndShare(stats, config),
+          ),
+        ]),
       ),
       body: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + context.bottomInset()),
@@ -63,22 +96,6 @@ class StatisticsScreen extends ConsumerWidget {
               _SectionCard(
                 title: 'Udział strażaków',
                 child: _FirefighterStatsList(stats: stats),
-              ),
-              const SizedBox(height: 24),
-
-              // --- Przyciski drukuj / udostępnij ---
-              ElevatedButton.icon(
-                onPressed: () =>
-                    StatsPdf.generateAndPrint(stats, config),
-                icon: const Icon(Icons.print),
-                label: const Text('Drukuj statystyki'),
-              ),
-              const SizedBox(height: 8),
-              OutlinedButton.icon(
-                onPressed: () =>
-                    StatsPdf.generateAndShare(stats, config),
-                icon: const Icon(Icons.share),
-                label: const Text('Udostępnij / Wyślij'),
               ),
             ],
           ],

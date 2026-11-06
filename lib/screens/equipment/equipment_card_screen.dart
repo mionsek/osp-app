@@ -9,7 +9,11 @@ import '../../models/models.dart';
 import '../../providers/providers.dart';
 import '../../services/equipment_card.dart';
 import '../../services/equipment_card_pdf.dart';
+import '../../services/equipment_card_xlsx.dart';
+import '../../services/file_share.dart';
 import '../../services/pdf_output.dart';
+import '../../services/xlsx_writer.dart';
+import '../../widgets/action_strip.dart';
 import '../../widgets/bluetooth_printer_picker.dart';
 import '../../widgets/month_picker.dart';
 import '../../widgets/navigation.dart';
@@ -28,7 +32,15 @@ class EquipmentCardScreen extends ConsumerStatefulWidget {
       _EquipmentCardScreenState();
 }
 
-enum _CardOutput { system, bluetooth, share }
+enum _CardOutput {
+  system,
+  bluetooth,
+  share,
+  excel;
+
+  /// Plik idzie dalej (poczta, Dysk), a nie na papier.
+  bool get sends => this == share || this == excel;
+}
 
 class _EquipmentCardScreenState extends ConsumerState<EquipmentCardScreen> {
   late CardMonth _month;
@@ -79,24 +91,34 @@ class _EquipmentCardScreenState extends ConsumerState<EquipmentCardScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(device.name),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.print),
+        actions: const [HomeButton()],
+        bottom: ActionStrip([
+          StripAction(
+            icon: Icons.print,
+            label: 'Drukuj',
             tooltip: 'Drukuj kartę pracy',
             onPressed: () => _output(device, rows, _CardOutput.system),
           ),
-          IconButton(
-            icon: const Icon(Icons.bluetooth),
+          StripAction(
+            icon: Icons.bluetooth,
+            label: 'Bluetooth',
             tooltip: 'Drukuj na drukarce Bluetooth',
             onPressed: () => _output(device, rows, _CardOutput.bluetooth),
           ),
-          IconButton(
-            icon: const Icon(Icons.share),
-            tooltip: 'Udostępnij / wyślij kartę',
+          StripAction(
+            icon: Icons.share,
+            label: 'Wyślij',
+            tooltip: 'Wyślij kartę pracy (PDF)',
             onPressed: () => _output(device, rows, _CardOutput.share),
           ),
-          const HomeButton(),
-        ],
+          StripAction(
+            icon: Icons.table_view,
+            label: 'Excel',
+            tooltip: 'Wyślij kartę pracy w Excelu — do poprawienia na '
+                'komputerze',
+            onPressed: () => _output(device, rows, _CardOutput.excel),
+          ),
+        ]),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () =>
@@ -252,7 +274,7 @@ class _EquipmentCardScreenState extends ConsumerState<EquipmentCardScreen> {
     List<EquipmentCardRow> rows,
     _CardOutput output,
   ) async {
-    if (rows.isEmpty && !await _confirmEmptyCard()) return;
+    if (rows.isEmpty && !await _confirmEmptyCard(output.sends)) return;
     if (!mounted) return;
     final config = ref.read(unitConfigProvider);
     try {
@@ -286,6 +308,19 @@ class _EquipmentCardScreenState extends ConsumerState<EquipmentCardScreen> {
             ),
             rotate90: false,
           );
+        case _CardOutput.excel:
+          await FileShare.share(
+            EquipmentCardXlsx.bytes(
+              device: device,
+              rows: rows,
+              config: config,
+              year: _month.year,
+              month: _month.month,
+            ),
+            fileName:
+                EquipmentCardXlsx.fileName(device, _month.year, _month.month),
+            mimeType: XlsxWorkbook.mimeType,
+          );
       }
     } catch (e) {
       if (mounted) {
@@ -296,7 +331,7 @@ class _EquipmentCardScreenState extends ConsumerState<EquipmentCardScreen> {
     }
   }
 
-  Future<bool> _confirmEmptyCard() async {
+  Future<bool> _confirmEmptyCard(bool send) async {
     final proceed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -304,7 +339,7 @@ class _EquipmentCardScreenState extends ConsumerState<EquipmentCardScreen> {
         content: Text(
           'W tym miesiącu (${PolishText.monthLabel(_month.month, _month.year)}) '
           'urządzenie nie ma jeszcze żadnego wpisu. Karta wyjdzie z nagłówkiem '
-          'urządzenia i pustymi wierszami — do wypełnienia długopisem.',
+          'urządzenia i pustymi wierszami — do wypełnienia.',
         ),
         actions: [
           TextButton(
@@ -313,7 +348,7 @@ class _EquipmentCardScreenState extends ConsumerState<EquipmentCardScreen> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Drukuj pustą kartę'),
+            child: Text(send ? 'Wyślij pustą kartę' : 'Drukuj pustą kartę'),
           ),
         ],
       ),

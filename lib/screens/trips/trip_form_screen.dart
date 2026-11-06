@@ -8,6 +8,7 @@ import '../../models/models.dart';
 import '../../providers/providers.dart';
 import '../../services/equipment_usage.dart';
 import '../../core/theme/osp_theme.dart';
+import '../../widgets/action_strip.dart';
 import '../../widgets/navigation.dart';
 import '../../widgets/person_field.dart';
 
@@ -267,15 +268,7 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
     return LeaveGuard(dirty: _dirty, child: Scaffold(
       appBar: AppBar(
         title: Text(widget.isEdit ? 'Edytuj przejazd' : 'Nowy przejazd'),
-        actions: [
-          if (widget.isEdit && canEdit)
-            IconButton(
-              icon: const Icon(Icons.delete),
-              tooltip: 'Usuń',
-              onPressed: _confirmDelete,
-            ),
-          HomeButton(confirmLeave: _dirty),
-        ],
+        actions: [HomeButton(confirmLeave: _dirty)],
       ),
       body: Form(
         key: _formKey,
@@ -324,6 +317,11 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
                 style: FilledButton.styleFrom(
                   minimumSize: const Size.fromHeight(50),
                 ),
+              ),
+            if (widget.isEdit && canEdit)
+              DeleteEntryButton(
+                label: 'Usuń przejazd',
+                onPressed: _confirmDelete,
               ),
           ],
         ),

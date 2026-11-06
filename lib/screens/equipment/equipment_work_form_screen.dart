@@ -7,6 +7,7 @@ import '../../core/utils/bottom_inset.dart';
 import '../../core/utils/time_format.dart';
 import '../../models/models.dart';
 import '../../providers/providers.dart';
+import '../../widgets/action_strip.dart';
 import '../../widgets/navigation.dart';
 import '../../widgets/person_field.dart';
 
@@ -212,15 +213,7 @@ class _EquipmentWorkFormScreenState
       child: Scaffold(
         appBar: AppBar(
           title: Text(_isEdit ? 'Edytuj pracę sprzętu' : 'Praca sprzętu'),
-          actions: [
-            if (_isEdit && canEdit)
-              IconButton(
-                icon: const Icon(Icons.delete),
-                tooltip: 'Usuń',
-                onPressed: _delete,
-              ),
-            HomeButton(confirmLeave: _dirty),
-          ],
+          actions: [HomeButton(confirmLeave: _dirty)],
         ),
         body: AbsorbPointer(
           absorbing: !canEdit,
@@ -334,6 +327,8 @@ class _EquipmentWorkFormScreenState
                       icon: const Icon(Icons.save),
                       label: Text(_isEdit ? 'Zapisz zmiany' : 'Zapisz'),
                     ),
+                  if (_isEdit && canEdit)
+                    DeleteEntryButton(label: 'Usuń wpis', onPressed: _delete),
                 ],
               ),
             ),

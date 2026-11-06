@@ -96,6 +96,14 @@ class OspTheme {
   static const Color medalSilver = Color(0xFFB0BEC5);
   static const Color medalBronze = Color(0xFFBCAAA4);
 
+  // ---------------------------------------------------------------------------
+  // Pliki Excela
+  // ---------------------------------------------------------------------------
+
+  /// Tło nagłówków tabel w karcie drogowej i karcie pracy w Excelu — szare,
+  /// bo arkusz idzie na czarno-białą drukarkę w gminie.
+  static const Color spreadsheetHeader = Color(0xFFE7E6E6);
+
   static ThemeData get lightTheme {
     return ThemeData(
       useMaterial3: true,
