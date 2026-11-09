@@ -289,6 +289,8 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
                     const SizedBox(height: 20),
                     _odometerSection(),
                     const SizedBox(height: 20),
+                    _equipmentField(),
+                    const SizedBox(height: 20),
                     _purposeField(),
                     const SizedBox(height: 14),
                     _routeFields(),
@@ -296,8 +298,6 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
                     _driverField(),
                     const SizedBox(height: 14),
                     _dispatcherField(),
-                    const SizedBox(height: 14),
-                    _equipmentField(),
                     const SizedBox(height: 14),
                     _idleField(),
                     const SizedBox(height: 14),
@@ -559,7 +559,7 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
             children: [
               const Icon(Icons.speed, size: 19, color: OspTheme.sectionVehicles),
               const SizedBox(width: 8),
-              Text('Stan licznika',
+              Text('Stan licznika pojazdu',
                   style: Theme.of(context)
                       .textTheme
                       .titleSmall
@@ -883,34 +883,36 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
 
   static const String _otherDispatcher = '__other__';
 
-  /// Praca urządzeń specjalnych — lista „urządzenie + minuty".
+  /// Praca sprzętu na tym przejeździe — zaraz pod licznikiem, bo wpisuje się
+  /// ją razem z nim, po powrocie (Dawid, 9.11.2026: „zastęp wraca do domu,
+  /// wpisuje kilometry i od razu wybiera z listy, jakie urządzenia
+  /// pracowały"). Wcześniej sekcja była na samym dole formularza i ginęła.
   ///
-  /// Wcześniej było tu jedno pole na minuty, bez wskazania **czego** dotyczą.
-  /// Zgłoszenie z testów: „nie ma możliwości wyboru urządzenia, co powoduje,
-  /// że to trzeba pominąć i najlepiej wpisać w komentarzu autopompa 2h,
-  /// agregat 1h". Rubryka była więc w praktyce nie do użycia.
-  ///
-  /// Na wydruk (kolumna 10) idzie suma minut, bo druk ma tam jedną liczbę.
+  /// Sprzęt zasilany z wozu (autopompa) idzie do kolumny „Minuty pracy
+  /// urządzeń" karty drogowej, sprzęt z własnym silnikiem — na swoją kartę
+  /// pracy, razem z obsługującym.
   Widget _equipmentField() {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey.shade400),
-        borderRadius: BorderRadius.circular(4),
+        color: OspTheme.vehiclesSurface.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: OspTheme.vehiclesBorder),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
-              Icon(Icons.settings_input_component,
-                  size: 20, color: Colors.grey[700]),
-              const SizedBox(width: 10),
+              const Icon(Icons.handyman,
+                  size: 19, color: OspTheme.sectionVehicles),
+              const SizedBox(width: 8),
               Expanded(
-                child: Text(
-                  'Praca urządzeń specjalnych',
-                  style: TextStyle(fontSize: 15, color: Colors.grey[800]),
-                ),
+                child: Text('Praca sprzętu',
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleSmall
+                        ?.copyWith(fontWeight: FontWeight.bold)),
               ),
               if (_equipment.isNotEmpty)
                 Text('${_totalEquipmentMinutes()} min',
@@ -921,25 +923,29 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
             Padding(
               padding: const EdgeInsets.only(top: 6),
               child: Text(
-                'Kolumna 10 karty drogowej. Dodaj urządzenie i czas jego pracy.',
-                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                'Co pracowało na tym wyjeździe i ile minut — sprzęt tego '
+                'wozu albo bez przypisanego wozu.',
+                style: TextStyle(fontSize: 12.5, color: Colors.grey[700]),
               ),
             ),
-          for (var i = 0; i < _equipment.length; i++) _equipmentRow(i),
-          const SizedBox(height: 4),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              onPressed: () =>
-                  setState(() => _equipment.add(_newEquipmentEntry())),
-              icon: const Icon(Icons.add, size: 18),
-              label: const Text('Dodaj urządzenie'),
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          for (var i = 0; i < _equipment.length; i++)
+            Container(
+              key: ObjectKey(_equipment[i]),
+              margin: const EdgeInsets.only(top: 10),
+              padding: const EdgeInsets.fromLTRB(10, 12, 2, 10),
+              decoration: BoxDecoration(
+                color: OspTheme.surface,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey.shade300),
               ),
+              child: _equipmentRow(i),
             ),
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: () =>
+                setState(() => _equipment.add(_newEquipmentEntry())),
+            icon: const Icon(Icons.add),
+            label: const Text('Dodaj urządzenie'),
           ),
         ],
       ),
@@ -952,32 +958,33 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
   /// Pozycja listy dla nazwy wpisanej spoza listy sprzętu.
   static const _customEquipment = '__spoza_listy__';
 
-  /// Nagłówek „Inne" na liście — nie do wybrania.
-  static const _othersHeader = '__inne__';
+  /// Nagłówek „Bez przypisanego wozu" na liście — nie do wybrania.
+  static const _freeHeader = '__bez_wozu__';
 
-  /// Urządzenie z listy sprzętu jednostki: najpierw sprzęt wozu tego
-  /// przejazdu, pod „Inne" nieprzypisany i z innych wozów, na końcu nazwa
-  /// spoza listy. Bez listy sprzętu — dawna stała lista nazw.
+  /// Urządzenie z listy sprzętu jednostki: sprzęt wozu tego przejazdu, pod
+  /// nagłówkiem sprzęt bez przypisanego wozu, na końcu nazwa spoza listy
+  /// (Dawid, 9.11.2026 — sprzętu innych wozów na liście nie ma). Bez listy
+  /// sprzętu — dawna stała lista nazw.
   Widget _equipmentRow(int index) {
     final devices = ref.watch(equipmentProvider);
     if (devices.isEmpty) return _fixedListEquipmentRow(index);
 
     final item = _equipment[index];
-    final vehicles = ref.watch(vehiclesProvider);
+    final vehicleIds = ref.watch(vehiclesProvider).map((v) => v.id).toSet();
     final device =
         EquipmentUsage.resolve(item, devices, vehicleId: _vehicleId);
     final own = devices.where((e) => e.vehicleId == _vehicleId).toList();
-    final others = devices.where((e) => e.vehicleId != _vehicleId).toList();
-    String label(Equipment e) {
-      final vehicle =
-          vehicles.where((v) => v.id == e.vehicleId).firstOrNull?.name;
-      return vehicle == null ? e.name : '${e.name} ($vehicle)';
-    }
+    // Wóz usunięty z listy pojazdów — sprzęt jest jak nieprzypisany.
+    final free = devices
+        .where((e) => e.vehicleId == null || !vehicleIds.contains(e.vehicleId))
+        .toList();
+    // Sprzęt innego wozu wybrany wcześniej (np. po zmianie pojazdu
+    // przejazdu) zostaje na liście, żeby wybór nie zniknął.
+    final kept = device != null && !own.contains(device) && !free.contains(device)
+        ? device
+        : null;
 
-    return Padding(
-      key: ObjectKey(item),
-      padding: const EdgeInsets.only(top: 10),
-      child: Column(
+    return Column(
         children: [
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -993,28 +1000,29 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
                     labelText: 'Urządzenie',
                   ),
                   items: [
-                    for (final e in own)
+                    // Nie `?kept` — patrz ewidencja przejazdów (hive_generator).
+                    // ignore: use_null_aware_elements
+                    for (final e in [...own, if (kept != null) kept])
                       DropdownMenuItem(
                         value: e.id,
                         child: Text(e.name, overflow: TextOverflow.ellipsis),
                       ),
-                    if (others.isNotEmpty)
+                    if (free.isNotEmpty)
                       DropdownMenuItem(
-                        value: _othersHeader,
+                        value: _freeHeader,
                         enabled: false,
                         child: Text(
-                          'Inne',
+                          'Bez przypisanego wozu',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             color: Colors.grey[600],
                           ),
                         ),
                       ),
-                    for (final e in others)
+                    for (final e in free)
                       DropdownMenuItem(
                         value: e.id,
-                        child:
-                            Text(label(e), overflow: TextOverflow.ellipsis),
+                        child: Text(e.name, overflow: TextOverflow.ellipsis),
                       ),
                     const DropdownMenuItem(
                       value: _customEquipment,
@@ -1062,7 +1070,6 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
             ),
           ],
         ],
-      ),
     );
   }
 

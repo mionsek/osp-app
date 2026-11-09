@@ -192,6 +192,9 @@ void main() {
 
       await tester.tap(find.byIcon(Icons.print));
       await tester.pumpAndSettle();
+      // Najpierw wybór: wszystkie karty miesiąca czy tylko ten pojazd.
+      await tester.tap(find.textContaining('Tylko karta drogowa'));
+      await tester.pumpAndSettle();
 
       expect(find.text('Miesiąc bez przejazdów'), findsOneWidget);
       expect(find.text('Drukuj pustą kartę'), findsOneWidget);

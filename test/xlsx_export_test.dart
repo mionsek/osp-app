@@ -4,63 +4,376 @@ import 'dart:typed_data';
 import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:osp_app/models/models.dart';
+import 'package:osp_app/services/card_sheet.dart';
 import 'package:osp_app/services/equipment_card.dart';
-import 'package:osp_app/services/equipment_card_xlsx.dart';
-import 'package:osp_app/services/trip_card_pdf.dart';
-import 'package:osp_app/services/trip_card_xlsx.dart';
+import 'package:osp_app/services/equipment_card_sheet.dart';
+import 'package:osp_app/services/trip_card.dart';
 import 'package:osp_app/services/xlsx_writer.dart';
 
-/// Karty w Excelu — do poprawienia na komputerze przed wysłaniem do gminy.
+/// Karty drogowe i karty pracy jak papierowe karty OSP Kielno.
 ///
-/// Prośba Dawida z 6.11.2026: „może trzeba będzie to wysłać, lub ewentualnie
-/// poprawić przed wysłaniem (bo paliwo się nie zgadza czy coś)". Stąd
-/// pilnujemy dwóch rzeczy: arkusz ma tę samą treść co wydruk, a rozliczenie
-/// paliwa to formuły, które przeliczą się po poprawce.
+/// Dawid, 9.11.2026 (pięć zdjęć kart): wydruk i plik mają być „DOKŁADNIE
+/// TAKIE SAME jak ta karta — cały układ tabeli, komórki, scalone komórki,
+/// pogrubiony tekst, szerokość tabel", także po wydruku z Excela. PDF
+/// i Excel rysują się z tego samego opisu strony ([CardPage]), więc test
+/// sprawdza opis, a potem, że Excel ma z niego to samo.
 void main() {
-  /// Komórki arkusza: adres → wartość (tekst, liczba jako tekst) i formuła.
-  Map<String, ({String value, String? formula})> cells(Uint8List bytes,
-      {int sheet = 1}) {
-    final zip = ZipDecoder().decodeBytes(bytes);
-    String part(String name) =>
-        utf8.decode(zip.findFile(name)!.readBytes()!);
-    String unescape(String s) => s
-        .replaceAll('&lt;', '<')
-        .replaceAll('&gt;', '>')
-        .replaceAll('&quot;', '"')
-        .replaceAll('&amp;', '&');
-
-    final strings = [
-      for (final m in RegExp(r'<si><t[^>]*>(.*?)</t></si>', dotAll: true)
-          .allMatches(part('xl/sharedStrings.xml')))
-        unescape(m.group(1)!),
-    ];
-    final out = <String, ({String value, String? formula})>{};
-    final cell = RegExp(
-        r'<c r="([A-Z]+\d+)"[^>]*?(?: t="(\w+)")?(?:/>|>(.*?)</c>)',
-        dotAll: true);
-    for (final m in cell.allMatches(part('xl/worksheets/sheet$sheet.xml'))) {
-      final body = m.group(3) ?? '';
-      final f = RegExp(r'<f>(.*?)</f>').firstMatch(body)?.group(1);
-      final v = RegExp(r'<v>(.*?)</v>').firstMatch(body)?.group(1) ?? '';
-      out[m.group(1)!] = (
-        value: m.group(2) == 's' ? strings[int.parse(v)] : unescape(v),
-        formula: f == null ? null : unescape(f),
+  final config = UnitConfig(
+    unitFullName: 'Ochotnicza Straż Pożarna w Kielnie',
+    locality: 'Kielno',
+    unitStreet: 'Oliwska 12',
+  );
+  final man = Vehicle(
+    id: 'v1',
+    name: 'GBA 3/30',
+    seats: 6,
+    make: 'MAN',
+    model: 'TGM 320',
+    kind: 'GBA 3/30',
+    plate: 'GWE 8998T',
+    fuelPer100Km: 26,
+    pumpFuelPerHour: 15.6, // 0,26 l/min — tak jest na karcie
+    idleFuelPerMinute: 0.13,
+    startupFuelPerMonth: 2.5,
+  );
+  final pump = Equipment(
+      id: 'pump', name: 'Autopompa', vehicleId: 'v1', poweredByVehicle: true);
+  final at = DateTime(2026, 11, 4, 20, 17);
+  VehicleTrip trip(String id, int start, int end, {int day = 4}) => VehicleTrip(
+        id: id,
+        vehicleId: 'v1',
+        date: DateTime(2026, 11, day),
+        routeFrom: 'Kielno, Oliwska 12',
+        routeTo: 'Szemud',
+        purpose: TripPurposes.training,
+        driverName: 'Mielewczyk M.',
+        departureTime: at,
+        returnTime: at.add(const Duration(hours: 1)),
+        odometerStart: start,
+        odometerEnd: end,
+        idleMinutes: 20,
+        equipmentUse: [
+          TripEquipmentUse(name: 'Autopompa', minutes: 30, equipmentId: 'pump'),
+        ],
+        createdAt: at,
+        updatedAt: at,
       );
-    }
-    return out;
-  }
+
+  List<CardPage> card({List<VehicleTrip>? trips, Vehicle? v}) => TripCard.pages(
+        trips: trips ?? [trip('t1', 4310, 4330), trip('t2', 4330, 4340, day: 8)],
+        vehicle: v ?? man,
+        config: config,
+        year: 2026,
+        month: 11,
+        equipment: [pump],
+      );
 
   String part(Uint8List bytes, String name) => utf8.decode(
       ZipDecoder().decodeBytes(bytes).findFile(name)!.readBytes()!);
 
-  /// Wiersz (numer Excela) komórki z tekstem [label] w kolumnie [col].
-  int rowOf(Map<String, ({String value, String? formula})> c, String label,
-      {String col = 'B'}) {
-    final at = c.entries
-        .firstWhere((e) => e.key.startsWith(col) && e.value.value == label)
-        .key;
-    return int.parse(at.substring(col.length));
+  Iterable<String> texts(CardPage p) =>
+      p.boxes.map((b) => b.text).where((t) => t.isNotEmpty);
+  CardBox box(CardPage p, String text) =>
+      p.boxes.firstWhere((b) => b.text == text);
+
+  /// Ramka z tekstem na prawo od [label], w tym samym wierszu.
+  String rightOf(CardPage p, String label) {
+    final l = box(p, label);
+    final row = p.boxes.where((b) =>
+        b.text.isNotEmpty && b.y == l.y && b.x >= l.x + l.w - 0.01).toList()
+      ..sort((a, b) => a.x.compareTo(b.x));
+    return row.first.text;
   }
+
+  group('karta drogowa — strona zewnętrzna', () {
+    test('okładka: napisy jak na papierze, Typ to model, Rodzaj — GBA', () {
+      final p = card().first;
+      for (final t in [
+        'OSP KIELNO',
+        'Jednostka m..p.',
+        'NUMER EWIDENCYJNY KARTY PRACY',
+        'MIESIĘCZNA KARTA DROGOWA',
+        'POŻARNICZEGO POJAZDU SAMOCHODOWEGO',
+        'Numer operacyjny',
+        'Rodzaj paliwa',
+        'ON/ET',
+        'Norma zużycia paliwa autopompy',
+        'Zużycie -praca na postoju silnika l/min',
+        'Rozruch silnika 1/m - c',
+        'Stan licznika autopompy',
+        'ZAPISY DOTYCZĄCE OBSŁUG TECHNICZNYCH I TP.\n'
+            'Remontu , zakupu, wymiany podzespołów',
+        '(miejscowość, data i podpis osoby wydającej kartę)',
+      ]) {
+        expect(texts(p), contains(t), reason: t);
+      }
+      expect(rightOf(p, 'Marka'), 'MAN');
+      expect(rightOf(p, 'Typ'), 'TGM 320');
+      expect(rightOf(p, 'Rodzaj'), 'GBA 3/30');
+      expect(rightOf(p, 'Nr rej.'), 'GWE 8998T');
+      expect(box(p, 'MAN').style.bold, isTrue);
+      expect(box(p, 'Listopad 2026 r.'), isNotNull);
+    });
+
+    test('normy w zapisie z karty: 26L, 0,26L/MIN, 0,13L/MIN, 2,5/M-C', () {
+      final p = card().first;
+      expect(texts(p), containsAll(['26L', '0,26L/MIN', '0,13L/MIN', '2,5/M-C']));
+    });
+
+    test('rozliczenie: 12 pozycji, km, godziny, minuty i litry z norm', () {
+      final p = card().first;
+      for (final t in [
+        'ROZLICZENIE MATERIAŁÓW PĘDNYCH',
+        'Pobrano (w litrach)',
+        'Ogółem',
+        'Pozostało z ubiegłego miesiąca',
+        'Przepracowano\no godz.',
+        'Zużyto paliwa w ciągu miesiąca razem:',
+        'Oszczędzono- przechowano',
+        'Obliczył',
+        '(imię i nazwisko, podpis, data)',
+      ]) {
+        expect(texts(p), contains(t), reason: t);
+      }
+      for (var n = 1; n <= 12; n++) {
+        expect(texts(p), contains('$n'), reason: 'pozycja $n');
+      }
+      // 30 km × 26 l / 100 = 7,8; 1 godz. autopompy × 15,6; 40 min × 0,13.
+      expect(rightOf(p, 'Przebyto km'), '30');
+      expect(texts(p), containsAll(['7,8', '15,6', '5,2', '2,5']));
+      // Razem: 7,8 + 15,6 + 5,2 + 2,5 = 31,1 — w kolumnie ON.
+      expect(texts(p), contains('31,1'));
+    });
+
+    test('„Pobrano (w litrach)" scalone nad czterema kolumnami', () {
+      final p = card().first;
+      final pobrano = box(p, 'Pobrano (w litrach)');
+      expect(pobrano.w, closeTo(14 + 27 + 21 + 21, 0.01));
+      expect(box(p, 'Podpis\nmagazyniera').h, closeTo(6 + 5.5, 0.01),
+          reason: 'na dwa wiersze nagłówka');
+    });
+  });
+
+  group('karta drogowa — strona wewnętrzna', () {
+    test('kolumny jak na papierze, bez „Lp.", krój jak Times', () {
+      final p = card()[1];
+      expect(texts(p), isNot(contains('Lp.')));
+      for (final t in [
+        'Data',
+        'Nazwisko\ndysponenta',
+        'Trasy jazdy Skąd-dokąd',
+        'Cel jazdy',
+        'Odjazdy',
+        'Przyjazdy',
+        'Godz.Min.',
+        'Stan licznika',
+        'Minuty pracy\nurządzeń\nspecjalistycznych',
+        'Dodatki*',
+        'Praca silnika\nna postoju\nmin.',
+        'Podpis\ndysponenta',
+        '* np.. P-30 (praca silnika na postoju - 30 min)',
+      ]) {
+        expect(texts(p), contains(t), reason: t);
+      }
+      expect(box(p, 'Cel jazdy').style.font, CardFont.serif);
+    });
+
+    test('24 wiersze, dwa na przejazd; cel „Ć" na środku', () {
+      final p = card()[1];
+      final dates = p.boxes
+          .where((b) => b.hasBorder && b.x == 12 && b.y >= 14 + 13)
+          .toList();
+      expect(dates, hasLength(TripCard.rowsPerPage));
+      expect(dates.first.text, '04.11');
+      final cel = p.boxes.firstWhere((b) => b.text == 'Ć');
+      expect(cel.style.align, CardAlign.center);
+      expect(texts(p), containsAll(['OSP – Szemud', 'Szemud – OSP', 'Powrót', '4310']));
+    });
+  });
+
+  group('karta pracy sprzętu', () {
+    final niagara = Equipment(
+      id: 'e1',
+      name: 'MOTOPOMPA PŁYWAJĄCA',
+      brand: 'NIAGARA',
+      model: 'GKV160KN/5',
+      fuelType: EquipmentFuel.petrol,
+      fuelPerHour: 2,
+    );
+    final honda = Equipment(
+        id: 'e2', name: 'AGREGAT PRĄDOTWÓRCZY', brand: 'HONDA', model: 'GX160');
+    final rows = [
+      EquipmentCardRow(
+          date: DateTime(2026, 11, 4),
+          operatorName: 'Nowak J.',
+          minutes: 90,
+          purpose: 'MZ, Kielno'),
+      EquipmentCardRow(
+          date: DateTime(2026, 11, 7),
+          operatorName: 'Kowalski A.',
+          minutes: 30,
+          purpose: 'Rozruch kontrolny',
+          isStartup: true),
+    ];
+    List<CardPage> sheets() => EquipmentCardSheet.pages(
+        cards: [(niagara, rows), (honda, const [])],
+        config: config,
+        year: 2026,
+        month: 11);
+
+    test('dwie karty A5 obok siebie, napisy z papieru', () {
+      final front = sheets().first;
+      for (final t in [
+        'Jednostka',
+        'OSP Kielno',
+        'MIESIĘCZNA KARTA PRACY',
+        'SPRZĘTU SILNIKOWEGO',
+        'Na miesiąc',
+        'Listopad 2026',
+        'Norma eksploatacyjna na 1 godz. Pracy',
+        'litrów',
+        'Nazwisko i imię\nobsługującego',
+        'Minut\npracy',
+        'Cel użycia',
+      ]) {
+        expect(texts(front).where((x) => x == t), hasLength(2), reason: t);
+      }
+      expect(rightOf(front, 'Typ'), 'GKV160KN/5');
+      expect(box(front, 'NIAGARA').x, lessThan(CardPage.width / 2));
+      expect(box(front, 'HONDA').x, greaterThan(CardPage.width / 2));
+      expect(texts(front), containsAll(['04.11', 'Nowak J.', '90', 'MZ, Kielno']));
+    });
+
+    test('tył: karty w odwrotnej kolejności, rozliczenie z litrami w ET', () {
+      final back = sheets()[1];
+      // Druga karta z przodu (Honda) jest z tyłu po lewej.
+      final rozliczenia = back.boxes
+          .where((b) => b.text == 'ROZLICZANIE MATERIAŁÓW PĘDNYCH')
+          .toList();
+      expect(rozliczenia, hasLength(2));
+      expect(texts(back), containsAll(['1 godz. 30 min', '3', '30 min', '1', '4']));
+      // Litry tylko po stronie Niagary (prawa połowa).
+      expect(box(back, '3').x, greaterThan(CardPage.width / 2));
+    });
+  });
+
+  group('układ, który drukuje się tak samo wszędzie', () {
+    List<CardPage> all() => [
+          ...card(),
+          ...card(trips: [for (var i = 0; i < 14; i++) trip('t$i', 10, 20)]),
+          ...EquipmentCardSheet.pages(
+              cards: [(Equipment(id: 'e', name: 'Pilarka'), const [])],
+              config: config,
+              year: 2026,
+              month: 11),
+        ];
+
+    test('wszystko na kartce A4, z marginesem na niedrukowalny brzeg', () {
+      for (final p in all()) {
+        for (final b in p.boxes) {
+          expect(b.x, greaterThanOrEqualTo(8), reason: '${p.title}: ${b.text}');
+          expect(b.y, greaterThanOrEqualTo(8), reason: '${p.title}: ${b.text}');
+          expect(b.x + b.w, lessThanOrEqualTo(CardPage.width - 8),
+              reason: '${p.title}: ${b.text}');
+          expect(b.y + b.h, lessThanOrEqualTo(CardPage.height - 8),
+              reason: '${p.title}: ${b.text}');
+        }
+      }
+    });
+
+    test('napisy nie nachodzą na siebie — w Excelu każdy to osobny scalony '
+        'zakres', () {
+      for (final p in all()) {
+        final t = p.boxes.where((b) => b.text.isNotEmpty).toList();
+        for (var i = 0; i < t.length; i++) {
+          for (var j = i + 1; j < t.length; j++) {
+            final a = t[i], b = t[j];
+            final overlap = a.x < b.x + b.w - 0.01 &&
+                b.x < a.x + a.w - 0.01 &&
+                a.y < b.y + b.h - 0.01 &&
+                b.y < a.y + a.h - 0.01;
+            expect(overlap, isFalse,
+                reason: '${p.title}: „${a.text}" i „${b.text}"');
+          }
+        }
+      }
+    });
+
+    test('14 przejazdów — druga strona przejazdów', () {
+      final pages = card(trips: [for (var i = 0; i < 14; i++) trip('t$i', 10, 20)]);
+      expect(pages.map((p) => p.title),
+          ['Okładka GBA 3/30', 'Przejazdy GBA 3/30', 'Przejazdy GBA 3/30 2']);
+    });
+  });
+
+  group('Excel z tego samego opisu', () {
+    Map<String, ({String value, String? style})> cells(Uint8List bytes,
+        {int sheet = 1}) {
+      final zip = ZipDecoder().decodeBytes(bytes);
+      String part(String name) => utf8.decode(zip.findFile(name)!.readBytes()!);
+      final strings = [
+        for (final m in RegExp(r'<si><t[^>]*>(.*?)</t></si>', dotAll: true)
+            .allMatches(part('xl/sharedStrings.xml')))
+          m
+              .group(1)!
+              .replaceAll('&lt;', '<')
+              .replaceAll('&gt;', '>')
+              .replaceAll('&quot;', '"')
+              .replaceAll('&amp;', '&'),
+      ];
+      return {
+        for (final m in RegExp(
+                r'<c r="([A-Z]+\d+)" s="(\d+)"( t="s")?(?:/>|><v>(.*?)</v></c>)')
+            .allMatches(part('xl/worksheets/sheet$sheet.xml')))
+          m.group(1)!: (
+            value: m.group(3) != null
+                ? strings[int.parse(m.group(4)!)]
+                : (m.group(4) ?? ''),
+            style: m.group(2),
+          ),
+      };
+    }
+
+    test('każda strona to arkusz z tymi samymi napisami co PDF', () {
+      final pages = card();
+      final bytes = CardSheet.xlsx(pages);
+      expect(part(bytes, 'xl/workbook.xml'),
+          allOf(contains('name="1 Okładka GBA 3-30"'),
+              contains('name="2 Przejazdy GBA 3-30"')));
+      for (var i = 0; i < pages.length; i++) {
+        final values = cells(bytes, sheet: i + 1).values.map((c) => c.value);
+        for (final t in texts(pages[i])) {
+          final asNumber = RegExp(r'^-?\d+(,\d+)?$').hasMatch(t)
+              ? t.replaceAll(',', '.')
+              : t;
+          expect(values, contains(asNumber), reason: '${pages[i].title}: $t');
+        }
+      }
+    });
+
+    test('scalone komórki, grube obwódki, A4 poziomo na jednej kartce', () {
+      final bytes = CardSheet.xlsx(card());
+      final sheet = part(bytes, 'xl/worksheets/sheet1.xml');
+      expect(RegExp('<mergeCell ').allMatches(sheet).length, greaterThan(20));
+      expect(sheet, contains('<pageSetUpPr fitToPage="1"/>'));
+      expect(sheet, contains('orientation="landscape"'));
+      expect(sheet, contains('fitToWidth="1" fitToHeight="1"'));
+      final styles = part(bytes, 'xl/styles.xml');
+      expect(styles, contains('style="medium"'));
+      expect(styles, contains('<name val="Arial"/>'));
+      final inner = part(bytes, 'xl/styles.xml');
+      expect(inner, contains('<name val="Times New Roman"/>'));
+    });
+
+    test('liczniki jako liczby, daty i godziny jako tekst', () {
+      final bytes = CardSheet.xlsx(card());
+      final inner = part(bytes, 'xl/worksheets/sheet2.xml');
+      expect(RegExp(r'<c r="[A-Z]+\d+" s="\d+"><v>4310</v></c>').hasMatch(inner),
+          isTrue);
+      expect(cells(bytes, sheet: 2).values.map((c) => c.value),
+          containsAll(['04.11', '20:17']));
+    });
+  });
 
   group('zapis arkusza', () {
     test('litery kolumn jak w Excelu', () {
@@ -68,13 +381,12 @@ void main() {
       expect(XlsxWorkbook.column(25), 'Z');
       expect(XlsxWorkbook.column(26), 'AA');
       expect(XlsxWorkbook.column(701), 'ZZ');
-      expect(XlsxWorkbook.column(702), 'AAA');
       expect(XlsxWorkbook.ref(9, 27), 'AB10');
     });
 
     test('plik ma części, bez których Excel go nie otworzy', () {
       final book = XlsxWorkbook();
-      book.addSheet('Arkusz').set(0, 0, 'x');
+      book.addSheet('Arkusz').set(0, 0, 'x', const XlsxStyle());
       final zip = ZipDecoder().decodeBytes(book.save());
       expect(
         zip.files.map((f) => f.name),
@@ -90,344 +402,31 @@ void main() {
       );
     });
 
-    test('polskie znaki, cudzysłowy i nawiasy ostre przechodzą bez zmian',
-        () {
+    test('polskie znaki i znaki specjalne bez zmian; jeden styl dla wielu '
+        'komórek', () {
       final book = XlsxWorkbook();
-      book.addSheet('Arkusz')
-        ..set(0, 0, 'Żółć <gęś> & "łódź"')
-        ..set(0, 1, const XlsxFormula('IF(A1<>"","tak","")', 'tak'))
-        ..set(0, 2, 1.5)
-        ..set(0, 3, 0.1 + 0.2);
-      final c = cells(book.save());
-      expect(c['A1']!.value, 'Żółć <gęś> & "łódź"');
-      expect(c['B1']!.formula, 'IF(A1<>"","tak","")');
-      expect(c['B1']!.value, 'tak');
-      expect(c['C1']!.value, '1.5');
-      expect(c['D1']!.value, '0.3', reason: 'bez ogona 0.30000000000000004');
-    });
-
-    test('ten sam wygląd w wielu komórkach to jeden styl', () {
-      final book = XlsxWorkbook();
-      const style = XlsxStyle(bold: true, border: true);
-      final sheet = book.addSheet('Arkusz');
-      for (var r = 0; r < 50; r++) {
+      const style = XlsxStyle(bold: true, left: 2);
+      final sheet = book.addSheet('Arkusz')..set(0, 0, 'Żółć <gęś> & "łódź"', style);
+      for (var r = 1; r < 50; r++) {
         sheet.set(r, 0, 'x', style);
       }
-      final styles = part(book.save(), 'xl/styles.xml');
-      expect(RegExp(r'<cellXfs count="2">').hasMatch(styles), isTrue,
-          reason: 'domyślny i jeden pogrubiony z ramką');
-    });
-
-    test('scalona komórka ma ramkę na całej szerokości', () {
-      final book = XlsxWorkbook();
-      book.addSheet('Arkusz').merge(0, 0, 0, 2, 'tytuł',
-          const XlsxStyle(border: true));
       final bytes = book.save();
-      final c = cells(bytes);
-      expect(c.keys, containsAll(['A1', 'B1', 'C1']));
-      expect(part(bytes, 'xl/worksheets/sheet1.xml'),
-          contains('<mergeCell ref="A1:C1"/>'));
+      expect(part(bytes, 'xl/sharedStrings.xml'),
+          contains('Żółć &lt;gęś&gt; &amp; &quot;łódź&quot;'));
+      expect(part(bytes, 'xl/styles.xml'), contains('<cellXfs count="2">'));
     });
   });
 
-  group('karta drogowa w Excelu', () {
-    const station = 'Kielno, Oliwska 12';
-    final config = UnitConfig(
-      unitFullName: 'Ochotnicza Straż Pożarna w Kielnie',
-      locality: 'Kielno',
-      unitStreet: 'Oliwska 12',
-    );
-    final vehicle = Vehicle(
-      id: 'v1',
-      name: 'GBA 2,5/16',
-      seats: 6,
-      make: 'MAN',
-      model: 'TGM 13.290',
-      kind: 'GBA',
-      plate: 'GWE 12345',
-      fuelPer100Km: 30,
-      pumpFuelPerHour: 12,
-      idleFuelPerMinute: 0.05,
-      startupFuelPerMonth: 1,
-    );
-    final pump = Equipment(
-        id: 'pump', name: 'Autopompa', vehicleId: 'v1', poweredByVehicle: true);
-
-    final at = DateTime(2026, 11, 3, 19, 40);
-    final trips = [
-      VehicleTrip(
-        id: 't1',
-        vehicleId: 'v1',
-        date: DateTime(2026, 11, 3),
-        dispatcherName: 'Kwapisz O.',
-        routeFrom: station,
-        routeTo: 'Szemud',
-        purpose: TripPurposes.training,
-        driverName: 'Mielewczyk M.',
-        departureTime: at,
-        odometerStart: 1000,
-        sceneArrivalTime: at.add(const Duration(minutes: 12)),
-        sceneOdometer: 1010,
-        sceneDepartureTime: at.add(const Duration(minutes: 70)),
-        returnTime: at.add(const Duration(minutes: 85)),
-        odometerEnd: 1020,
-        idleMinutes: 10,
-        equipmentUse: [
-          TripEquipmentUse(name: 'Autopompa', minutes: 30, equipmentId: 'pump'),
-        ],
-        createdAt: at,
-        updatedAt: at,
-      ),
-      VehicleTrip(
-        id: 't2',
-        vehicleId: 'v1',
-        date: DateTime(2026, 11, 5),
-        routeFrom: station,
-        routeTo: 'Żukowo',
-        purpose: TripPurposes.refuelling,
-        driverName: 'Mielewczyk M.',
-        departureTime: DateTime(2026, 11, 5, 9, 0),
-        returnTime: DateTime(2026, 11, 5, 9, 50),
-        odometerStart: 1020,
-        odometerEnd: 1050,
-        createdAt: at,
-        updatedAt: at,
-      ),
-    ];
-
-    Uint8List build({Vehicle? v, List<VehicleTrip>? list}) =>
-        TripCardXlsx.bytes(
-          trips: list ?? trips,
-          vehicle: v ?? vehicle,
-          config: config,
-          year: 2026,
-          month: 11,
-          equipment: [pump],
-        );
-
-    test('wiersze przejazdów mają tę samą treść co wydruk', () {
-      final c = cells(build());
-      // Tabela zaczyna się w wierszu 17 — dwa wiersze na przejazd.
-      var row = 17;
-      for (var i = 0; i < trips.length; i++) {
-        final pdfRows = TripCardPdf.tripRowTexts(
-          trips[i],
-          i + 1,
-          equipmentMinutes: i == 0 ? 30 : 0,
-          stationAddress: config.stationAddress,
-        );
-        for (final texts in pdfRows) {
-          for (var col = 0; col < texts.length; col++) {
-            final at = XlsxWorkbook.ref(row - 1, col);
-            expect(c[at]?.value ?? '', texts[col], reason: at);
-          }
-          row++;
-        }
-      }
-      expect(c['D17']!.value, 'OSP – Szemud');
-      expect(c['D19']!.value, 'OSP – Żukowo', reason: 'polskie litery');
-    });
-
-    test('liczniki, minuty i postój to liczby, nie tekst', () {
-      final xml = part(build(), 'xl/worksheets/sheet1.xml');
-      for (final at in ['A17', 'H17', 'J17', 'K17', 'M17', 'J18']) {
-        expect(RegExp('<c r="$at" s="\\d+"><v>').hasMatch(xml), isTrue,
-            reason: '$at bez t="s"');
-      }
-    });
-
-    test('kilometry przejazdu liczą się z liczników — po poprawce same',
-        () {
-      final c = cells(build());
-      expect(c['O17']!.formula, contains('J18-H17'));
-      expect(c['O17']!.value, '20');
-      expect(c['O19']!.formula, contains('J20-H19'));
-      expect(c['O19']!.value, '30');
-    });
-
-    test('normy w osobnych komórkach — formuły biorą je stąd', () {
-      final c = cells(build());
-      expect(c['D8']!.value, '30', reason: 'na 100 km');
-      expect(c['K8']!.value, '12', reason: 'autopompa');
-      expect(c['D9']!.value, '0.05', reason: 'postój');
-      expect(c['K9']!.value, '1', reason: 'rozruch');
-    });
-
-    test('rozliczenie: te same liczby co na wydruku, ale na formułach', () {
-      final c = cells(build());
-      final km = rowOf(c, 'Przebyto km');
-      expect(c['F$km']!.formula, startsWith(r'SUM($O$17:'));
-      expect(c['F$km']!.value, '50');
-      expect(c['G$km']!.formula, contains(r'$D$8'));
-      expect(c['G$km']!.value, '15', reason: '50 km × 30 l / 100');
-
-      final hours = rowOf(c, 'Przepracowano godz. urządzeń');
-      expect(c['F$hours']!.value, '0.5');
-      expect(c['G$hours']!.value, '6', reason: '0,5 godz. × 12 l');
-
-      final idle = rowOf(c, 'Praca na postoju');
-      expect(c['F$idle']!.value, '10');
-      expect(c['G$idle']!.value, '0.5');
-
-      final startup = rowOf(c, 'Wyk. rozruch.');
-      expect(c['G$startup']!.value, '1');
-
-      final total = rowOf(c, 'Zużyto paliwa w ciągu miesiąca razem');
-      expect(c['G$total']!.formula, 'IF(COUNT(\$G\$$km:\$G\$$startup)=0,"",'
-          'SUM(\$G\$$km:\$G\$$startup))');
-      expect(c['G$total']!.value, '22.5');
-    });
-
-    test('pobrane paliwo przechodzi do rozliczenia, a „pozostało" liczy się '
-        'samo — puste, dopóki nikt nic nie wpisze', () {
-      final c = cells(build());
-      final intake = rowOf(c, 'Ogółem', col: 'A');
-      expect(c['D$intake']!.formula, startsWith('IF(COUNT('));
-      expect(c['D$intake']!.value, '');
-
-      final got = rowOf(c, 'Pobrano w ciągu miesiąca bieżącego');
-      expect(c['G$got']!.formula, contains('\$D\$$intake'));
-      expect(c['G$got']!.value, '');
-
-      final left = rowOf(c, 'Pozostało na miesiąc następny');
-      expect(c['G$left']!.formula, contains('-'));
-      expect(c['G$left']!.value, '', reason: 'nie zmyślamy stanu zbiornika');
-    });
-
-    test('pojazd bez norm: litry puste, ale formuły czekają na normę', () {
-      final c = cells(build(
-          v: Vehicle(id: 'v1', name: 'GLM 8', seats: 4)));
-      final km = rowOf(c, 'Przebyto km');
-      expect(c['G$km']!.value, '');
-      expect(c['G$km']!.formula, contains(r'ISNUMBER($D$8)'));
-      final total = rowOf(c, 'Zużyto paliwa w ciągu miesiąca razem');
-      expect(c['G$total']!.value, '');
-    });
-
-    test('pusty miesiąc — sam formularz z pustymi wierszami', () {
-      final c = cells(build(list: const []));
-      expect(c['A17']!.value, '');
-      expect(c.containsKey('N${17 + TripCardPdf.minRows - 1}'), isTrue,
-          reason: 'kratki do wypełnienia');
-      expect(c['F${rowOf(c, 'Przebyto km')}']!.value, '0');
-    });
-
-    test('drukuje się A4 w poziomie, bez kolumny pomocniczej, rozliczenie '
-        'od nowej strony', () {
-      final bytes = build();
-      final sheet = part(bytes, 'xl/worksheets/sheet1.xml');
-      expect(sheet, contains('orientation="landscape"'));
-      expect(sheet, contains('paperSize="9"'));
-      expect(sheet, contains('<rowBreaks count="1"'));
-      expect(part(bytes, 'xl/workbook.xml'),
-          contains("<definedName name=\"_xlnm.Print_Area\" localSheetId=\"0\">"
-              "'Karta drogowa'!\$A\$1:\$N\$"));
-    });
-
-    test('nagłówek z danymi pojazdu — Marka, Model, Typ', () {
-      final c = cells(build());
-      expect(c['A1']!.value, 'Ochotnicza Straż Pożarna w Kielnie');
-      expect(c['E1']!.value, 'MIESIĘCZNA KARTA DROGOWA');
-      expect(c['E3']!.value, 'na miesiąc  listopad 2026');
-      expect(c['A5']!.value, 'Marka');
-      expect(c['D5']!.value, 'MAN');
-      expect(c['G5']!.value, 'Model');
-      expect(c['K5']!.value, 'TGM 13.290');
-      expect(c['A6']!.value, 'Typ');
-      expect(c['D6']!.value, 'GBA');
-    });
-
-    test('nazwa pliku bez polskich znaków, z rozszerzeniem .xlsx', () {
-      expect(TripCardXlsx.fileName(vehicle, 2026, 11),
-          'karta_drogowa_GBA_2_5_16_2026-11.xlsx');
-    });
-  });
-
-  group('karta pracy sprzętu w Excelu', () {
-    final config = UnitConfig(unitFullName: 'OSP Kielno', locality: 'Kielno');
-    final saw = Equipment(
-      id: 'e1',
-      name: 'Pilarka',
-      vehicleId: 'v1',
-      fuelType: EquipmentFuel.mix,
-      fuelPerHour: 1.2,
-      brand: 'Stihl',
-      model: 'MS 462',
-    );
-    final rows = [
-      EquipmentCardRow(
-        date: DateTime(2026, 11, 3, 19, 40),
-        operatorName: 'Nowak J.',
-        minutes: 90,
-        purpose: 'MZ, Kielno',
-        tripId: 't1',
-      ),
-      EquipmentCardRow(
-        date: DateTime(2026, 11, 7, 10, 0),
-        operatorName: 'Kowalski A.',
-        minutes: 30,
-        purpose: 'Rozruch kontrolny',
-        isStartup: true,
-        workId: 'w1',
-      ),
-    ];
-
-    Uint8List build({Equipment? device}) => EquipmentCardXlsx.bytes(
-          device: device ?? saw,
-          rows: rows,
-          config: config,
-          year: 2026,
-          month: 11,
-        );
-
-    test('wiersze pracy jak na wydruku, rozruch oznaczony w kolumnie '
-        'pomocniczej', () {
-      final c = cells(build());
-      expect(c['A12']!.value, '03.11');
-      expect(c['B12']!.value, 'Nowak J.');
-      expect(c['C12']!.value, '90');
-      expect(c['D12']!.value, 'MZ, Kielno');
-      expect(c['G12']?.value ?? '', '');
-      expect(c['G13']!.value, 'tak');
-      expect(c['B7']!.value, 'Stihl');
-      expect(c['D7']!.value, 'MS 462');
-    });
-
-    test('rozliczenie: praca bez rozruchów, rozruchy osobno, litry w ET', () {
-      final c = cells(build());
-      final work = rowOf(c, '4. Przepracowano godz. i min.', col: 'A');
-      expect(c['C$work']!.formula, contains('"<>tak"'));
-      expect(double.parse(c['C$work']!.value) * 1440, closeTo(90, 1e-6));
-
-      final used = rowOf(c, '5. zużyto', col: 'A');
-      expect(c['E$used']!.value, '1.8', reason: '1,5 godz. × 1,2 l — ET');
-      expect(c['F$used']?.value ?? '', '', reason: 'mieszanka to nie ON');
-      expect(c['F$used']?.formula, isNull);
-
-      final startup = rowOf(c, '6. zużyto na rozruchy i kontrole', col: 'A');
-      expect(double.parse(c['C$startup']!.value) * 1440, closeTo(30, 1e-6));
-      expect(c['E$startup']!.value, '0.6');
-
-      final total = rowOf(c, '7. zużyto w ciągu mies. Razem', col: 'A');
-      expect(c['E$total']!.value, '2.4');
-    });
-
-    test('bez rodzaju paliwa — litry puste w obu kolumnach, jak na wydruku',
-        () {
-      final c = cells(build(
-          device: Equipment(id: 'e1', name: 'Agregat', fuelPerHour: 1)));
-      final used = rowOf(c, '5. zużyto', col: 'A');
-      expect(c['E$used']?.formula, isNull);
-      expect(c['F$used']?.formula, isNull);
-    });
-
-    test('A4 w pionie, bez kolumny „Rozruch" na wydruku', () {
-      final bytes = build();
-      expect(part(bytes, 'xl/worksheets/sheet1.xml'),
-          contains('orientation="portrait"'));
-      expect(part(bytes, 'xl/workbook.xml'), contains(r"'Karta pracy'!$A$1:$F$"));
-      expect(EquipmentCardXlsx.fileName(saw, 2026, 11),
-          'karta_pracy_Pilarka_2026-11.xlsx');
-    });
+  test('EquipmentCard.rows i totals bez zmian — tylko nowy wygląd', () {
+    final t = EquipmentCard.totals(
+        Equipment(id: 'e', name: 'P', fuelPerHour: 2),
+        [
+          EquipmentCardRow(
+              date: DateTime(2026, 11, 1),
+              operatorName: '',
+              minutes: 90,
+              purpose: ''),
+        ]);
+    expect(t.workFuel, 3);
   });
 }

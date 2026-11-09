@@ -215,7 +215,8 @@ void main() {
 
       expect(
         find.text(
-            'Kolumna 10 karty drogowej. Dodaj urządzenie i czas jego pracy.'),
+            'Co pracowało na tym wyjeździe i ile minut — sprzęt tego '
+            'wozu albo bez przypisanego wozu.'),
         findsOneWidget,
       );
     });
@@ -278,26 +279,39 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('nowa pozycja to sprzęt tego wozu, a pod „Inne" reszta — '
-        'z nazwą wozu', (tester) async {
+    testWidgets('na liście sprzęt tego wozu i bez przypisanego wozu — sprzętu '
+        'innych wozów nie ma', (tester) async {
+      // Dawid, 9.11.2026: „te, które są przypisane do tego samochodu, który
+      // był na akcji, oraz te, które nie są przypisane do żadnego wozu".
       await pumpForm(tester);
       await addDevice(tester);
       expect(find.text('Autopompa A16/8'), findsOneWidget);
 
       await tester.tap(find.text('Autopompa A16/8'));
       await tester.pumpAndSettle();
-      expect(find.text('Inne'), findsOneWidget);
-      expect(find.text('Agregat Honda (GLM 8)'), findsOneWidget);
+      expect(find.text('Bez przypisanego wozu'), findsOneWidget);
       expect(find.text('Pilarka'), findsOneWidget);
+      expect(find.textContaining('Agregat Honda'), findsNothing,
+          reason: 'agregat jest na GLM 8');
       expect(find.text('Spoza listy — wpisz nazwę'), findsOneWidget);
       expect(find.text(SpecialEquipment.pump), findsNothing,
           reason: 'stała lista tylko bez listy sprzętu');
 
-      await tester.tap(find.text('Agregat Honda (GLM 8)').last);
+      await tester.tap(find.text('Pilarka').last);
       await tester.pumpAndSettle();
-      expect(find.text('Agregat Honda (GLM 8)'), findsOneWidget);
+      expect(find.text('Pilarka'), findsOneWidget);
       expect(find.widgetWithText(TextFormField, 'Nazwa urządzenia'),
           findsNothing);
+    });
+
+    testWidgets('sekcja sprzętu stoi zaraz pod licznikiem pojazdu',
+        (tester) async {
+      await pumpForm(tester);
+      final odometer = tester.getTopLeft(find.text('Stan licznika pojazdu'));
+      final equipment = tester.getTopLeft(find.text('Praca sprzętu'));
+      final purpose = tester.getTopLeft(find.text('Cel jazdy').first);
+      expect(equipment.dy, greaterThan(odometer.dy));
+      expect(equipment.dy, lessThan(purpose.dy));
     });
 
     testWidgets('„Spoza listy" — pole na własną nazwę', (tester) async {

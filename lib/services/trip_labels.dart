@@ -41,10 +41,17 @@ class TripLabels {
   static String _normalize(String s) =>
       s.toLowerCase().replaceAll(RegExp(r'[\s,.]+'), '');
 
-  /// Cel jazdy: skrót zdarzenia przy wyjeździe alarmowym, inaczej cel
-  /// przejazdu („Ćwiczenia", „Tankowanie").
-  static String purpose(VehicleTrip t, Report? report) =>
-      report != null ? threatShort(report.threatCategory) : t.purpose;
+  /// Skrót ćwiczeń w rubryce „Cel jazdy".
+  static const String training = 'Ć';
+
+  /// Cel jazdy jak na karcie Kielna (Dawid, 9.11.2026): „P" przy pożarze,
+  /// „MZ" przy miejscowym zagrożeniu, „Ć" przy ćwiczeniach, „Tankowanie";
+  /// drugi wiersz wyjazdu to [returnLeg]. Pozostałe cele bez zmian.
+  static String purpose(VehicleTrip t, Report? report) => report != null
+      ? threatShort(report.threatCategory)
+      : t.purpose == TripPurposes.training
+          ? training
+          : t.purpose;
 
   /// „OSP – Kielno" — puste strony trasy pominięte.
   static String route(String from, String to) =>

@@ -57,10 +57,13 @@ class ActionStrip extends StatelessWidget implements PreferredSizeWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
+            // Limit szerokości tylko przy kilku przyciskach — samotny
+            // „Rozruch kontrolny" ucinał się do „Rozruch kontr…".
             for (final a in actions)
               Flexible(
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 104),
+                  constraints: BoxConstraints(
+                      maxWidth: actions.length == 1 ? double.infinity : 104),
                   child: _StripButton(a),
                 ),
               ),

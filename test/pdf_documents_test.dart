@@ -4,13 +4,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:osp_app/models/models.dart';
 import 'package:osp_app/providers/statistics_provider.dart';
 import 'package:osp_app/services/equipment_card.dart';
-import 'package:osp_app/services/equipment_card_pdf.dart';
+import 'package:osp_app/services/card_sheet.dart';
+import 'package:osp_app/services/equipment_card_sheet.dart';
 import 'package:osp_app/services/handover_pdf.dart';
 import 'package:osp_app/services/report_pdf.dart';
 import 'package:osp_app/services/stats_pdf.dart';
-import 'package:osp_app/services/trip_card_pdf.dart';
+import 'package:osp_app/services/trip_card.dart';
 
-/// Generowanie wszystkich czterech dokumentów — dotąd żaden nie miał testu.
+/// Generowanie wszystkich dokumentów — dotąd żaden nie miał testu.
 ///
 /// Test przechodzi bez sieci, więc przy okazji pilnuje, że czcionki są
 /// w paczce aplikacji: wcześniej pobierały się z internetu i bez zasięgu nie
@@ -107,35 +108,39 @@ void main() {
     expect(pageCount(bytes), greaterThanOrEqualTo(1));
   });
 
-  group('karta drogowa', () {
-    test('pusta karta — dwie strony: przejazdy i rozliczenie', () async {
-      final bytes = await TripCardPdf.bytes(
-          trips: const [], vehicle: vehicle, config: config, year: 2026, month: 8);
+  Future<List<int>> cardPdf(List<CardPage> pages) =>
+      CardSheet.pdf(pages, title: 'Karty', author: 'OSP');
+
+  group('karta drogowa — kartka składana na pół', () {
+    test('pusta karta — strona zewnętrzna i wewnętrzna', () async {
+      final bytes = await cardPdf(TripCard.pages(
+          trips: const [], vehicle: vehicle, config: config, year: 2026, month: 8));
       expect(pageCount(bytes), 2);
     });
 
     test('pojazd bez norm', () async {
-      final bytes = await TripCardPdf.bytes(
+      final bytes = await cardPdf(TripCard.pages(
           trips: [trip(3)],
           vehicle: Vehicle(id: 'v1', name: 'GLM', seats: 3),
           config: config,
           year: 2026,
-          month: 8);
+          month: 8));
       expect(pageCount(bytes), 2);
     });
 
-    test('pelny miesiac przejazdow przechodzi na kolejne strony', () async {
-      final bytes = await TripCardPdf.bytes(
+    test('więcej niż 12 przejazdów — kolejne strony wewnętrzne', () async {
+      final bytes = await cardPdf(TripCard.pages(
           trips: [for (var d = 1; d <= 28; d++) trip(d)],
           vehicle: vehicle,
           config: config,
           year: 2026,
-          month: 8);
-      expect(pageCount(bytes), greaterThanOrEqualTo(3));
+          month: 8));
+      // 56 wierszy po 24 na stronę: okładka + 3 strony przejazdów.
+      expect(pageCount(bytes), 4);
     });
   });
 
-  group('karta pracy sprzętu', () {
+  group('karta pracy sprzętu — dwie A5 na kartce', () {
     final niagara = Equipment(
       id: 'e1',
       name: 'Motopompa pływająca',
@@ -153,31 +158,29 @@ void main() {
               : 'Miejscowe zagrożenie, Żukowo — wypompowanie wody z piwnicy',
           isStartup: startup,
         );
+    Future<List<int>> cards(List<(Equipment, List<EquipmentCardRow>)> c) =>
+        cardPdf(EquipmentCardSheet.pages(
+            cards: c, config: config, year: 2026, month: 11));
 
-    test('pusta karta — przód z tabelą i tył z rozliczeniem', () async {
-      final bytes = await EquipmentCardPdf.bytes(
-          device: niagara, rows: const [], config: config, year: 2026, month: 11);
-      expect(pageCount(bytes), 2);
+    test('jedno urządzenie — przód i tył kartki', () async {
+      expect(pageCount(await cards([(niagara, const [])])), 2);
     });
 
-    test('sprzęt bez normy, rodzaju paliwa i marki', () async {
-      final bytes = await EquipmentCardPdf.bytes(
-          device: Equipment(id: 'e2', name: 'Pilarka'),
-          rows: [row(1, startup: true), row(3)],
-          config: config,
-          year: 2026,
-          month: 11);
-      expect(pageCount(bytes), 2);
+    test('dwa urządzenia na jednej kartce, trzecie na następnej', () async {
+      final pila = Equipment(id: 'e2', name: 'Pilarka');
+      expect(pageCount(await cards([(niagara, const []), (pila, const [])])), 2);
+      expect(
+          pageCount(await cards(
+              [(niagara, const []), (pila, const []), (niagara, const [])])),
+          4);
     });
 
-    test('dużo wpisów przechodzi na kolejne strony', () async {
-      final bytes = await EquipmentCardPdf.bytes(
-          device: niagara,
-          rows: [for (var i = 0; i < 45; i++) row(1 + i % 28, startup: i.isOdd)],
-          config: config,
-          year: 2026,
-          month: 11);
-      expect(pageCount(bytes), greaterThanOrEqualTo(3));
+    test('sprzęt bez normy, rodzaju paliwa i marki; dużo wpisów', () async {
+      final bytes = await cards([
+        (Equipment(id: 'e2', name: 'Pilarka'), [row(1, startup: true), row(3)]),
+        (niagara, [for (var i = 0; i < 45; i++) row(1 + i % 28, startup: i.isOdd)]),
+      ]);
+      expect(pageCount(bytes), 2, reason: 'wpisy gęściej, bez nowej kartki');
     });
   });
 }

@@ -7,11 +7,8 @@ import '../../providers/providers.dart';
 import '../../core/utils/polish_text.dart';
 import '../../services/equipment_usage.dart';
 import '../../services/trip_odometer.dart';
-import '../../widgets/bluetooth_printer_picker.dart';
-import '../../services/trip_card_pdf.dart';
-import '../../services/trip_card_xlsx.dart';
-import '../../services/file_share.dart';
-import '../../services/xlsx_writer.dart';
+import '../../services/trip_card.dart';
+import '../../widgets/card_output.dart';
 import '../../core/theme/osp_theme.dart';
 import '../../widgets/action_strip.dart';
 import '../../widgets/month_picker.dart';
@@ -65,27 +62,27 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
                 StripAction(
                   icon: Icons.print,
                   label: 'Drukuj',
-                  tooltip: 'Drukuj kartę drogową',
-                  onPressed: () => _printCard(vehicles, _CardOutput.system),
+                  tooltip: 'Drukuj karty',
+                  onPressed: () => _printCard(vehicles, CardOutput.system),
                 ),
                 StripAction(
                   icon: Icons.bluetooth,
                   label: 'Bluetooth',
                   tooltip: 'Drukuj na drukarce Bluetooth',
-                  onPressed: () => _printCard(vehicles, _CardOutput.bluetooth),
+                  onPressed: () => _printCard(vehicles, CardOutput.bluetooth),
                 ),
                 StripAction(
                   icon: Icons.share,
                   label: 'Wyślij',
-                  tooltip: 'Wyślij kartę drogową (PDF)',
-                  onPressed: () => _printCard(vehicles, _CardOutput.share),
+                  tooltip: 'Wyślij karty (PDF)',
+                  onPressed: () => _printCard(vehicles, CardOutput.share),
                 ),
                 StripAction(
                   icon: Icons.table_view,
                   label: 'Excel',
-                  tooltip: 'Wyślij kartę drogową w Excelu — do poprawienia '
+                  tooltip: 'Wyślij karty w Excelu — do poprawienia '
                       'na komputerze',
-                  onPressed: () => _printCard(vehicles, _CardOutput.excel),
+                  onPressed: () => _printCard(vehicles, CardOutput.excel),
                 ),
               ]),
       ),
@@ -100,85 +97,64 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
     );
   }
 
-  /// Drukuje, wysyła na drukarkę Bluetooth albo udostępnia kartę drogową
-  /// wybranego pojazdu za wybrany miesiąc.
-  ///
-  /// Karta powstaje z tego, co widać na ekranie — ta sama para pojazd + miesiąc,
-  /// więc nie ma osobnego okna wyboru zakresu.
-  Future<void> _printCard(List<Vehicle> vehicles, _CardOutput output) async {
+  /// Karty za wybrany miesiąc: wszystkie karty jednostki (tak rozlicza je
+  /// gmina) albo tylko karta drogowa pojazdu widocznego na ekranie.
+  Future<void> _printCard(List<Vehicle> vehicles, CardOutput output) async {
     final vehicle = vehicles.where((v) => v.id == _vehicleId).firstOrNull;
     if (vehicle == null) return;
+    final all = await _pickScope(vehicle, vehicles.length);
+    if (all == null || !mounted) return;
+    final month = TripCard.month(_month, _year);
 
-    final trips = ref.read(tripsForCardProvider(
-      (vehicleId: _vehicleId!, year: _year, month: _month),
-    ));
+    if (all) {
+      final unit = TripCard.unitName(ref.read(unitConfigProvider));
+      await outputCards(context, ref, allCards(ref, _year, _month), output,
+          fileName: cardFileName('karty $unit', _year, _month),
+          title: 'Karty $unit - $month');
+      return;
+    }
 
     // Miesiąc bez przejazdów nie blokuje druku. Papierową kartę zakłada się
     // **na początku miesiąca** i wypełnia długopisem w trakcie, więc czysty
     // formularz z nagłówkiem pojazdu jest osobną, sensowną potrzebą. Pytamy
-    // jednak wprost, żeby nikt nie oddał gminy pustej kartki przez pomyłkę.
+    // jednak wprost, żeby nikt nie oddał gminie pustej kartki przez pomyłkę.
+    final trips = ref.read(tripsForCardProvider(
+      (vehicleId: vehicle.id, year: _year, month: _month),
+    ));
     if (trips.isEmpty && !await _confirmEmptyCard(output.sends)) return;
     if (!mounted) return;
+    await outputCards(
+        context, ref, vehicleCard(ref, vehicle, _year, _month), output,
+        fileName: cardFileName('karta_drogowa ${vehicle.name}', _year, _month),
+        title: 'Karta drogowa ${vehicle.name} - $month');
+  }
 
-    final config = ref.read(unitConfigProvider);
-    try {
-      switch (output) {
-        case _CardOutput.system:
-          await TripCardPdf.generateAndPrint(
-            trips: trips,
-            vehicle: vehicle,
-            config: config,
-            year: _year,
-            month: _month,
-            equipment: ref.read(equipmentProvider),
-            reportOf: ref.read(databaseServiceProvider).getReport,
-          );
-        case _CardOutput.share:
-          await TripCardPdf.generateAndShare(
-            trips: trips,
-            vehicle: vehicle,
-            config: config,
-            year: _year,
-            month: _month,
-            equipment: ref.read(equipmentProvider),
-            reportOf: ref.read(databaseServiceProvider).getReport,
-          );
-        case _CardOutput.bluetooth:
-          await printOnBluetoothPrinter(
-            context,
-            ref,
-            () => TripCardPdf.bytes(
-              trips: trips,
-              vehicle: vehicle,
-              config: config,
-              year: _year,
-              month: _month,
-              equipment: ref.read(equipmentProvider),
-              reportOf: ref.read(databaseServiceProvider).getReport,
+  /// Wszystkie karty czy jedna — domyślnie wszystkie, bo gmina rozlicza
+  /// każdy pojazd i każde urządzenie, także nieużywane (Dawid, 9.11.2026).
+  Future<bool?> _pickScope(Vehicle vehicle, int vehicleCount) {
+    final devices = ref.read(equipmentProvider).where((e) => e.hasWorkCard).length;
+    return showModalBottomSheet<bool>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.library_books),
+              title: Text('Wszystkie karty — ${PolishText.monthLabel(_month, _year)}'),
+              subtitle: Text('Karty drogowe: $vehicleCount, karty pracy '
+                  'sprzętu: $devices'),
+              onTap: () => Navigator.pop(ctx, true),
             ),
-          );
-        case _CardOutput.excel:
-          await FileShare.share(
-            TripCardXlsx.bytes(
-              trips: trips,
-              vehicle: vehicle,
-              config: config,
-              year: _year,
-              month: _month,
-              equipment: ref.read(equipmentProvider),
-              reportOf: ref.read(databaseServiceProvider).getReport,
+            ListTile(
+              leading: const Icon(Icons.description_outlined),
+              title: Text('Tylko karta drogowa ${vehicle.name}'),
+              onTap: () => Navigator.pop(ctx, false),
             ),
-            fileName: TripCardXlsx.fileName(vehicle, _year, _month),
-            mimeType: XlsxWorkbook.mimeType,
-          );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Nie udało się przygotować wydruku: $e')),
-        );
-      }
-    }
+          ],
+        ),
+      ),
+    );
   }
 
   /// Pyta, czy naprawdę wydrukować kartę za miesiąc bez ani jednego przejazdu.
@@ -586,20 +562,4 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
       });
     }
   }
-}
-
-/// Sposób wyprowadzenia karty drogowej z ekranu ewidencji.
-///
-/// Cztery drogi, bo cztery różne sytuacje: drukarka w sieci (Mopria),
-/// przenośna drukarka termiczna sparowana przez Bluetooth, wysyłka PDF-a,
-/// gdy karta ma trafić do gminy mailem, i Excel — gdy trzeba ją jeszcze
-/// poprawić na komputerze.
-enum _CardOutput {
-  system,
-  bluetooth,
-  share,
-  excel;
-
-  /// Plik idzie dalej (poczta, Dysk), a nie na papier.
-  bool get sends => this == share || this == excel;
 }

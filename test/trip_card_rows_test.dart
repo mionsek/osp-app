@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:osp_app/models/models.dart';
 import 'package:osp_app/services/sync_json.dart';
-import 'package:osp_app/services/trip_card_pdf.dart';
+import 'package:osp_app/services/trip_card.dart';
 import 'package:osp_app/services/trip_labels.dart';
 
 /// Karta drogowa tak, jak wypełnia się ją w Kielnie (zdjęcie z 7.08.2026,
@@ -77,9 +77,35 @@ void main() {
     });
   });
 
+  test('cel jazdy: P, MZ, Ć, Tankowanie, Powrót (Dawid, 9.11.2026)', () {
+    final fire = Report(
+      id: 'r2',
+      reportNumber: '0008/2026',
+      year: 2026,
+      date: DateTime(2026, 4, 3),
+      departureTime: DateTime(2026, 4, 3, 19, 40),
+      addressLocality: 'Kielno',
+      addressStreet: '',
+      threatCategory: 'Pożar',
+      createdAt: DateTime(2026, 4, 3),
+      updatedAt: DateTime(2026, 4, 3),
+    );
+    expect(TripLabels.purpose(trip(), fire), 'P');
+    expect(TripLabels.purpose(trip(), report), 'MZ');
+    expect(
+        TripLabels.purpose(
+            trip(purpose: TripPurposes.training, reportId: null), null),
+        'Ć');
+    expect(
+        TripLabels.purpose(
+            trip(purpose: TripPurposes.refuelling, reportId: null), null),
+        'Tankowanie');
+    expect(TripLabels.returnLeg, 'Powrót');
+  });
+
   group('dwa wiersze na wyjazd', () {
     test('wyjazd alarmowy z pobytem na miejscu — jak na papierze', () {
-      final rows = TripCardPdf.tripRowTexts(
+      final rows = TripCard.tripRowTexts(
         trip(
           sceneArrival: DateTime(2026, 4, 3, 19, 43),
           sceneOdometer: 3525,
@@ -87,7 +113,6 @@ void main() {
           returnTime: DateTime(2026, 4, 3, 21, 0),
           odometerEnd: 3529,
         ),
-        3,
         equipmentMinutes: 61,
         stationAddress: station,
         report: report,
@@ -95,59 +120,55 @@ void main() {
 
       expect(rows, hasLength(2));
       expect(rows[0], [
-        '3', '03.04', 'Kwapisz O.', 'OSP – Kielno', 'MZ', 'Mielewczyk M.',
+        '03.04', 'Kwapisz O.', 'OSP – Kielno', 'MZ', 'Mielewczyk M.',
         '19:40', '3523', '19:43', '3525', '61', '', '25', '',
       ]);
       expect(rows[1], [
-        '', '03.04', 'Kwapisz O.', 'Kielno – OSP', 'Powrót', 'Mielewczyk M.',
+        '03.04', 'Kwapisz O.', 'Kielno – OSP', 'Powrót', 'Mielewczyk M.',
         '20:55', '3525', '21:00', '3529', '', '', '', '',
       ]);
     });
 
     test('bez pobytu na miejscu — puste rubryki zamiast zgadywania', () {
-      final rows = TripCardPdf.tripRowTexts(
+      final rows = TripCard.tripRowTexts(
         trip(returnTime: DateTime(2026, 4, 3, 21, 0), odometerEnd: 3529),
-        1,
         equipmentMinutes: 0,
         stationAddress: station,
         report: report,
       );
-      expect(rows[0].sublist(6, 10), ['19:40', '3523', '', '']);
-      expect(rows[1].sublist(6, 10), ['', '', '21:00', '3529']);
+      expect(rows[0].sublist(5, 9), ['19:40', '3523', '', '']);
+      expect(rows[1].sublist(5, 9), ['', '', '21:00', '3529']);
     });
 
-    test('ćwiczenia w remizie: „OSP – OSP · Ćwiczenia" i powrót', () {
-      final rows = TripCardPdf.tripRowTexts(
+    test('ćwiczenia w remizie: „OSP – OSP · Ć" i powrót (Dawid, 9.11.2026)', () {
+      final rows = TripCard.tripRowTexts(
         trip(purpose: TripPurposes.training, routeTo: station, reportId: null),
-        1,
         equipmentMinutes: 0,
         stationAddress: station,
       );
-      expect(rows[0].sublist(3, 5), ['OSP – OSP', 'Ćwiczenia']);
-      expect(rows[1].sublist(3, 5), ['OSP – OSP', 'Powrót']);
+      expect(rows[0].sublist(2, 4), ['OSP – OSP', 'Ć']);
+      expect(rows[1].sublist(2, 4), ['OSP – OSP', 'Powrót']);
     });
 
     test('akcja po północy — wiersz powrotu z datą powrotu', () {
-      final rows = TripCardPdf.tripRowTexts(
+      final rows = TripCard.tripRowTexts(
         trip(
           sceneDeparture: DateTime(2026, 4, 3, 23, 58),
           returnTime: DateTime(2026, 4, 4, 0, 2),
         ),
-        1,
         equipmentMinutes: 0,
         stationAddress: station,
         report: report,
       );
-      expect(rows[1][1], '03.04', reason: 'wyjazd z miejsca przed północą');
+      expect(rows[1][0], '03.04', reason: 'wyjazd z miejsca przed północą');
 
-      final later = TripCardPdf.tripRowTexts(
+      final later = TripCard.tripRowTexts(
         trip(returnTime: DateTime(2026, 4, 4, 0, 2)),
-        1,
         equipmentMinutes: 0,
         stationAddress: station,
         report: report,
       );
-      expect(later[1][1], '04.04');
+      expect(later[1][0], '04.04');
     });
   });
 

@@ -1,7 +1,7 @@
 name: osp_app
 description: "Raporty OSP — raporty z wyjazdów ratowniczych dla jednostek OSP"
 publish_to: 'none'
-version: 1.9.3+26
+version: 1.9.4+27
 
 environment:
   sdk: ^3.11.4
@@ -74,3 +74,10 @@ flutter:
     - assets/fonts/OpenSans-Italic.ttf
     # Licencja SIL OFL wymaga, żeby tekst licencji jechał razem z czcionką.
     - assets/fonts/OFL.txt
+    # Karty drogowe i karty pracy: kroje jak Arial i Times New Roman
+    # z papierowych kart (Liberation, też SIL OFL).
+    - assets/fonts/LiberationSans-Regular.ttf
+    - assets/fonts/LiberationSans-Bold.ttf
+    - assets/fonts/LiberationSerif-Regular.ttf
+    - assets/fonts/LiberationSerif-Bold.ttf
+    - assets/fonts/LIBERATION-OFL.txt

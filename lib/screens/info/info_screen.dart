@@ -149,10 +149,12 @@ class InfoScreen extends StatelessWidget {
                 'formularzami. Potwierdzenia drukują się po dwa identyczne '
                 'egzemplarze A5 obok siebie na kartce A4, do rozcięcia wzdłuż '
                 'przerywanej linii: jeden zostaje w jednostce, drugi trafia '
-                'do drugiej strony. Karta drogowa drukuje się na A4 poziomo, '
-                'karta pracy sprzętu — w pionie. Obie karty możesz też wysłać '
-                'w Excelu, żeby przed oddaniem w gminie poprawić je na '
-                'komputerze.\n\n'
+                'do drugiej strony. Karty drogowe i karty pracy sprzętu '
+                'wyglądają jak papierowe karty gminy: karta drogowa to kartka '
+                'A4 składana na pół (druk dwustronny, obracanie wzdłuż '
+                'krótszej krawędzi), karty pracy — po dwie A5 na kartce. '
+                'Możesz je też wysłać w Excelu, żeby przed oddaniem w gminie '
+                'poprawić je na komputerze.\n\n'
                 'Aplikacja prowadzi też ewidencję ratowników (z terminami '
                 'badań lekarskich), pojazdów i sprzętu, liczy roczne statystyki '
                 'i potrafi synchronizować dane między telefonami całej '
@@ -245,8 +247,11 @@ class InfoScreen extends StatelessWidget {
                     'raportu — zostaje uzupełnić stan licznika po powrocie. '
                     'Gospodarcze i tankowanie dodajesz ręcznie. Stan licznika '
                     'przed wyjazdem podstawia się z poprzedniego przejazdu, '
-                    'więc wpisujesz tylko jedną liczbę. Kartę za dany miesiąc '
-                    'wydrukujesz albo wyślesz przyciskami pod tytułem ekranu.',
+                    'więc wpisujesz tylko jedną liczbę, a pod licznikiem — '
+                    'jaki sprzęt pracował i ile minut. Przyciski pod tytułem '
+                    'drukują albo wysyłają wszystkie karty miesiąca naraz '
+                    '(każdy pojazd i każde urządzenie, także nieużywane) albo '
+                    'tylko kartę wybranego pojazdu.',
               ),
               const _HowToItem(
                 icon: Icons.print,
@@ -262,12 +267,11 @@ class InfoScreen extends StatelessWidget {
                 icon: Icons.table_view,
                 title: 'Karta w Excelu',
                 description:
-                    'Kartę drogową i kartę pracy sprzętu wyślesz też '
-                    'przyciskiem „Excel" — np. sobie na maila, żeby poprawić '
-                    'ją na komputerze przed oddaniem w gminie. Po poprawce '
-                    'licznika, minut albo normy kilometry i litry w rozliczeniu '
-                    'przeliczą się same; stan z poprzedniego miesiąca i paliwo '
-                    'z kwitów dopiszesz w arkuszu.',
+                    'Karty wyślesz też przyciskiem „Excel" — np. sobie na '
+                    'maila, żeby poprawić je na komputerze przed oddaniem '
+                    'w gminie. Arkusz ma ten sam układ co wydruk: każda strona '
+                    'karty to osobny arkusz, który drukuje się na jednej '
+                    'kartce A4.',
               ),
               const _HowToItem(
                 icon: Icons.bar_chart,

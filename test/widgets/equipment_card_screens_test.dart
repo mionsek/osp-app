@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:osp_app/models/models.dart';
@@ -221,8 +222,15 @@ void main() {
     )));
     await tester.pumpAndSettle();
 
-    // Podpis pod ikoną na pasku akcji, a nie sama ikona obok tytułu.
+    // Podpis pod ikoną na pasku akcji, a nie sama ikona obok tytułu —
+    // w całości, nie „Rozruch kontr…" (Dawid, 9.11.2026).
     expect(find.text('Rozruch kontrolny'), findsOneWidget);
+    expect(
+      tester
+          .renderObject<RenderParagraph>(find.text('Rozruch kontrolny'))
+          .didExceedMaxLines,
+      isFalse,
+    );
     await tester.tap(find.text('Autopompa'));
     await tester.pumpAndSettle();
     expect(find.textContaining('KARTA'), findsNothing);

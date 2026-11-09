@@ -188,8 +188,32 @@ void main() {
         expect(inBar(label), findsOneWidget, reason: label);
       }
       expect(barIconButtons(tester), 1);
-      expect(find.byTooltip('Wyślij kartę drogową w Excelu — do poprawienia '
+      expect(find.byTooltip('Wyślij karty w Excelu — do poprawienia '
           'na komputerze'), findsOneWidget);
+    });
+
+    testWidgets('druk pyta: wszystkie karty miesiąca (domyślnie) czy jedna',
+        (tester) async {
+      // Dawid, 9.11.2026: Dering rozlicza wszystkie karty — każdy wóz
+      // i każde urządzenie, także nieużywane.
+      await tester.runAsync(() async {
+        await db.addEquipment(Equipment(id: 'e1', name: 'Pilarka'));
+        await db.addEquipment(Equipment(id: 'e2', name: 'Agregat'));
+        await db.addEquipment(Equipment(
+            id: 'e3', name: 'Autopompa', vehicleId: 'v1', poweredByVehicle: true));
+      });
+      await pump(tester, const TripsListScreen());
+
+      await tester.tap(inBar('Drukuj'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Wszystkie karty'), findsOneWidget);
+      expect(find.text('Karty drogowe: 1, karty pracy sprzętu: 2'),
+          findsOneWidget,
+          reason: 'autopompa liczy się na karcie drogowej, nie ma swojej');
+      expect(find.text('Tylko karta drogowa GBA 2,5/16'), findsOneWidget);
+      final all = tester.getTopLeft(find.textContaining('Wszystkie karty'));
+      final one = tester.getTopLeft(find.textContaining('Tylko karta'));
+      expect(all.dy, lessThan(one.dy), reason: 'wszystkie — pierwsze');
     });
 
     testWidgets('Excel z pustego miesiąca pyta o „Wyślij pustą kartę", '
@@ -197,6 +221,8 @@ void main() {
       await pump(tester, const TripsListScreen());
 
       await tester.tap(inBar('Excel'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.textContaining('Tylko karta drogowa'));
       await tester.pumpAndSettle();
       expect(find.text('Miesiąc bez przejazdów'), findsOneWidget);
       expect(find.text('Wyślij pustą kartę'), findsOneWidget);

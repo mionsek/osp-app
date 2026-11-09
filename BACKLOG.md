@@ -1007,6 +1007,36 @@ Ekrany wyjazdu i przekazania miały domek zamiast strzałki, reszta ekranów —
 - [x] 10 nowych testów na prawdziwym drzewie tras: po zapisie przekazania wstecz do listy i do menu (aplikacja się nie zamyka), po „Lista wyjazdów" wstecz do menu, strzałka i domek na każdym z 19 ekranów, kreator cofa o krok i pyta na pierwszym, bez wpisanych danych bez pytania, „Zostań" zostawia, formularz pyta domkiem i wstecz, zapis zamyka bez pytania, Ustawienia pytają przed zapisem, a po nim nie. Łącznie **364**
 - [x] Wersja **1.7.8+21**
 
+## Zrobione (fix/054-bluetooth-i-karty-jak-na-papierze)
+Zgłoszenia Dawida z testów 1.9.3 (8–9.11.2026, pięć zdjęć kart z Kielna
+i dwa zrzuty podglądu ScanPrint): druk Bluetooth wyłącza aplikację; karta
+w drukarce Bluetooth wychodzi pionowo i pomniejszona; karty mają być
+„DOKŁADNIE TAKIE SAME" jak papierowe — także po eksporcie i wydruku z pliku;
+Dering rozlicza wszystkie karty jednostki naraz; praca sprzętu przy
+przejeździe ma być widoczna od razu pod licznikiem; cel jazdy P / MZ / Ć.
+
+- [x] **Druk Bluetooth wyłączał aplikację** — odtworzone na emulatorze w wersji wydania: `OutOfMemoryError` przy przekazaniu obrazu strony z Androida do aplikacji. Strona była renderowana dwa razy gęściej niż drukarka (63 MB na stronę A4), a kanał wtyczki `printing` potrzebował na nią jeszcze 125 MB naraz. Teraz strona renderuje się od razu w rozdzielczości drukarki (16 MB). Sprawdzone tą samą ścieżką w wersji wydania (z tymczasowo podstawioną drukarką): „Wysyłanie do drukarki…" i odpowiedź drukarki zamiast zamknięcia aplikacji
+- [x] **Karta w poziomie na Bluetooth** — wszystkie karty są teraz A4 w poziomie, a druk Bluetooth obraca je o 90°, więc wypełniają całą kartkę (test pilnuje, że krótszy bok A4 to dokładnie szerokość drukarki). Zrzuty z ScanPrint pokazywały zwykły PDF wysłany do aplikacji producenta, bo nasz druk się wyłączał — tam trzeba nacisnąć „Obracać"
+- [x] **Karty jak na papierze** — jeden opis strony w milimetrach (`services/card_sheet.dart`: ramki, linie, scalone komórki, pogrubienia, kroje), z którego rysują się i PDF, i Excel. Układ, szerokości kolumn i wiersze odmierzone ze zdjęć:
+  - karta drogowa (`services/trip_card.dart`) — kartka A4 składana na pół. Strona zewnętrzna: z lewej „ROZLICZENIE MATERIAŁÓW PĘDNYCH" (tabela „Pobrano (w litrach)" ze scalonym nagłówkiem i „Ogółem", 12 pozycji z kolumnami km/min · zużyto · Litry/Ilość litrów · ON · ET, „Obliczył", „Sprawdził"), z prawej okładka („OSP KIELNO", „Jednostka m..p.", ramka „NUMER EWIDENCYJNY KARTY PRACY / SERIA A/ /", tabela pojazdu: Marka · Typ · Rodzaj · Nr rej. · Numer operacyjny · Rodzaj paliwa ON/ET · normy, „Stan licznika autopompy", „ZAPISY DOTYCZĄCE OBSŁUG TECHNICZNYCH I TP."). Strona wewnętrzna: tabela przejazdów na całą szerokość, krojem jak Times, 24 wiersze, **bez kolumny „Lp."**, której papier nie ma; przypis „* np.. P-30…". Więcej niż 12 przejazdów — kolejne strony wewnętrzne
+  - na karcie „Typ" to model (TGM 320), a „Rodzaj" to typ z formularza pojazdu (GBA 3/30), jak na papierze; normy w zapisie z karty: „26L", „0,26L/MIN", „0,13L/MIN", „2,5/M-C" (norma autopompy w aplikacji jest na godzinę — na karcie przeliczona na minutę)
+  - karty pracy sprzętu (`services/equipment_card_sheet.dart`) — po dwie A5 obok siebie na kartce A4 w poziomie, jak drukuje je gmina: „Jednostka OSP Kielno", tytuł, „Na miesiąc", „Marka … Typ …", „Rodzaj … Stan Licznika ……", „Norma eksploatacyjna na 1 godz. Pracy … litrów", tabela na 20 wierszy. Tył z rozliczeniem — karty w odwrotnej kolejności, żeby po druku dwustronnym wypadły za swoim przodem
+  - kroje Liberation Sans i Serif (wymiarami jak Arial i Times New Roman, SIL OFL — licencja w `assets/fonts/LIBERATION-OFL.txt`), w paczce aplikacji, bo karty drukuje się też bez internetu
+- [x] **Excel taki sam jak wydruk** — każda strona karty to arkusz zbudowany z siatki granic wszystkich ramek: ramka to scalony zakres z tymi samymi liniami (cienkie i grube), krojem (Arial / Times New Roman), wielkością i pogrubieniem; wydruk A4 w poziomie, cała strona na jednej kartce. Liczby (liczniki, minuty, litry) jako liczby. Arkusz z feature/053 z formułami zastąpiony — formuły nie dawały się pogodzić z układem papierowej karty. Sprawdzone `openpyxl`: zero nachodzących scaleń, ustawienia wydruku jak trzeba
+- [x] **Wszystkie karty miesiąca naraz** — przyciski w ewidencji przejazdów pytają: „Wszystkie karty — listopad 2026 (karty drogowe: 2, karty pracy sprzętu: 6)" albo „Tylko karta drogowa …". Wszystkie to każdy pojazd i każde urządzenie z własnym silnikiem, także nieużywane w tym miesiącu — jeden PDF albo jeden plik Excela. Pojedyncza karta urządzenia dalej z jego ekranu (`widgets/card_output.dart` — wspólny druk, wysyłka, Bluetooth i Excel)
+- [x] **Cel jazdy** — „P" (pożar), „MZ", „Ć" (ćwiczenia), „Tankowanie", „Powrót"; w rubryce na środku
+- [x] **Praca sprzętu przy przejeździe** — sekcja zaraz pod „Stanem licznika pojazdu" (dotąd na samym dole formularza), w ramce jak licznik, każde urządzenie w osobnym kafelku, wyraźny przycisk „Dodaj urządzenie". Na liście sprzęt wozu tego przejazdu i „Bez przypisanego wozu"; sprzętu innych wozów nie ma (wybrany wcześniej zostaje, żeby nie zniknął)
+- [x] „Stan licznika" → **„Stan licznika pojazdu"** w formularzu przejazdu
+- [x] **„Rozruch kontrolny"** na liście sprzętu w całości (był ucięty do „Rozruch kontr…" — pojedynczy przycisk paska miał limit szerokości jak jeden z pięciu). To wpis rozruchu kontrolnego od razu na kartach pracy wszystkich urządzeń z silnikiem (pozycja 6 rozliczenia)
+- [x] Usunięte: stare generatory kart (`trip_card_pdf.dart`, `equipment_card_pdf.dart`, `trip_card_xlsx.dart`, `equipment_card_xlsx.dart`), formuły, wypełnienia i podziały stron w `xlsx_writer.dart`, kolor `OspTheme.spreadsheetHeader`
+- [x] „O aplikacji": karty jak papierowe (kartka składana, druk dwustronny wzdłuż krótszej krawędzi, dwie A5 na kartce), wszystkie karty naraz, sprzęt pod licznikiem; Excel bez obietnicy przeliczania
+- [x] Testy: druk Bluetooth (rozmiar obrazu strony, obrót, próg czerni), karty (napisy i wartości z papieru, normy, rozliczenie, scalenia, 24 wiersze bez „Lp.", „Ć" na środku, dwie A5 i odwrócony tył, marginesy ≥ 8 mm, napisy bez nakładania), Excel z tego samego opisu (te same napisy, scalenia, grube linie, kroje, liczby), PDF (liczba stron), cel jazdy, sprzęt pod licznikiem i lista bez sprzętu innych wozów, wybór „wszystkie karty / jedna", pełny „Rozruch kontrolny"
+- [x] Wersja **1.9.4+27**
+
+Do rozważenia: norma autopompy w formularzu pojazdu jest „na godzinę pracy",
+a karta i Dering podają ją na minutę (0,26 l/min). Pole można przestawić na
+minuty (zapis dalej w godzinach, bez zmiany danych na Dysku).
+
 ## Zrobione (feature/053-powitanie-na-pasku)
 Uwagi Dawida z testów 1.9.1 (6.11.2026): „Witaj, Dawid" ma stać na samej
 górze, na czerwonym pasku, razem z nazwą jednostki — nie pod nim na białym;

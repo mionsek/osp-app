@@ -8,13 +8,10 @@ import '../../core/utils/polish_text.dart';
 import '../../models/models.dart';
 import '../../providers/providers.dart';
 import '../../services/equipment_card.dart';
-import '../../services/equipment_card_pdf.dart';
-import '../../services/equipment_card_xlsx.dart';
-import '../../services/file_share.dart';
 import '../../services/pdf_output.dart';
-import '../../services/xlsx_writer.dart';
+import '../../services/trip_card.dart';
+import '../../widgets/card_output.dart';
 import '../../widgets/action_strip.dart';
-import '../../widgets/bluetooth_printer_picker.dart';
 import '../../widgets/month_picker.dart';
 import '../../widgets/navigation.dart';
 
@@ -30,16 +27,6 @@ class EquipmentCardScreen extends ConsumerStatefulWidget {
   @override
   ConsumerState<EquipmentCardScreen> createState() =>
       _EquipmentCardScreenState();
-}
-
-enum _CardOutput {
-  system,
-  bluetooth,
-  share,
-  excel;
-
-  /// Plik idzie dalej (poczta, Dysk), a nie na papier.
-  bool get sends => this == share || this == excel;
 }
 
 class _EquipmentCardScreenState extends ConsumerState<EquipmentCardScreen> {
@@ -97,26 +84,26 @@ class _EquipmentCardScreenState extends ConsumerState<EquipmentCardScreen> {
             icon: Icons.print,
             label: 'Drukuj',
             tooltip: 'Drukuj kartę pracy',
-            onPressed: () => _output(device, rows, _CardOutput.system),
+            onPressed: () => _output(device, rows, CardOutput.system),
           ),
           StripAction(
             icon: Icons.bluetooth,
             label: 'Bluetooth',
             tooltip: 'Drukuj na drukarce Bluetooth',
-            onPressed: () => _output(device, rows, _CardOutput.bluetooth),
+            onPressed: () => _output(device, rows, CardOutput.bluetooth),
           ),
           StripAction(
             icon: Icons.share,
             label: 'Wyślij',
             tooltip: 'Wyślij kartę pracy (PDF)',
-            onPressed: () => _output(device, rows, _CardOutput.share),
+            onPressed: () => _output(device, rows, CardOutput.share),
           ),
           StripAction(
             icon: Icons.table_view,
             label: 'Excel',
             tooltip: 'Wyślij kartę pracy w Excelu — do poprawienia na '
                 'komputerze',
-            onPressed: () => _output(device, rows, _CardOutput.excel),
+            onPressed: () => _output(device, rows, CardOutput.excel),
           ),
         ]),
       ),
@@ -269,66 +256,25 @@ class _EquipmentCardScreenState extends ConsumerState<EquipmentCardScreen> {
     if (picked != null && mounted) setState(() => _month = picked);
   }
 
+  /// Karta tego urządzenia — sama, na lewej połowie kartki. Wszystkie karty
+  /// naraz są w ewidencji przejazdów.
   Future<void> _output(
     Equipment device,
     List<EquipmentCardRow> rows,
-    _CardOutput output,
+    CardOutput output,
   ) async {
     if (rows.isEmpty && !await _confirmEmptyCard(output.sends)) return;
     if (!mounted) return;
-    final config = ref.read(unitConfigProvider);
-    try {
-      switch (output) {
-        case _CardOutput.system:
-          await EquipmentCardPdf.generateAndPrint(
-            device: device,
-            rows: rows,
-            config: config,
-            year: _month.year,
-            month: _month.month,
-          );
-        case _CardOutput.share:
-          await EquipmentCardPdf.generateAndShare(
-            device: device,
-            rows: rows,
-            config: config,
-            year: _month.year,
-            month: _month.month,
-          );
-        case _CardOutput.bluetooth:
-          await printOnBluetoothPrinter(
-            context,
-            ref,
-            () => EquipmentCardPdf.bytes(
-              device: device,
-              rows: rows,
-              config: config,
-              year: _month.year,
-              month: _month.month,
-            ),
-            rotate90: false,
-          );
-        case _CardOutput.excel:
-          await FileShare.share(
-            EquipmentCardXlsx.bytes(
-              device: device,
-              rows: rows,
-              config: config,
-              year: _month.year,
-              month: _month.month,
-            ),
-            fileName:
-                EquipmentCardXlsx.fileName(device, _month.year, _month.month),
-            mimeType: XlsxWorkbook.mimeType,
-          );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Nie udało się przygotować wydruku: $e')),
-        );
-      }
-    }
+    await outputCards(
+      context,
+      ref,
+      equipmentCards(ref, [device], _month.year, _month.month),
+      output,
+      fileName: cardFileName(
+          'karta_pracy ${device.name}', _month.year, _month.month),
+      title: 'Karta pracy ${device.name} - '
+          '${TripCard.month(_month.month, _month.year)}',
+    );
   }
 
   Future<bool> _confirmEmptyCard(bool send) async {

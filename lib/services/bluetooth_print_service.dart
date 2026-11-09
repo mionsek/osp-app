@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:permission_handler/permission_handler.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import 'package:printing/printing.dart';
@@ -99,15 +100,8 @@ class BluetoothPrintService {
     0x10, 0xFF, 0xFE, 0x45, // koniec zadania
   ];
 
-  /// Ile razy gęściej renderujemy stronę, zanim zredukujemy ją do bitmapy
-  /// czarno-białej. Drukarka drukuje tylko "jest punkt / nie ma punktu",
-  /// więc renderowanie od razu w jej rozdzielczości gubi cienkie kreski i
-  /// drobny tekst. Renderujemy dwukrotnie gęściej i uśredniamy — kreska
-  /// pokrywająca choćby część punktu nadal zostanie wydrukowana.
-  static const int _supersample = 2;
-
   /// Próg jasności decydujący o zaczernieniu punktu (0–255). Wyższy niż
-  /// połowa skali celowo: po uśrednieniu częściowo pokryty punkt ma jasność
+  /// połowa skali celowo: cienka kreska wygładzona przez renderer ma jasność
   /// pośrednią, a na papierze termicznym lepiej wypada tekst nieco
   /// pogrubiony niż poszarpany i miejscami zanikający.
   static const int _inkThreshold = 176;
@@ -120,24 +114,22 @@ class BluetoothPrintService {
   /// formacie oczekiwanym przez drukarkę i wysyła ją przez Bluetooth —
   /// strona po stronie, jako osobne zadania.
   ///
-  /// Wcześniej szła tylko pierwsza strona. Raport i przekazanie mienia mają
-  /// jedną, ale karta drogowa ma co najmniej dwie, więc rozliczenie paliwa
-  /// nigdy nie wychodziło na drukarce, choć aplikacja mówiła „wysłano".
+  /// Strona renderuje się **od razu w rozdzielczości drukarki**. Do wersji
+  /// 1.9.3 była renderowana dwa razy gęściej i uśredniana — obraz A4 miał
+  /// wtedy 63 MB, a przekazanie go z Androida do aplikacji potrzebowało
+  /// jeszcze 125 MB naraz. Telefon zamykał aplikację (`OutOfMemoryError`,
+  /// zgłoszenie Dawida z 8.11.2026: „jak klikamy drukuj bluetooth, to
+  /// aplikacja się crashuje"). W rozdzielczości drukarki strona ma 16 MB.
   ///
-  /// Strony renderujemy po kolei, a nie wszystkie naraz: jedna strona
-  /// w nadpróbkowaniu to kilkadziesiąt MB pamięci.
-  ///
-  /// [rotate90] — nasze dokumenty są w poziomie (A4 landscape), a drukarka
-  /// podaje papier pionowo, więc stronę trzeba obrócić.
+  /// [rotate90] — strony w poziomie (A4 landscape) obracamy, bo drukarka
+  /// podaje papier pionowo: karta wypełnia wtedy całą kartkę, zamiast
+  /// drukować się pomniejszona na jej szerokość.
   static Future<bool> printPdf(Uint8List pdfBytes, {bool rotate90 = true}) async {
     var first = true;
-    await for (final page in Printing.raster(
-      pdfBytes,
-      dpi: printerDpi * _supersample,
-    )) {
+    await for (final page in Printing.raster(pdfBytes, dpi: printerDpi)) {
       if (!first) await Future<void>.delayed(_pauseBetweenPages);
       first = false;
-      final bitmap = _toPrinterBitmap(
+      final bitmap = toPrinterBitmap(
         pixels: page.pixels,
         srcWidth: page.width,
         srcHeight: page.height,
@@ -149,57 +141,35 @@ class BluetoothPrintService {
   }
 
   /// Zamienia piksele RGBA na bitmapę 1-bitową o szerokości
-  /// [printerBytesPerRow] bajtów, opcjonalnie obracając stronę o 90°.
-  ///
-  /// Źródło jest [_supersample] razy gęstsze od wyniku — każdy punkt
-  /// wydruku powstaje z uśrednienia bloku pikseli źródłowych.
-  static ({Uint8List data, int rows}) _toPrinterBitmap({
+  /// [printerBytesPerRow] bajtów, opcjonalnie obracając stronę o 90°
+  /// w prawo. Piksel źródła to punkt wydruku.
+  @visibleForTesting
+  static ({Uint8List data, int rows}) toPrinterBitmap({
     required Uint8List pixels,
     required int srcWidth,
     required int srcHeight,
     required bool rotate90,
   }) {
-    const s = _supersample;
     // Po obrocie zamieniamy szerokość z wysokością.
-    final outWidth = (rotate90 ? srcHeight : srcWidth) ~/ s;
-    final rows = (rotate90 ? srcWidth : srcHeight) ~/ s;
+    final outWidth = rotate90 ? srcHeight : srcWidth;
+    final rows = rotate90 ? srcWidth : srcHeight;
     final data = Uint8List(printerBytesPerRow * rows);
     const maxDots = printerBytesPerRow * 8;
+    final limit = outWidth < maxDots ? outWidth : maxDots;
 
     for (var y = 0; y < rows; y++) {
       final rowOffset = y * printerBytesPerRow;
-      final limit = outWidth < maxDots ? outWidth : maxDots;
       for (var x = 0; x < limit; x++) {
-        var sum = 0;
-        var samples = 0;
-        for (var sy = 0; sy < s; sy++) {
-          for (var sx = 0; sx < s; sx++) {
-            final int srcX, srcY;
-            if (rotate90) {
-              // Obrót o 90° w prawo w siatce nadpróbkowanej.
-              srcX = y * s + sy;
-              srcY = srcHeight - 1 - (x * s + sx);
-            } else {
-              srcX = x * s + sx;
-              srcY = y * s + sy;
-            }
-            if (srcX < 0 || srcX >= srcWidth || srcY < 0 || srcY >= srcHeight) {
-              continue;
-            }
-            final i = (srcY * srcWidth + srcX) * 4;
-            if (i + 3 >= pixels.length) continue;
-            samples++;
-            // Przezroczyste tło traktujemy jak białe.
-            if (pixels[i + 3] < 128) {
-              sum += 255;
-              continue;
-            }
-            sum += (pixels[i] * 299 + pixels[i + 1] * 587 + pixels[i + 2] * 114) ~/
+        final srcX = rotate90 ? y : x;
+        final srcY = rotate90 ? srcHeight - 1 - x : y;
+        final i = (srcY * srcWidth + srcX) * 4;
+        if (i + 3 >= pixels.length) continue;
+        // Przezroczyste tło traktujemy jak białe.
+        if (pixels[i + 3] < 128) continue;
+        final luma =
+            (pixels[i] * 299 + pixels[i + 1] * 587 + pixels[i + 2] * 114) ~/
                 1000;
-          }
-        }
-        if (samples == 0) continue;
-        if (sum ~/ samples >= _inkThreshold) continue; // za jasne — bez druku
+        if (luma >= _inkThreshold) continue; // za jasne — bez druku
 
         data[rowOffset + (x >> 3)] |= 0x80 >> (x & 7);
       }
