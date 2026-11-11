@@ -368,11 +368,11 @@ Obecnie druk startuje od razu po kliknięciu.
 
 ### Przed publikacją w Play Store
 - [x] **Własny klucz podpisu** — dziś APK jest podpisany kluczem debug. Po zmianie klucza Android potraktuje aplikację jako inną i **każdy będzie musiał odinstalować przed aktualizacją, tracąc dane lokalne**. Im więcej osób dostanie wersję na kluczu debug, tym boleśniejsze. Wymaga dopisania nowego odcisku SHA-1 do klienta OAuth w Google Cloud, inaczej przestanie działać logowanie Google (błąd 10). **Zrobione w chore/039** — patrz sekcja niżej
-- [ ] **Dopisać SHA-1 klucza wydań do Google Cloud** — klient OAuth typu Android „Raporty OSP – wydania" już istnieje (od 30.09.2026), trzeba w nim **podmienić odcisk**. Pakiet `pl.osp.osp_app`, SHA-1 `AC:02:42:F2:89:F3:E9:75:E1:04:9E:54:0F:4A:35:F0:40:36:35:BB` (klucz z chore/045; `59:9C:…` z chore/043 przepadł z poprzednim komputerem, a wcześniejszy `B4:8D:…` przepadł razem z laptopem Lenovo). **Do czasu dopisania logowanie Google zwraca błąd 10** i działa tylko tryb offline
+- [x] **Dopisać SHA-1 klucza wydań do Google Cloud** — **podmienione 15.10.2026** (patrz chore/045 niżej) — klient OAuth typu Android „Raporty OSP – wydania" już istnieje (od 30.09.2026), trzeba w nim **podmienić odcisk**. Pakiet `pl.osp.osp_app`, SHA-1 `AC:02:42:F2:89:F3:E9:75:E1:04:9E:54:0F:4A:35:F0:40:36:35:BB` (klucz z chore/045; `59:9C:…` z chore/043 przepadł z poprzednim komputerem, a wcześniejszy `B4:8D:…` przepadł razem z laptopem Lenovo). **Do czasu dopisania logowanie Google zwraca błąd 10** i działa tylko tryb offline
 - [ ] **Weryfikacja uprawnienia `drive` przez Google** — od fix/046 aplikacja prosi o pełny dostęp do Dysku, a to uprawnienie z grupy zastrzeżonych. W trybie testowym działa dla najwyżej 100 testerów (z ostrzeżeniem o niezweryfikowanej aplikacji); publikacja dla wszystkich wymaga weryfikacji Google z płatną oceną bezpieczeństwa. Węższe `drive.file` odpada — przy nim koledzy nie widzą nawzajem swoich plików (opis w fix/046)
 - [ ] Grafiki do sklepu: ikona 512×512, feature graphic 1024×500, min. 2 screenshoty
 - [ ] Polityka prywatności — po usunięciu reklam aplikacja nie zbiera praktycznie nic (dane leżą na Dysku Google użytkownika), więc mieści się w akapicie. Opisać w niej też wyłączoną kopię zapasową Androida i „Wyloguj i usuń dane" (fix/047)
-- [ ] (opcjonalnie) Ikona monochromatyczna `<monochrome>` w adaptive icon — motywy Android 13+
+- [x] (opcjonalnie) Ikona monochromatyczna `<monochrome>` w adaptive icon — motywy Android 13+ — **zrobione w feature/055** razem z logo A
 
 **Publikacja w Play daje też odpowiedź na pytanie o statystyki**: konsola pokazuje
 liczbę instalacji, odinstalowań, kraje i wersje Androida — bez dokładania
@@ -654,7 +654,7 @@ Zapisane, żeby następny przegląd nie zaczynał od zera.
 
 ### Znalezione, świadomie niezmienione
 - [x] **`FileNames.sanitize` kaleczy polskie znaki** — `\w` w Darcie to tylko ASCII, więc „Żukowo" dawało `ukowo`, a „Łódź" samo `d`. **Naprawione w tej samej gałęzi po decyzji Dawida** — opis niżej
-- **Druk Bluetooth alokuje jednorazowo ~62 MB** — `Printing.raster` renderuje stronę w podwójnej gęstości (`201,3 × 2 ≈ 402 DPI`), co dla A4 daje ok. 3325 × 4700 px, czyli 15,6 mln pikseli RGBA. Sterta procesu w pomiarach z feature/032 miała limit 192 MB. To rachunek, nie zaobserwowana awaria. **Zostaje bez zmian — decyzja Dawida: jakość wydruku jest potwierdzona i ma taka pozostać.** Zmniejszenie nadpróbkowania obniżyłoby zużycie czterokrotnie kosztem czytelności druku, więc nie jest to kompromis do przyjęcia
+- **Druk Bluetooth alokuje jednorazowo ~62 MB** — `Printing.raster` renderuje stronę w podwójnej gęstości (`201,3 × 2 ≈ 402 DPI`), co dla A4 daje ok. 3325 × 4700 px, czyli 15,6 mln pikseli RGBA. Sterta procesu w pomiarach z feature/032 miała limit 192 MB. To rachunek, nie zaobserwowana awaria. **Zostaje bez zmian — decyzja Dawida: jakość wydruku jest potwierdzona i ma taka pozostać.** Zmniejszenie nadpróbkowania obniżyłoby zużycie czterokrotnie kosztem czytelności druku, więc nie jest to kompromis do przyjęcia. **Zmienione w fix/054**, bo ta pamięć wyłączała aplikację (`OutOfMemoryError`): strona od razu w rozdzielczości drukarki. Pomiar 11.11.2026 na raporcie, przekazaniu i obu stronach karty drogowej (pdfium jak w Androidzie, próg 176): czerni tyle samo (0 do +6 %), ok. 15 % punktów na krawędziach przesuniętych o jeden, w powiększeniu najdrobniejszego tekstu bez widocznej różnicy — renderer sam wygładza krawędzie, jak dawne uśrednianie. Do potwierdzenia wydrukiem na NETUM
 
 ### Polskie znaki w nazwach plików — naprawione
 Sanityzacja dotyczy **wyłącznie nazw plików**. Nazwiska na wydrukach i ekranach
@@ -720,7 +720,7 @@ Kolejność według wagi.
 
 **Przed rozdaniem kolejnej wersji**
 - [x] ~~Klucz wydań jest tylko na drugim komputerze~~ — laptopa już nie ma, klucz przepadł; zastąpiony nowym w chore/043 niżej. Pierwotny opis: (`C:/Users/Lenovo/.keys/`). APK zbudowany na tym komputerze podpisuje się kluczem debug **bez ostrzeżenia** — nie zaktualizuje 1.6.0 u kolegów. Wydania budować tam albo przenieść keystore i `key.properties` (bezpiecznie, nie przez repo). Rozważyć, żeby build release bez `key.properties` kończył się błędem zamiast cicho spadać na klucz debug. I potwierdzić, że keystore ma kopię poza komputerem
-- [ ] **SHA-1 klucza wydań w Google Cloud** — odcisk klucza z chore/045 (patrz „Przed publikacją"). Bez tego wersja wydania zwraca przy logowaniu błąd 10
+- [x] **SHA-1 klucza wydań w Google Cloud** — odcisk klucza z chore/045 (patrz „Przed publikacją"). Bez tego wersja wydania zwraca przy logowaniu błąd 10 — **podmienione 15.10.2026**
 - [ ] **Tryb ekranu zgody OAuth** — w „Testing" zalogują się tylko konta dopisane jako testerzy, a zgoda wygasa po 7 dniach. Do sprawdzenia razem z SHA-1
 - [x] **Wszyscy w jednostce na tej samej wersji** (fix/044: `syncFormat` w `unit_config.json`) — stare wersje nie znają ochrony poprawek ani daty badań. Rozważyć minimalną wersję w `unit_config.json` z komunikatem „zaktualizuj"
 
@@ -731,7 +731,7 @@ Kolejność według wagi.
 - [x] Wysyłka wszystkich dokumentów co 5 minut (ok. 3 wywołania API na rekord) — wysyłać tylko zmienione
 - [x] Jeden uszkodzony plik na Dysku przerywa całą synchronizację — parsować każdy plik osobno
 - [x] Duplikaty plików po zmianie reguł nazw, gdy telefony są na różnych wersjach — docelowo dopasowanie po id rekordu (`appProperties`), nie po nazwie
-- [ ] Test na **dwóch telefonach z różnymi kontami Google** — wykonany przy 1.7.1 i **nie przeszedł** (dołączenie kodem z innego konta niemożliwe); przyczyna i naprawa w fix/046, test do powtórzenia
+- [x] Test na **dwóch telefonach z różnymi kontami Google** — wykonany przy 1.7.1 i **nie przeszedł** (dołączenie kodem z innego konta niemożliwe); przyczyna i naprawa w fix/046 — **zaliczony 11.11.2026**: wyjazd 0017/2026 dodany przez kolegę z jego konta Google widać na telefonie Dawida, „Zapisano na Dysku jednostki"
 
 **Druk** — zrobione w fix/044, szczegóły niżej
 - [x] **Druk BT karty drogowej drukuje tylko pierwszą stronę** — `BluetoothPrintService` rasteryzuje `.first`, a karta ma dwie strony, więc **rozliczenie paliwa nigdy nie wychodzi** na drukarce BT (komunikat mimo to mówi „Wysłano")
@@ -812,7 +812,7 @@ dokument**.
 ### Czego pilnować
 - **Stare wersje (≤ 1.6.1) nie znają znaczników usunięcia** — dopóki ktoś ich używa, potrafią odesłać usunięty dokument; nowa wersja nadpisze go z powrotem znacznikiem. Koledzy i tak muszą przeinstalować aplikację (nowy klucz podpisu), więc okres przejściowy powinien być krótki
 - Znaczniki usunięcia nie wygasają — to kilka kilobajtów rocznie, a dzięki temu telefon, który był długo offline, nie wskrzesi usuniętych wpisów
-- [ ] **Test na dwóch prawdziwych telefonach z różnymi kontami Google** — zostaje; atrapa nie sprawdzi uprawnień Dysku między kontami
+- [x] **Test na dwóch prawdziwych telefonach z różnymi kontami Google** — atrapa nie sprawdzi uprawnień Dysku między kontami — **zaliczony 11.11.2026**: wyjazd 0017/2026 dodany przez kolegę z jego konta Google widać na telefonie Dawida, „Zapisano na Dysku jednostki"
 
 ## Zrobione (chore/045-klucz-na-nowym-komputerze)
 Klucz z chore/043 przepadł razem z poprzednim komputerem i kopii nie ma, choć
@@ -899,8 +899,8 @@ i na emulatorze.
 
 ### Do zrobienia przez Dawida
 - [ ] **Google Cloud → Dostęp do danych:** dopisać zakres `https://www.googleapis.com/auth/drive`. Testerom logowanie zadziała i bez tego, ale ekran zgody pokaże wtedy właściwy opis
-- [ ] **Test na dwóch telefonach z różnymi kontami** (oba na liście testerów): zaproszenie z Ustawień → e-mail z kodem → dołączenie na drugim telefonie → wyjazd z jednego widoczny na drugim
-- [ ] Parowanie drukarki NETUM z poziomu aplikacji
+- [x] **Test na dwóch telefonach z różnymi kontami** (oba na liście testerów): zaproszenie z Ustawień → e-mail z kodem → dołączenie na drugim telefonie → wyjazd z jednego widoczny na drugim — **zaliczony 11.11.2026**: wyjazd 0017/2026 dodany przez kolegę z jego konta Google widać na telefonie Dawida, „Zapisano na Dysku jednostki"
+- [x] Parowanie drukarki NETUM z poziomu aplikacji — zrobione wyżej w tej gałęzi („Wyszukiwanie i parowanie w aplikacji")
 
 ## Zrobione (fix/047-synchronizacja-dane-telefonu)
 Zgłoszenia Dawida z testów 1.7.3 (27.10.2026) i część planu ochrony danych
@@ -1006,6 +1006,16 @@ Ekrany wyjazdu i przekazania miały domek zamiast strzałki, reszta ekranów —
 - [x] **Niezapisane dane**: kreator wyjazdu, formularze (przekazanie, przejazd, pojazd, ratownik) i dane jednostki w Ustawieniach z wpisanymi zmianami pytają „Wyjść bez zapisywania?" przy wstecz i przy domku. Pusty formularz zamyka się bez pytania, po zapisie też
 - [x] 10 nowych testów na prawdziwym drzewie tras: po zapisie przekazania wstecz do listy i do menu (aplikacja się nie zamyka), po „Lista wyjazdów" wstecz do menu, strzałka i domek na każdym z 19 ekranów, kreator cofa o krok i pyta na pierwszym, bez wpisanych danych bez pytania, „Zostań" zostawia, formularz pyta domkiem i wstecz, zapis zamyka bez pytania, Ustawienia pytają przed zapisem, a po nim nie. Łącznie **364**
 - [x] Wersja **1.7.8+21**
+
+## Zrobione (feature/056-kto-dodal)
+Prośba Dawida z 11.11.2026, po teście na dwóch telefonach (wyjazd kolegi
+widoczny u niego): przy wyjeździe i przekazaniu mienia mała informacja, kto
+je dodał — tylko na ekranie, bez zmiany wydruku.
+
+- [x] **„Dodał: e-mail"** w szczegółach wyjazdu (pod „Ratownicy") i przekazania mienia (pod „Miejscowość, dnia"). Adres to konto, z którego wpis zapisano (`createdBy` — zapisywane i synchronizowane przez Dysk od dawna, na nim stoi blokada „Edytuj" / „Usuń"), więc nic nie zmienia się w danych ani na wydruku. Wpisy dodane bez zalogowania nie mają autora — wtedy bez wiersza
+- [x] Porządki w BACKLOG: odhaczone zrobione wcześniej SHA-1 w Google Cloud (15.10.2026), parowanie drukarki z aplikacji (fix/046) i ikona jednobarwna (feature/055); test na dwóch telefonach z różnymi kontami zaliczony; przy decyzji o nadpróbkowaniu druku Bluetooth dopisana zmiana z fix/054 i pomiar jakości z 11.11.2026
+- [x] 3 nowe testy: „Dodał" z e-mailem kolegi na wyjeździe i na przekazaniu, brak wiersza przy wpisie bez autora. Łącznie **467**
+- [x] Wersja **1.9.6+29**
 
 ## Zrobione (feature/055-ikony-kolory-logo)
 Wybór Dawida z 9–11.11.2026: najpierw porównanie pięciu zestawów ikon, potem

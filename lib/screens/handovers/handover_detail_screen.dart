@@ -171,6 +171,10 @@ class HandoverDetailScreen extends ConsumerWidget {
                     _Row('Przekazujący', handoverFF?.fullNameWithRank ?? '—'),
                     _Row('Miejscowość, dnia',
                         '${handover.signLocality}, ${TimeFormat.date(handover.signDate)}'),
+                    // Konto, z którego przekazanie zapisano — tylko na
+                    // ekranie, nie na wydruku. Bez logowania autora nie ma.
+                    if (handover.createdBy.isNotEmpty)
+                      _Row('Dodał', handover.createdBy),
                   ],
                 ),
               ),
