@@ -31,13 +31,13 @@ class OspTheme {
   // ---------------------------------------------------------------------------
 
   /// Wyjazdy ratownicze — sekcja wiodąca, stąd kolor wiodący aplikacji.
+  /// W menu tym kolorem są obie pozycje: „Dodaj wyjazd" i „Wyjazdy".
   static const Color sectionReports = primaryRed;
 
-  /// Lista wyjazdów, a poza nią wszystko, co tylko informuje: przycisk edycji,
-  /// czas trwania działań, nieznana kategoria zagrożenia.
-  static const Color sectionReportsList = Color(0xFF1565C0);
-
-  static const Color sectionHandovers = Color(0xFF6D4C41);
+  /// Przekazania mienia — „Dodaj przekazanie mienia" i „Przekazania mienia".
+  /// Do 1.9.4 brąz, a tym niebieskim była lista wyjazdów; zielony odpadł,
+  /// bo mają go ratownicy, a ewidencja przejazdów — morski.
+  static const Color sectionHandovers = Color(0xFF1565C0);
   static const Color sectionTrips = Color(0xFF00695C);
   static const Color sectionVehicles = Color(0xFFE65100);
   static const Color sectionFirefighters = Color(0xFF2E7D32);
@@ -47,7 +47,8 @@ class OspTheme {
   // Znaczenie komunikatu
   //
   // Trzy z nich to te same wartości, co kolory sekcji — czerwień wyjazdu jest
-  // od początku czerwienią błędu, a zieleń ratowników zielenią potwierdzenia.
+  // od początku czerwienią błędu, zieleń ratowników zielenią potwierdzenia,
+  // a niebieski przekazań niebieskim informacji.
   // Dostają mimo to własne nazwy, żeby dało się je kiedyś rozdzielić przez
   // zmianę jednej linijki, a nie przez szukanie po całym kodzie, które
   // wystąpienie znaczyło co.
@@ -59,8 +60,9 @@ class OspTheme {
   /// Potwierdzenie zapisu, ważne uprawnienie, zalecany wybór.
   static const Color success = sectionFirefighters;
 
-  /// Informacja neutralna i akcje bezpieczne (edycja).
-  static const Color info = sectionReportsList;
+  /// Informacja neutralna i akcje bezpieczne: przycisk edycji, czas trwania
+  /// działań, nieznana kategoria zagrożenia.
+  static const Color info = sectionHandovers;
 
   /// Miejscowe zagrożenie i ostrzeżenia, które nie są błędem.
   static const Color warning = Color(0xFFF9A825);
@@ -77,7 +79,10 @@ class OspTheme {
   // Tła pastelowe — wypełnienia ramek i kart pod kolorami wyżej
   // ---------------------------------------------------------------------------
 
-  static const Color handoversSurface = Color(0xFFF5EFEB);
+  /// Karta „postaw mi kawę" na ekranie głównym — brąz kawy. Do 1.9.4
+  /// dzieliła go z przekazaniami mienia.
+  static const Color coffee = Color(0xFF6D4C41);
+  static const Color coffeeSurface = Color(0xFFF5EFEB);
   static const Color successSurface = Color(0xFFE8F5E9);
   static const Color dangerSurface = Color(0xFFFFEBEE);
   static const Color infoSurface = Color(0xFFE3F2FD);

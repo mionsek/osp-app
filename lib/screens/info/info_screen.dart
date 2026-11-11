@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/constants/constants.dart';
+import '../../core/theme/osp_icons.dart';
 import '../../core/theme/osp_theme.dart';
 import '../../widgets/navigation.dart';
 
@@ -205,7 +206,7 @@ class InfoScreen extends StatelessWidget {
                     'paliwa na karcie.',
               ),
               const _HowToItem(
-                icon: Icons.handyman,
+                icon: OspIcons.circularSaw,
                 title: 'Dodaj sprzęt',
                 description:
                     'Pilarki, agregaty, autopompy — przypisane do wozów. '
@@ -240,7 +241,7 @@ class InfoScreen extends StatelessWidget {
                     'same.',
               ),
               const _HowToItem(
-                icon: Icons.route,
+                icon: Icons.edit_road,
                 title: 'Ewidencja przejazdów',
                 description:
                     'Wyjazd alarmowy dopisuje się tu sam po zapisaniu '

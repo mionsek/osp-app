@@ -148,6 +148,8 @@ void main() {
     await tester.ensureVisible(find.text('Lista wyjazdów'));
     await tester.tap(find.text('Lista wyjazdów'));
     await tester.pumpAndSettle();
+    // Ekran listy nazywa się jak pozycja w menu.
+    expect(find.widgetWithText(AppBar, 'Wyjazdy'), findsOneWidget);
 
     await systemBack(tester);
     expect(home(), findsOneWidget);

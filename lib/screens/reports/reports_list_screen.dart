@@ -25,7 +25,7 @@ class ReportsListScreen extends ConsumerWidget {
 
     return SyncOnOpen(child: Scaffold(
       appBar: AppBar(
-        title: const Text('Lista wyjazdów'),
+        title: const Text('Wyjazdy'),
         actions: const [HomeButton()],
       ),
       floatingActionButton: FloatingActionButton.extended(

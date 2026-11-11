@@ -19,6 +19,11 @@ void main() async {
       const ['Open Sans'],
       await rootBundle.loadString('assets/fonts/OFL.txt'),
     );
+    // Cztery ikony z Material Design Icons (OspIcons) — Apache 2.0.
+    yield LicenseEntryWithLineBreaks(
+      const ['Material Design Icons'],
+      await rootBundle.loadString('assets/fonts/MDI-LICENSE.txt'),
+    );
   });
   runApp(const ProviderScope(child: OspApp()));
 }

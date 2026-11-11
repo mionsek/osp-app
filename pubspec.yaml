@@ -1,7 +1,7 @@
 name: osp_app
 description: "Raporty OSP — raporty z wyjazdów ratowniczych dla jednostek OSP"
 publish_to: 'none'
-version: 1.9.4+27
+version: 1.9.5+28
 
 environment:
   sdk: ^3.11.4
@@ -59,9 +59,14 @@ dev_dependencies:
 flutter_launcher_icons:
   android: true
   ios: false
+  # Logo A — karta z płomieniem. Źródło: assets/icon/osp_icon.svg, obrazki
+  # PNG składa z niego tool/osp_icons/build_logo.py.
   image_path: "assets/icon/osp_icon.png"
-  adaptive_icon_background: "#FFFFFF"
-  adaptive_icon_foreground: "assets/icon/osp_icon.png"
+  adaptive_icon_background: "#B71C1C"
+  adaptive_icon_foreground: "assets/icon/osp_icon_foreground.png"
+  # Pierwszy plan to już całe płótno 108 × 108, więc bez dodatkowego wcięcia.
+  adaptive_icon_foreground_inset: 0
+  adaptive_icon_monochrome: "assets/icon/osp_icon_monochrome.png"
 
 flutter:
   uses-material-design: true
@@ -81,3 +86,11 @@ flutter:
     - assets/fonts/LiberationSerif-Regular.ttf
     - assets/fonts/LiberationSerif-Bold.ttf
     - assets/fonts/LIBERATION-OFL.txt
+    # Licencja ikon z Material Design Icons (Apache 2.0) z czcionki niżej.
+    - assets/fonts/MDI-LICENSE.txt
+
+  # Kilka ikon spoza wbudowanych Icons — składa je tool/osp_icons/build_font.py.
+  fonts:
+    - family: OspIcons
+      fonts:
+        - asset: assets/fonts/OspIcons.otf

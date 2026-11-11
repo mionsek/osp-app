@@ -9,6 +9,7 @@ import '../../services/equipment_usage.dart';
 import '../../services/trip_odometer.dart';
 import '../../services/trip_card.dart';
 import '../../widgets/card_output.dart';
+import '../../core/theme/osp_icons.dart';
 import '../../core/theme/osp_theme.dart';
 import '../../widgets/action_strip.dart';
 import '../../widgets/month_picker.dart';
@@ -525,13 +526,15 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
   IconData _purposeIcon(String purpose) {
     switch (purpose) {
       case TripPurposes.alarm:
-        return Icons.local_fire_department;
+        return OspIcons.alarmLight;
+      case TripPurposes.economic:
+        return Icons.fire_truck;
       case TripPurposes.refuelling:
         return Icons.local_gas_station;
       case TripPurposes.training:
-        return Icons.school;
+        return OspIcons.humanMaleBoard;
       case TripPurposes.service:
-        return Icons.build;
+        return OspIcons.carWrench;
       default:
         return Icons.directions_car;
     }

@@ -124,7 +124,7 @@ void main() {
     await tester.tap(find.byIcon(Icons.home).first);
     await tester.pumpAndSettle();
 
-    expect(find.text('Lista wyjazdów (1)'), findsOneWidget);
+    expect(find.text('Wyjazdy (1)'), findsOneWidget);
 
     // --- Sedno testu: wyjazd alarmowy dopisał się do ewidencji sam ---
     await tapText(tester, 'Ewidencja przejazdów');

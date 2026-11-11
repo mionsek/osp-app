@@ -44,12 +44,13 @@ void main() {
 
     test('nazwy dzielące wartość wskazują na tę samą barwę', () {
       // Aliasy są celowe i opisane w OspTheme: czerwień wyjazdu jest czerwienią
-      // błędu, zieleń ratowników zielenią potwierdzenia, pomarańcz pojazdów
-      // pomarańczem wpisu do uzupełnienia. Test pilnuje, żeby rozdzielenie
-      // ich kiedyś było **świadomą** zmianą, a nie skutkiem ubocznym.
+      // błędu, zieleń ratowników zielenią potwierdzenia, niebieski przekazań
+      // niebieskim informacji, pomarańcz pojazdów pomarańczem wpisu do
+      // uzupełnienia. Test pilnuje, żeby rozdzielenie ich kiedyś było
+      // **świadomą** zmianą, a nie skutkiem ubocznym.
       expect(OspTheme.danger, OspTheme.primaryRed);
       expect(OspTheme.success, OspTheme.sectionFirefighters);
-      expect(OspTheme.info, OspTheme.sectionReportsList);
+      expect(OspTheme.info, OspTheme.sectionHandovers);
       expect(OspTheme.attention, OspTheme.sectionVehicles);
     });
   });

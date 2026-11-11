@@ -1007,6 +1007,23 @@ Ekrany wyjazdu i przekazania miały domek zamiast strzałki, reszta ekranów —
 - [x] 10 nowych testów na prawdziwym drzewie tras: po zapisie przekazania wstecz do listy i do menu (aplikacja się nie zamyka), po „Lista wyjazdów" wstecz do menu, strzałka i domek na każdym z 19 ekranów, kreator cofa o krok i pyta na pierwszym, bez wpisanych danych bez pytania, „Zostań" zostawia, formularz pyta domkiem i wstecz, zapis zamyka bez pytania, Ustawienia pytają przed zapisem, a po nim nie. Łącznie **364**
 - [x] Wersja **1.7.8+21**
 
+## Zrobione (feature/055-ikony-kolory-logo)
+Wybór Dawida z 9–11.11.2026: najpierw porównanie pięciu zestawów ikon, potem
+klikalny katalog tylko z ikon wbudowanych (Material) i MDI, w którym sam
+przypisał ikony. Do tego zasada: „Dodaj …" i lista pod nim to jedna sekcja —
+ten sam kolor i nazwa w tej samej formie co reszta menu (wybrana opcja B:
+„Wyjazdy", „Przekazania mienia", bez „Lista").
+
+- [x] **Logo A — karta z płomieniem** na czerwieni OSP (#B71C1C). Źródło w `assets/icon/osp_icon.svg` (płótno 108 × 108 ikony adaptacyjnej, grupy: tło, karta, wycięcia); `tool/osp_icons/build_logo.py` renderuje z niego trzy PNG, a `flutter_launcher_icons` resztę. Nowe: **warstwa jednobarwna** do ikon tematycznych Androida 13+ (kształt karty z wyciętymi liniami i płomieniem), pierwszy plan bez wcięcia 16 % (to już całe płótno). Usunięty `tool/generate_icon.dart` — generator zastępczego logo z pierwszych gałęzi
+- [x] **Ikony celów przejazdów** w ewidencji: wyjazd alarmowy — kogut (MDI), gospodarczy — wóz strażacki (był samochód), ćwiczenia — osoba przy tablicy (MDI, był biret), przegląd / naprawa — samochód z kluczem (MDI, był klucz). Tankowanie i „Inny" bez zmian. Ikony zagrożeń bez zmian
+- [x] **Menu główne**: ewidencja przejazdów — droga z ołówkiem (`edit_road`), sprzęt — piła tarczowa (MDI). Te same ikony w „O aplikacji" → „Jak korzystać"
+- [x] **Ikony MDI bez całego pakietu** — cztery rysunki z Material Design Icons (Pictogrammers, Apache 2.0) w czcionce `assets/fonts/OspIcons.otf` (1,3 KB), używane jak `Icons.*` przez `OspIcons` (`lib/core/theme/osp_icons.dart`). Pakiet `material_design_icons_flutter` odpadł: ostatnie wydanie z 2023, kilka tysięcy ikon. Czcionkę składa `tool/osp_icons/build_font.py` z niezmienionych plików SVG w `tool/osp_icons/svg/` (fontTools, ten sam plik przy każdym przebudowaniu). Licencja w `assets/fonts/MDI-LICENSE.txt` i na liście licencji w aplikacji
+- [x] **Kolory par w menu**: „Wyjazdy" czerwone jak „Dodaj wyjazd" (było niebieskie), obie pozycje przekazań mienia niebieskie (były brązowe). Zielony odpadł — mają go ratownicy, a ewidencja morski. Niebieski to dalej kolor informacji i przycisku „Edytuj" (`OspTheme.info` = `sectionHandovers`); `sectionReportsList` usunięty. Karta „Postaw mi kawę" zostaje brązowa — własny kolor `OspTheme.coffee`
+- [x] **„Lista wyjazdów" → „Wyjazdy"** w menu (`Wyjazdy (n)`, jak `Pojazdy (n)`) i w tytule ekranu listy. Przyciski „Lista wyjazdów" / „Lista przekazań mienia" pod wyjazdem i przekazaniem zostają — tam to polecenie „wróć do listy"
+- [x] Sprawdzone na emulatorze w wersji wydania: menu (kolory par, „Wyjazdy", piła przy sprzęcie — czcionka przeżywa odchudzanie czcionek ikon), logo w szufladzie aplikacji
+- [x] 6 nowych testów: każda ikona `OspIcons` ma znak w czcionce, a czcionka i licencja są w paczce; ikona aplikacji (czerwone tło z palety, warstwa jednobarwna, bez wcięcia); pary „Dodaj …" i lista w tym samym kolorze, niebieski przekazań nie powtarza się w innej sekcji; „Wyjazdy" bez „Lista"; ikony ewidencji i sprzętu te same w menu i w „O aplikacji"; ikona każdego celu przejazdu. Test nawigacji sprawdza tytuł „Wyjazdy". Łącznie **464**
+- [x] Wersja **1.9.5+28**
+
 ## Zrobione (fix/054-bluetooth-i-karty-jak-na-papierze)
 Zgłoszenia Dawida z testów 1.9.3 (8–9.11.2026, pięć zdjęć kart z Kielna
 i dwa zrzuty podglądu ScanPrint): druk Bluetooth wyłącza aplikację; karta
