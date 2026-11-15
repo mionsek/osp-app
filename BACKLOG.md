@@ -1049,7 +1049,8 @@ lepszej jakości" — poprawić, ale bez problemów z pamięcią.
 - [x] Wersja **1.9.9+32**
 
 ### Do sprawdzenia przez Dawida
-- [ ] Wydruk na NETUM: raport, przekazanie mienia i „Wszystkie karty" — czy jakość jak przed 1.9.4
+- [x] Wydruk na NETUM — **potwierdzone przez Dawida 15.11.2026** na potwierdzeniu udziału 0017/2026: „jakość wydruku jest o wiele lepsza"
+- [ ] Przekazanie mienia i „Wszystkie karty" na NETUM
 - [ ] Przy kilku kartach naraz aplikacja się nie wyłącza
 
 ## Zrobione (feature/058-wspolne-konto-jednostki)
