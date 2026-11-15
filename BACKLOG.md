@@ -682,7 +682,7 @@ Zapisane, żeby następny przegląd nie zaczynał od zera.
 
 ### Znalezione, świadomie niezmienione
 - [x] **`FileNames.sanitize` kaleczy polskie znaki** — `\w` w Darcie to tylko ASCII, więc „Żukowo" dawało `ukowo`, a „Łódź" samo `d`. **Naprawione w tej samej gałęzi po decyzji Dawida** — opis niżej
-- **Druk Bluetooth alokuje jednorazowo ~62 MB** — `Printing.raster` renderuje stronę w podwójnej gęstości (`201,3 × 2 ≈ 402 DPI`), co dla A4 daje ok. 3325 × 4700 px, czyli 15,6 mln pikseli RGBA. Sterta procesu w pomiarach z feature/032 miała limit 192 MB. To rachunek, nie zaobserwowana awaria. **Zostaje bez zmian — decyzja Dawida: jakość wydruku jest potwierdzona i ma taka pozostać.** Zmniejszenie nadpróbkowania obniżyłoby zużycie czterokrotnie kosztem czytelności druku, więc nie jest to kompromis do przyjęcia. **Zmienione w fix/054**, bo ta pamięć wyłączała aplikację (`OutOfMemoryError`): strona od razu w rozdzielczości drukarki. Pomiar 11.11.2026 na raporcie, przekazaniu i obu stronach karty drogowej (pdfium jak w Androidzie, próg 176): czerni tyle samo (0 do +6 %), ok. 15 % punktów na krawędziach przesuniętych o jeden, w powiększeniu najdrobniejszego tekstu bez widocznej różnicy — renderer sam wygładza krawędzie, jak dawne uśrednianie. Do potwierdzenia wydrukiem na NETUM
+- **Druk Bluetooth alokuje jednorazowo ~62 MB** — `Printing.raster` renderuje stronę w podwójnej gęstości (`201,3 × 2 ≈ 402 DPI`), co dla A4 daje ok. 3325 × 4700 px, czyli 15,6 mln pikseli RGBA. Sterta procesu w pomiarach z feature/032 miała limit 192 MB. To rachunek, nie zaobserwowana awaria. **Zostaje bez zmian — decyzja Dawida: jakość wydruku jest potwierdzona i ma taka pozostać.** Zmniejszenie nadpróbkowania obniżyłoby zużycie czterokrotnie kosztem czytelności druku, więc nie jest to kompromis do przyjęcia. **Zmienione w fix/054**, bo ta pamięć wyłączała aplikację (`OutOfMemoryError`): strona od razu w rozdzielczości drukarki. Pomiar 11.11.2026 na raporcie, przekazaniu i obu stronach karty drogowej (pdfium jak w Androidzie, próg 176): czerni tyle samo (0 do +6 %), ok. 15 % punktów na krawędziach przesuniętych o jeden, w powiększeniu najdrobniejszego tekstu bez widocznej różnicy — renderer sam wygładza krawędzie, jak dawne uśrednianie. Do potwierdzenia wydrukiem na NETUM. **Wydruk nie potwierdził** (Dawid, 15.11.2026: „zdecydowanie za słaby") — **nadpróbkowanie wróciło w fix/059**, renderowane w pasach, bez obrazu całej strony w pamięci
 
 ### Polskie znaki w nazwach plików — naprawione
 Sanityzacja dotyczy **wyłącznie nazw plików**. Nazwiska na wydrukach i ekranach
@@ -1034,6 +1034,23 @@ Ekrany wyjazdu i przekazania miały domek zamiast strzałki, reszta ekranów —
 - [x] **Niezapisane dane**: kreator wyjazdu, formularze (przekazanie, przejazd, pojazd, ratownik) i dane jednostki w Ustawieniach z wpisanymi zmianami pytają „Wyjść bez zapisywania?" przy wstecz i przy domku. Pusty formularz zamyka się bez pytania, po zapisie też
 - [x] 10 nowych testów na prawdziwym drzewie tras: po zapisie przekazania wstecz do listy i do menu (aplikacja się nie zamyka), po „Lista wyjazdów" wstecz do menu, strzałka i domek na każdym z 19 ekranów, kreator cofa o krok i pyta na pierwszym, bez wpisanych danych bez pytania, „Zostań" zostawia, formularz pyta domkiem i wstecz, zapis zamyka bez pytania, Ustawienia pytają przed zapisem, a po nim nie. Łącznie **364**
 - [x] Wersja **1.7.8+21**
+
+## Zrobione (fix/059-jakosc-druku-bluetooth)
+Zgłoszenie Dawida z 15.11.2026, po wydruku na NETUM XL-P801 z wersji 1.9.8:
+„druk jest zdecydowanie za słaby. Ostatnim razem jak działała drukarka był
+lepszej jakości" — poprawić, ale bez problemów z pamięcią.
+
+- [x] **Przyczyna**: od fix/054 strona renderowała się od razu w rozdzielczości drukarki (201 DPI). Drukarka zna tylko „jest punkt / nie ma punktu", więc część cienkich kresek i drobnego tekstu wypadała z jednego punktu na granicy progu i chudła albo znikała. Do 1.9.3 strona szła dwa razy gęściej (402 DPI) i każdy punkt był średnią z czterech pikseli — druk był dobry, ale obraz całej strony (63 MB) i jego przekazanie przez wtyczkę `printing` (jeszcze 125 MB) wyłączały aplikację
+- [x] **Nadpróbkowanie wraca, ale w pasach**: na Androidzie stronę renderuje własny kod (`PdfBandRasterizer.kt`, systemowy `PdfRenderer` — ten sam, którego używa `printing`) pasami po 64 wiersze druku, dwa razy gęściej, z uśrednieniem 2 × 2 i progiem 176 jak w 1.9.3. Naraz w pamięci jest jeden pas (ok. 2,4 MB) i obraz strony w szarości w rozdzielczości drukarki (ok. 4 MB, jeden bajt na punkt) — tylko on trafia do Darta. Próg i obrót bez zmian, po stronie Darta
+- [x] **Strona po stronie**: kolejna renderuje się dopiero po wysłaniu poprzedniej. Wtyczka `printing` renderowała wszystkie strony od razu, niezależnie od tempa wysyłki — przy „Wszystkich kartach" obrazy stron mogły się zbierać w pamięci
+- [x] Renderowanie na osobnym wątku Androida; błąd (także brak pamięci) wraca jako komunikat „Błąd druku: …", nie zamyka aplikacji. Na innych systemach (iOS w przyszłości) zostaje `Printing.raster` w rozdzielczości drukarki
+- [x] **Sprawdzone na emulatorze w wersji wydania** (tymczasowo zamiast drukarki zapis zadania do pliku, potem usunięty): „Wszystkie karty" z listopada (karta drogowa i karta pracy sprzętu, 4 strony). Nowy druk: o 7–12 % więcej czarnych punktów niż w 1.9.4–1.9.8; w powiększeniu kropki linii wykropkowanych i cienkie kreski liter pełne, a dotąd miejscami chudły do jednego punktu. Pamięć: aplikacja przed drukiem 181 MB, w szczycie nowego druku 233 MB (z tworzeniem PDF kart), przy sposobie z 1.9.4–1.9.8 — 355 MB. Czas: 4,4 s zamiast 2,9 s na 4 strony
+- [x] Testy: obraz w szarości na stronę A4 poniżej 5 MB, nadpróbkowanie tylko w pasie (pas < 8 MB, cała strona > 60 MB), uśrednianie i próg (punkt w połowie pokryty się drukuje, w ćwierci nie), RGBA na szarość, kolejność „renderuj stronę → wyślij → następna", parametry dla Androida (2×, pasy, DPI), błąd renderowania bez wysyłki, założenia kodu Androida (białe tło pasa, przesunięcie, osobny wątek). Łącznie **504**
+- [x] Wersja **1.9.9+32**
+
+### Do sprawdzenia przez Dawida
+- [ ] Wydruk na NETUM: raport, przekazanie mienia i „Wszystkie karty" — czy jakość jak przed 1.9.4
+- [ ] Przy kilku kartach naraz aplikacja się nie wyłącza
 
 ## Zrobione (feature/058-wspolne-konto-jednostki)
 Decyzja Dawida z 12.11.2026: tablet w samochodzie ma działać na jednym koncie

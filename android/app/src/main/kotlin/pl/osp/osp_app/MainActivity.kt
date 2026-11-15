@@ -12,11 +12,15 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
+import java.io.File
+import java.util.concurrent.Executors
 
 /**
  * Wyszukiwanie i parowanie drukarek Bluetooth z poziomu aplikacji.
@@ -77,9 +81,67 @@ class MainActivity : FlutterActivity() {
                 else -> result.notImplemented()
             }
         }
+
+        // Druk Bluetooth: strony PDF w szarości, w pasach — patrz
+        // PdfBandRasterizer. Renderowanie trwa kilka sekund, więc idzie na
+        // osobnym wątku, a odpowiedź wraca na wątek główny.
+        MethodChannel(messenger, "pl.osp.osp_app/pdf_raster").setMethodCallHandler { call, result ->
+            val pdf = call.argument<ByteArray>("pdf")
+            if (pdf == null) {
+                result.error("args", "Brak dokumentu PDF", null)
+                return@setMethodCallHandler
+            }
+            rasterExecutor.execute {
+                val reply: () -> Unit = try {
+                    when (call.method) {
+                        "pageCount" -> {
+                            val count = withTempPdf(pdf) { PdfBandRasterizer.pageCount(it) }
+                            ({ result.success(count) })
+                        }
+                        "renderPage" -> {
+                            val page = withTempPdf(pdf) {
+                                PdfBandRasterizer.renderPage(
+                                    it,
+                                    call.argument<Int>("page") ?: 0,
+                                    call.argument<Double>("dpi") ?: 200.0,
+                                    call.argument<Int>("supersample") ?: 1,
+                                    call.argument<Int>("bandRows") ?: 64,
+                                )
+                            }
+                            ({
+                                result.success(
+                                    mapOf("width" to page.width, "height" to page.height, "gray" to page.gray),
+                                )
+                            })
+                        }
+                        else -> ({ result.notImplemented() })
+                    }
+                } catch (e: Throwable) {
+                    // Także OutOfMemoryError — komunikat zamiast zamknięcia aplikacji.
+                    val message = "${e.javaClass.simpleName}: ${e.message}"
+                    ({ result.error("raster", message, null) })
+                }
+                mainHandler.post(reply)
+            }
+        }
+    }
+
+    private val rasterExecutor = Executors.newSingleThreadExecutor()
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    private fun <T> withTempPdf(pdf: ByteArray, block: (File) -> T): T {
+        val file = File.createTempFile("bt_print", ".pdf", cacheDir)
+        try {
+            file.writeBytes(pdf)
+            return block(file)
+        } finally {
+            file.delete()
+        }
     }
 
     override fun onDestroy() {
+        // Rozpoczęte renderowanie się dokończy, nowe nie ruszy.
+        rasterExecutor.shutdown()
         cancelDiscovery()
         unregisterBluetoothReceiver()
         super.onDestroy()

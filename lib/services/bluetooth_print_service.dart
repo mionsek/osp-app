@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show visibleForTesting;
+import 'package:flutter/services.dart' show MethodChannel;
 import 'package:permission_handler/permission_handler.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import 'package:printing/printing.dart';
@@ -110,27 +111,51 @@ class BluetoothPrintService {
   /// dostaje czas na przyjęcie poprzedniego, zanim przyjdzie następne.
   static const Duration _pauseBetweenPages = Duration(milliseconds: 800);
 
+  /// Ile razy gęściej renderujemy stronę przed uśrednieniem do punktów
+  /// drukarki. Drukarka zna tylko „jest punkt / nie ma punktu", więc strona
+  /// renderowana od razu w jej rozdzielczości gubi części cienkich kresek
+  /// i drobnego tekstu — tak drukowały wersje 1.9.4–1.9.8 (zgłoszenie
+  /// Dawida z 15.11.2026: „druk jest zdecydowanie za słaby"). Dwa razy
+  /// gęściej z uśrednianiem — tak jak do 1.9.3, kiedy druk był dobry.
+  static const int supersample = 2;
+
+  /// Wysokość pasa, w którym Android renderuje stronę (w punktach drukarki).
+  /// W nadpróbkowaniu pas A4 w poziomie to ok. 2,4 MB, cała strona — 63 MB.
+  static const int rasterBandRows = 64;
+
+  static const MethodChannel _raster = MethodChannel('pl.osp.osp_app/pdf_raster');
+
+  /// Renderowanie w pasach jest w kodzie Androida (`PdfBandRasterizer.kt`);
+  /// na innych systemach zostaje `Printing.raster` w rozdzielczości drukarki.
+  @visibleForTesting
+  static bool nativeRaster = Platform.isAndroid;
+
+  /// Wysyłka bajtów do drukarki — w testach podmieniana.
+  @visibleForTesting
+  static Future<bool> Function(List<int> bytes) writeBytes =
+      PrintBluetoothThermal.writeBytes;
+
   /// Renderuje **każdą** stronę dokumentu PDF do bitmapy 1-bitowej w
   /// formacie oczekiwanym przez drukarkę i wysyła ją przez Bluetooth —
   /// strona po stronie, jako osobne zadania.
   ///
-  /// Strona renderuje się **od razu w rozdzielczości drukarki**. Do wersji
-  /// 1.9.3 była renderowana dwa razy gęściej i uśredniana — obraz A4 miał
-  /// wtedy 63 MB, a przekazanie go z Androida do aplikacji potrzebowało
-  /// jeszcze 125 MB naraz. Telefon zamykał aplikację (`OutOfMemoryError`,
-  /// zgłoszenie Dawida z 8.11.2026: „jak klikamy drukuj bluetooth, to
-  /// aplikacja się crashuje"). W rozdzielczości drukarki strona ma 16 MB.
+  /// Kolejna strona renderuje się dopiero po wysłaniu poprzedniej, więc
+  /// w pamięci jest zawsze jedna. Do 1.9.3 strona A4 w nadpróbkowaniu
+  /// zajmowała 63 MB, a jej przekazanie z Androida — jeszcze 125 MB naraz,
+  /// i telefon zamykał aplikację (`OutOfMemoryError`, zgłoszenie z
+  /// 8.11.2026). Teraz Android renderuje ją w pasach i oddaje obraz
+  /// w szarości w rozdzielczości drukarki — ok. 4 MB.
   ///
   /// [rotate90] — strony w poziomie (A4 landscape) obracamy, bo drukarka
   /// podaje papier pionowo: karta wypełnia wtedy całą kartkę, zamiast
   /// drukować się pomniejszona na jej szerokość.
   static Future<bool> printPdf(Uint8List pdfBytes, {bool rotate90 = true}) async {
     var first = true;
-    await for (final page in Printing.raster(pdfBytes, dpi: printerDpi)) {
+    await for (final page in _grayPages(pdfBytes)) {
       if (!first) await Future<void>.delayed(_pauseBetweenPages);
       first = false;
       final bitmap = toPrinterBitmap(
-        pixels: page.pixels,
+        gray: page.gray,
         srcWidth: page.width,
         srcHeight: page.height,
         rotate90: rotate90,
@@ -140,12 +165,56 @@ class BluetoothPrintService {
     return !first;
   }
 
-  /// Zamienia piksele RGBA na bitmapę 1-bitową o szerokości
-  /// [printerBytesPerRow] bajtów, opcjonalnie obracając stronę o 90°
-  /// w prawo. Piksel źródła to punkt wydruku.
+  /// Strony dokumentu po kolei, w szarości, jeden bajt na punkt drukarki.
+  static Stream<({int width, int height, Uint8List gray})> _grayPages(
+      Uint8List pdf) async* {
+    if (!nativeRaster) {
+      await for (final page in Printing.raster(pdf, dpi: printerDpi)) {
+        yield (
+          width: page.width,
+          height: page.height,
+          gray: grayFromRgba(page.pixels),
+        );
+      }
+      return;
+    }
+    final count = await _raster.invokeMethod<int>('pageCount', {'pdf': pdf});
+    for (var i = 0; i < (count ?? 0); i++) {
+      final page = await _raster.invokeMapMethod<String, Object?>('renderPage', {
+        'pdf': pdf,
+        'page': i,
+        'dpi': printerDpi,
+        'supersample': supersample,
+        'bandRows': rasterBandRows,
+      });
+      if (page == null) return;
+      yield (
+        width: page['width']! as int,
+        height: page['height']! as int,
+        gray: page['gray']! as Uint8List,
+      );
+    }
+  }
+
+  /// Piksele RGBA na jasność 0–255; przezroczyste tło jak białe.
+  @visibleForTesting
+  static Uint8List grayFromRgba(Uint8List pixels) {
+    final gray = Uint8List(pixels.length ~/ 4);
+    for (var p = 0, i = 0; p < gray.length; p++, i += 4) {
+      gray[p] = pixels[i + 3] < 128
+          ? 255
+          : (pixels[i] * 299 + pixels[i + 1] * 587 + pixels[i + 2] * 114) ~/
+              1000;
+    }
+    return gray;
+  }
+
+  /// Zamienia obraz w szarości (jeden bajt na punkt) na bitmapę 1-bitową
+  /// o szerokości [printerBytesPerRow] bajtów, opcjonalnie obracając stronę
+  /// o 90° w prawo.
   @visibleForTesting
   static ({Uint8List data, int rows}) toPrinterBitmap({
-    required Uint8List pixels,
+    required Uint8List gray,
     required int srcWidth,
     required int srcHeight,
     required bool rotate90,
@@ -162,14 +231,9 @@ class BluetoothPrintService {
       for (var x = 0; x < limit; x++) {
         final srcX = rotate90 ? y : x;
         final srcY = rotate90 ? srcHeight - 1 - x : y;
-        final i = (srcY * srcWidth + srcX) * 4;
-        if (i + 3 >= pixels.length) continue;
-        // Przezroczyste tło traktujemy jak białe.
-        if (pixels[i + 3] < 128) continue;
-        final luma =
-            (pixels[i] * 299 + pixels[i + 1] * 587 + pixels[i + 2] * 114) ~/
-                1000;
-        if (luma >= _inkThreshold) continue; // za jasne — bez druku
+        final i = srcY * srcWidth + srcX;
+        if (i >= gray.length) continue;
+        if (gray[i] >= _inkThreshold) continue; // za jasne — bez druku
 
         data[rowOffset + (x >> 3)] |= 0x80 >> (x & 7);
       }
@@ -198,7 +262,7 @@ class BluetoothPrintService {
     // Uint8List kończy się po stronie Androida wyjątkiem
     // "byte[] cannot be cast to java.util.List" — wtyczka rzutuje
     // argument na List<Int>, a Uint8List mapuje się na byte[].
-    return PrintBluetoothThermal.writeBytes(packet.toBytes().toList());
+    return writeBytes(packet.toBytes().toList());
   }
 
   /// Wydruk testowy własnym protokołem drukarki — rysuje prosty wzór
