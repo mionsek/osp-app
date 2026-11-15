@@ -91,6 +91,8 @@ class _EquipmentCardScreenState extends ConsumerState<EquipmentCardScreen> {
             label: 'Bluetooth',
             tooltip: 'Drukuj na drukarce Bluetooth',
             onPressed: () => _output(device, rows, CardOutput.bluetooth),
+            onLongPress: () =>
+                _output(device, rows, CardOutput.bluetoothOtherPrinter),
           ),
           StripAction(
             icon: Icons.share,

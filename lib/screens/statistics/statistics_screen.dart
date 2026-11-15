@@ -44,6 +44,11 @@ class StatisticsScreen extends ConsumerWidget {
                 : () => printOnBluetoothPrinter(
                     context, ref, () => StatsPdf.bytes(stats, config),
                     rotate90: false),
+            onLongPress: empty
+                ? null
+                : () => printOnBluetoothPrinter(
+                    context, ref, () => StatsPdf.bytes(stats, config),
+                    rotate90: false, choosePrinter: true),
           ),
           StripAction(
             icon: Icons.share,

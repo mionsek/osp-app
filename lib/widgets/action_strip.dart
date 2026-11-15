@@ -13,6 +13,10 @@ class StripAction {
   /// `null` — przycisk wyszarzony (np. statystyki pustego roku).
   final VoidCallback? onPressed;
 
+  /// Przytrzymanie — np. „Bluetooth" otwiera wtedy wybór drukarki. Bez tego
+  /// przytrzymanie pokazuje [tooltip].
+  final VoidCallback? onLongPress;
+
   /// Usuwanie — czerwony, zawsze ostatni.
   final bool danger;
 
@@ -21,6 +25,7 @@ class StripAction {
     required this.label,
     this.tooltip,
     required this.onPressed,
+    this.onLongPress,
     this.danger = false,
   });
 }
@@ -115,6 +120,7 @@ class _StripButton extends StatelessWidget {
             : Colors.grey[850]!;
     final button = InkWell(
       onTap: action.onPressed,
+      onLongPress: action.onLongPress,
       borderRadius: BorderRadius.circular(8),
       child: ConstrainedBox(
         constraints: const BoxConstraints(minWidth: 60),
@@ -143,6 +149,10 @@ class _StripButton extends StatelessWidget {
     );
     return Tooltip(
       message: action.tooltip ?? action.label,
+      // Przytrzymanie ma własne działanie — dymek by je zasłaniał.
+      triggerMode: action.onLongPress != null
+          ? TooltipTriggerMode.manual
+          : null,
       child: button,
     );
   }

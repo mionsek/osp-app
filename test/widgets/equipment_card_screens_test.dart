@@ -145,6 +145,19 @@ void main() {
     expect(find.text('Brak pracy w tym miesiącu'), findsOneWidget);
   });
 
+  testWidgets('„Bluetooth" na karcie urządzenia: przytrzymanie wybiera '
+      'drukarkę (feature/060)', (tester) async {
+    await seed(tester, equipment: [saw()]);
+    await tester.pumpWidget(app(const EquipmentCardScreen(equipmentId: 'e-saw')));
+    await tester.pumpAndSettle();
+
+    final button = tester.widget<InkWell>(find.ancestor(
+        of: find.descendant(
+            of: find.byType(AppBar), matching: find.text('Bluetooth')),
+        matching: find.byType(InkWell)));
+    expect(button.onLongPress, isNotNull);
+  });
+
   testWidgets('rozruch całego sprzętu: zaznaczone urządzenia z własnym '
       'silnikiem, 15 min, jeden wpis na urządzenie', (tester) async {
     await seed(tester, equipment: [niagara(), saw(), pump()]);

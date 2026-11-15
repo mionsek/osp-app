@@ -62,6 +62,9 @@ class ReportDetailScreen extends ConsumerWidget {
             tooltip: bluetoothTooltip(config),
             onPressed: () => printOnBluetoothPrinter(context, ref,
                 () => ReportPdf.bytes(report, config, firefighters)),
+            onLongPress: () => printOnBluetoothPrinter(context, ref,
+                () => ReportPdf.bytes(report, config, firefighters),
+                choosePrinter: true),
           ),
           StripAction(
             icon: Icons.share,

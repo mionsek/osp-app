@@ -60,6 +60,7 @@ Future<PrinterPickResult> pickBluetoothPrinter(
       return a.name.toLowerCase().compareTo(b.name.toLowerCase());
     });
   if (!context.mounted) return const PrinterPickResult.cancelled();
+  final current = ref.read(unitConfigProvider).btPrinterMac;
 
   // Bez sparowanych urządzeń od razu wyszukiwanie — wcześniej był tu tylko
   // komunikat odsyłający do ustawień Bluetooth telefonu.
@@ -92,7 +93,13 @@ Future<PrinterPickResult> pickBluetoothPrinter(
                               ? Icons.print
                               : Icons.bluetooth),
                           title: Text(info.name),
-                          subtitle: Text(info.macAdress),
+                          subtitle: Text(info.macAdress == current
+                              ? '${info.macAdress} · obecna drukarka'
+                              : info.macAdress),
+                          trailing: info.macAdress == current
+                              ? const Icon(Icons.check,
+                                  color: OspTheme.success)
+                              : null,
                           onTap: () => Navigator.pop(ctx, info),
                         ),
                       const Divider(),
@@ -138,6 +145,12 @@ String bluetoothTooltip(UnitConfig config) {
 /// Druk dokumentu na sparowanej drukarce termicznej Bluetooth, z wyborem
 /// drukarki na miejscu, gdy żadnej jeszcze nie wybrano.
 ///
+/// [choosePrinter] — najpierw lista drukarek, także gdy jakaś jest już
+/// zapamiętana (przytrzymanie „Bluetooth" albo „Wybierz inną" po nieudanym
+/// połączeniu). Wybrana zostaje zapamiętana na następne wydruki. Prośba
+/// Dawida z 15.11.2026: przy dwóch drukarkach (np. w dwóch wozach) albo
+/// wyłączonej zapamiętanej trzeba było iść do Ustawień.
+///
 /// Wspólne dla raportu, przekazania mienia i obu kart — wcześniej każdy
 /// ekran miał własną kopię tych samych kroków i komunikatów.
 ///
@@ -148,17 +161,21 @@ Future<void> printOnBluetoothPrinter(
   WidgetRef ref,
   Future<Uint8List> Function() pdfBytes, {
   bool rotate90 = true,
+  bool choosePrinter = false,
 }) async {
   final messenger = ScaffoldMessenger.of(context);
-  void show(String text, {bool ok = false}) {
+  void show(String text, {bool ok = false, SnackBarAction? action}) {
     messenger.showSnackBar(SnackBar(
       content: Text(text),
       backgroundColor: ok ? OspTheme.success : OspTheme.danger,
+      action: action,
+      // Z przyciskiem — czas, żeby go nacisnąć.
+      duration: Duration(seconds: action != null ? 8 : 4),
     ));
   }
 
   var mac = ref.read(unitConfigProvider).btPrinterMac;
-  if (mac == null || mac.isEmpty) {
+  if (choosePrinter || mac == null || mac.isEmpty) {
     final result = await pickBluetoothPrinter(context, ref);
     if (result.errorMessage != null) {
       show(result.errorMessage!);
@@ -174,7 +191,20 @@ Future<void> printOnBluetoothPrinter(
       return;
     }
     if (!await BluetoothPrintService.connectIfNeeded(mac)) {
-      show('Nie udało się połączyć z drukarką.');
+      final name = ref.read(unitConfigProvider).btPrinterName ?? '';
+      show(
+        'Nie udało się połączyć z drukarką${name.isEmpty ? '' : ' $name'}. '
+        'Sprawdź, czy jest włączona, albo wybierz inną.',
+        action: SnackBarAction(
+          label: 'Wybierz inną',
+          textColor: Colors.white,
+          onPressed: () {
+            if (!context.mounted) return;
+            printOnBluetoothPrinter(context, ref, pdfBytes,
+                rotate90: rotate90, choosePrinter: true);
+          },
+        ),
+      );
       return;
     }
     messenger.showSnackBar(const SnackBar(

@@ -71,6 +71,8 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
                   label: 'Bluetooth',
                   tooltip: 'Drukuj na drukarce Bluetooth',
                   onPressed: () => _printCard(vehicles, CardOutput.bluetooth),
+                  onLongPress: () =>
+                      _printCard(vehicles, CardOutput.bluetoothOtherPrinter),
                 ),
                 StripAction(
                   icon: Icons.share,

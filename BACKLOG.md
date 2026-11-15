@@ -1035,6 +1035,25 @@ Ekrany wyjazdu i przekazania miały domek zamiast strzałki, reszta ekranów —
 - [x] 10 nowych testów na prawdziwym drzewie tras: po zapisie przekazania wstecz do listy i do menu (aplikacja się nie zamyka), po „Lista wyjazdów" wstecz do menu, strzałka i domek na każdym z 19 ekranów, kreator cofa o krok i pyta na pierwszym, bez wpisanych danych bez pytania, „Zostań" zostawia, formularz pyta domkiem i wstecz, zapis zamyka bez pytania, Ustawienia pytają przed zapisem, a po nim nie. Łącznie **364**
 - [x] Wersja **1.7.8+21**
 
+## Zrobione (feature/060-wybor-drukarki-bluetooth)
+Pytanie Dawida z 15.11.2026: jak wygląda druk Bluetooth z niesparowaną
+drukarką i czy da się wybrać urządzenie. Pierwszy raz wybór już był (lista
+sparowanych, wyszukanie i sparowanie nowej), ale potem przycisk drukował
+zawsze na zapamiętanej — przy dwóch drukarkach (np. w dwóch wozach) albo
+wyłączonej trzeba było iść do Ustawień. Wybrany wariant A.
+
+- [x] **„Wybierz inną" przy nieudanym połączeniu** — komunikat „Nie udało się połączyć z drukarką NETUM… Sprawdź, czy jest włączona, albo wybierz inną." z przyciskiem (8 s zamiast 4), który otwiera listę drukarek i drukuje na wybranej
+- [x] **Przytrzymanie „Bluetooth"** — lista drukarek przed drukiem, także gdy jakaś jest zapamiętana. Na wyjeździe, przekazaniu mienia, statystykach, w ewidencji przejazdów i na karcie pracy urządzenia (przy pustych statystykach wyłączone jak sam przycisk). Wybrana drukarka zostaje domyślna. Zwykłe dotknięcie bez zmian — drukuje od razu. Przytrzymanie nie pokazuje już dymka z nazwą drukarki — tę widać na liście
+- [x] Na liście drukarek obecna oznaczona „· obecna drukarka" i znaczkiem
+- [x] **Połączenie z właściwą drukarką** — dotąd każde otwarte połączenie uznawano za dobre, więc po wybraniu innej drukarki wydruk poszedłby na poprzednią. Teraz aplikacja pamięta, z którą drukarką jest połączona, i przy innej najpierw się rozłącza (wtyczka nie łączy się ponownie przy otwartym połączeniu)
+- [x] Podpowiedź w „O aplikacji" (druk na drukarce Bluetooth) i w Ustawieniach (Drukarka Bluetooth)
+- [x] Testy: połączenie (ta sama drukarka bez ponownego łączenia, inna — po rozłączeniu, nieudane — od nowa), komunikat z „Wybierz inną" i druk na wybranej, która zostaje domyślna, przytrzymanie — lista bez łączenia i rezygnacja bez zmian, zwykłe dotknięcie bez listy, przytrzymanie tylko na „Bluetooth" na wszystkich pięciu ekranach. Łącznie **511**
+- [x] Wersja **1.9.10+33**
+
+### Do sprawdzenia przez Dawida
+- [ ] Przytrzymanie „Bluetooth" na wyjeździe — lista drukarek, wydruk na wybranej
+- [ ] Wyłączona drukarka — komunikat z „Wybierz inną"
+
 ## Zrobione (fix/059-jakosc-druku-bluetooth)
 Zgłoszenie Dawida z 15.11.2026, po wydruku na NETUM XL-P801 z wersji 1.9.8:
 „druk jest zdecydowanie za słaby. Ostatnim razem jak działała drukarka był

@@ -320,7 +320,9 @@ class InfoScreen extends StatelessWidget {
                     'Dokument możesz wysłać wprost na przenośną drukarkę '
                     'termiczną — przycisk „Bluetooth" jest na pasku pod '
                     'tytułem każdego dokumentu. Drukarkę wybiera się raz, '
-                    'a nową można wyszukać i sparować wprost z aplikacji.',
+                    'a nową można wyszukać i sparować wprost z aplikacji. '
+                    'Przytrzymaj „Bluetooth", żeby wydrukować na innej '
+                    'drukarce, np. w drugim wozie — będzie odtąd domyślna.',
               ),
               const SizedBox(height: 16),
 

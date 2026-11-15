@@ -89,6 +89,19 @@ void main() {
           of: inBar(label), matching: find.byType(InkWell)))
       .onTap != null;
 
+  /// Przytrzymanie ma własne działanie (feature/060: wybór drukarki).
+  bool longPress(WidgetTester tester, String label) => tester
+      .widget<InkWell>(find.ancestor(
+          of: inBar(label), matching: find.byType(InkWell)))
+      .onLongPress != null;
+
+  /// Tylko „Bluetooth" ma przytrzymanie — reszta pokazuje opis przycisku.
+  void expectBluetoothLongPressOnly(WidgetTester tester, List<String> labels) {
+    for (final label in labels) {
+      expect(longPress(tester, label), label == 'Bluetooth', reason: label);
+    }
+  }
+
   Report report() => Report(
         id: 'r1',
         reportNumber: '0002/$year',
@@ -129,6 +142,8 @@ void main() {
       expect(find.text('Drukuj (2 egzemplarze)'), findsNothing,
           reason: 'druk nie dubluje się na dole treści');
       expect(find.byTooltip('Drukuj (2 egzemplarze)'), findsOneWidget);
+      expectBluetoothLongPressOnly(
+          tester, ['Drukuj', 'Bluetooth', 'Wyślij', 'Edytuj', 'Usuń']);
     });
 
     testWidgets('kolega: drukuje i wysyła, ale bez Edytuj i Usuń',
@@ -153,6 +168,8 @@ void main() {
     }
     expect(barIconButtons(tester), 1);
     expect(find.text('Udostępnij / Wyślij'), findsNothing);
+    expectBluetoothLongPressOnly(
+        tester, ['Drukuj', 'Bluetooth', 'Wyślij', 'Edytuj', 'Usuń']);
   });
 
   testWidgets('statystyki pustego roku: przyciski na miejscu, wyszarzone — '
@@ -162,6 +179,7 @@ void main() {
     for (final label in ['Drukuj', 'Bluetooth', 'Wyślij']) {
       expect(inBar(label), findsOneWidget, reason: label);
       expect(enabled(tester, label), isFalse, reason: label);
+      expect(longPress(tester, label), isFalse, reason: label);
     }
     expect(find.text('Drukuj statystyki'), findsNothing);
   });
@@ -172,6 +190,7 @@ void main() {
 
     expect(enabled(tester, 'Drukuj'), isTrue);
     expect(enabled(tester, 'Bluetooth'), isTrue);
+    expectBluetoothLongPressOnly(tester, ['Drukuj', 'Bluetooth', 'Wyślij']);
   });
 
   group('ewidencja przejazdów', () {
@@ -190,6 +209,8 @@ void main() {
       expect(barIconButtons(tester), 1);
       expect(find.byTooltip('Wyślij karty w Excelu — do poprawienia '
           'na komputerze'), findsOneWidget);
+      expectBluetoothLongPressOnly(
+          tester, ['Drukuj', 'Bluetooth', 'Wyślij', 'Excel']);
     });
 
     testWidgets('druk pyta: wszystkie karty miesiąca (domyślnie) czy jedna',

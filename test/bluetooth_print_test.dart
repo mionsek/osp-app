@@ -190,6 +190,49 @@ void main() {
     });
   });
 
+  group('połączenie z drukarką (feature/060: wybór innej drukarki)', () {
+    String? connectedTo;
+    final log = <String>[];
+
+    setUp(() {
+      connectedTo = null;
+      log.clear();
+      BluetoothPrintService.resetConnection();
+      BluetoothPrintService.isConnected = () async => connectedTo != null;
+      BluetoothPrintService.disconnect = () async {
+        log.add('rozłącz');
+        connectedTo = null;
+        return true;
+      };
+      BluetoothPrintService.connect = (mac) async {
+        log.add('połącz $mac');
+        if (mac == 'WYŁĄCZONA') return false;
+        connectedTo = mac;
+        return true;
+      };
+    });
+
+    test('ta sama drukarka — bez ponownego łączenia', () async {
+      expect(await BluetoothPrintService.connectIfNeeded('AA'), isTrue);
+      expect(await BluetoothPrintService.connectIfNeeded('AA'), isTrue);
+      expect(log, ['połącz AA']);
+    });
+
+    test('inna drukarka — najpierw rozłączenie, żeby wydruk nie poszedł na '
+        'poprzednią', () async {
+      await BluetoothPrintService.connectIfNeeded('AA');
+      expect(await BluetoothPrintService.connectIfNeeded('BB'), isTrue);
+      expect(log, ['połącz AA', 'rozłącz', 'połącz BB']);
+      expect(connectedTo, 'BB');
+    });
+
+    test('nieudane połączenie: następna próba łączy od nowa', () async {
+      expect(await BluetoothPrintService.connectIfNeeded('WYŁĄCZONA'), isFalse);
+      expect(await BluetoothPrintService.connectIfNeeded('WYŁĄCZONA'), isFalse);
+      expect(log, ['połącz WYŁĄCZONA', 'połącz WYŁĄCZONA']);
+    });
+  });
+
   test('kod Androida: pas renderowany na osobnym wątku, z białym tłem', () {
     // Pilnuje założeń, których test w Darcie nie sprawdzi.
     final kotlin = File(

@@ -27,35 +27,59 @@ class BluetoothPrintService {
   /// zwraca true od razu). Musi zostać wywołane i zwrócić true przed
   /// jakimkolwiek innym wywołaniem w tej klasie, inaczej te wywołania mogą
   /// zawiesić się w nieskończoność (patrz uwaga wyżej).
-  static Future<bool> ensurePermission() async {
+  static Future<bool> ensurePermission() => requestPermission();
+
+  static Future<bool> isBluetoothEnabled() => bluetoothEnabled();
+
+  static Future<List<BluetoothInfo>> pairedPrinters() => pairedDevices();
+
+  // Wywołania wtyczki i uprawnień — w testach podmieniane.
+  @visibleForTesting
+  static Future<bool> Function() requestPermission = () async {
     final connectStatus = await Permission.bluetoothConnect.request();
     final scanStatus = await Permission.bluetoothScan.request();
     return connectStatus.isGranted && scanStatus.isGranted;
-  }
+  };
+  @visibleForTesting
+  static Future<bool> Function() bluetoothEnabled =
+      () => PrintBluetoothThermal.bluetoothEnabled;
+  @visibleForTesting
+  static Future<List<BluetoothInfo>> Function() pairedDevices =
+      () => PrintBluetoothThermal.pairedBluetooths;
+  @visibleForTesting
+  static Future<bool> Function(String mac) connect =
+      (mac) => PrintBluetoothThermal.connect(macPrinterAddress: mac);
+  @visibleForTesting
+  static Future<bool> Function() isConnected =
+      () => PrintBluetoothThermal.connectionStatus;
+  @visibleForTesting
+  static Future<bool> Function() disconnect =
+      () => PrintBluetoothThermal.disconnect;
 
-  static Future<bool> isBluetoothEnabled() =>
-      PrintBluetoothThermal.bluetoothEnabled;
+  /// Drukarka, z którą ta sesja aplikacji się połączyła.
+  static String? _connectedMac;
 
-  static Future<List<BluetoothInfo>> pairedPrinters() =>
-      PrintBluetoothThermal.pairedBluetooths;
+  @visibleForTesting
+  static void resetConnection() => _connectedMac = null;
 
-  static Future<bool> connect(String mac) =>
-      PrintBluetoothThermal.connect(macPrinterAddress: mac);
-
-  static Future<bool> get isConnected => PrintBluetoothThermal.connectionStatus;
-
-  static Future<bool> disconnect() => PrintBluetoothThermal.disconnect;
-
-  /// Łączy się tylko, jeśli jeszcze nie jesteśmy połączeni.
+  /// Łączy się z drukarką [mac], chyba że już jest z nią połączenie.
   ///
   /// Wtyczka `print_bluetooth_thermal` ma błąd: gdy `connect` jest wywołane
   /// po raz drugi w tej samej sesji aplikacji, a poprzednie połączenie
   /// wciąż jest otwarte, jej kod po stronie Androida zwraca `false` (nie
   /// próbując nawet nawiązać połączenia), mimo że drukarka fizycznie jest
-  /// podłączona. Obchodzimy to, sprawdzając [isConnected] najpierw.
+  /// podłączona. Dlatego otwarte połączenie z tą samą drukarką zostawiamy,
+  /// a z inną — najpierw zamykamy. Wcześniej wystarczało samo „jest
+  /// połączenie", więc po wybraniu innej drukarki (feature/060) wydruk
+  /// poszedłby dalej na poprzednią.
   static Future<bool> connectIfNeeded(String mac) async {
-    if (await isConnected) return true;
-    return connect(mac);
+    if (await isConnected()) {
+      if (_connectedMac == mac) return true;
+      await disconnect();
+    }
+    final ok = await connect(mac);
+    _connectedMac = ok ? mac : null;
+    return ok;
   }
 
   // Uwaga: polskie znaki nie wymagają już żadnej podmiany — drukujemy

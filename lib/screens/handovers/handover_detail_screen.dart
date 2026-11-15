@@ -62,6 +62,9 @@ class HandoverDetailScreen extends ConsumerWidget {
             tooltip: bluetoothTooltip(config),
             onPressed: () => printOnBluetoothPrinter(context, ref,
                 () => HandoverPdf.bytes(handover, config, handoverFF)),
+            onLongPress: () => printOnBluetoothPrinter(context, ref,
+                () => HandoverPdf.bytes(handover, config, handoverFF),
+                choosePrinter: true),
           ),
           StripAction(
             icon: Icons.share,

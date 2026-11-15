@@ -22,6 +22,9 @@ import 'bluetooth_printer_picker.dart';
 enum CardOutput {
   system,
   bluetooth,
+
+  /// Bluetooth z wyborem drukarki — przytrzymanie przycisku „Bluetooth".
+  bluetoothOtherPrinter,
   share,
   excel;
 
@@ -108,9 +111,10 @@ Future<void> outputCards(
         );
       case CardOutput.share:
         await Printing.sharePdf(bytes: await pdf(), filename: '$fileName.pdf');
-      case CardOutput.bluetooth:
+      case CardOutput.bluetooth || CardOutput.bluetoothOtherPrinter:
         // Karty są w poziomie — obrócone wypełniają całą kartkę drukarki.
-        await printOnBluetoothPrinter(context, ref, pdf);
+        await printOnBluetoothPrinter(context, ref, pdf,
+            choosePrinter: output == CardOutput.bluetoothOtherPrinter);
       case CardOutput.excel:
         await FileShare.share(
           CardSheet.xlsx(pages),

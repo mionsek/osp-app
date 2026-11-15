@@ -888,7 +888,8 @@ class _BluetoothPrinterSectionState
         Text(
           'Dla drukarek termicznych (np. NETUM), których Android nie widzi '
           'jako zwykłej drukarki. Nową drukarkę sparujesz tutaj: '
-          '„Wybierz drukarkę" → „Wyszukaj i sparuj nową drukarkę".',
+          '„Wybierz drukarkę" → „Wyszukaj i sparuj nową drukarkę". '
+          'Przy samym druku przytrzymaj „Bluetooth", żeby wybrać inną.',
           style: TextStyle(fontSize: 12, color: Colors.grey[600]),
         ),
         const SizedBox(height: 12),
