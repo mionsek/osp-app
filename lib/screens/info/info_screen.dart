@@ -5,6 +5,7 @@ import '../../core/constants/constants.dart';
 import '../../core/theme/osp_icons.dart';
 import '../../core/theme/osp_theme.dart';
 import '../../widgets/navigation.dart';
+import '../../widgets/shared_account_guide.dart';
 
 class InfoScreen extends StatelessWidget {
   const InfoScreen({super.key});
@@ -289,6 +290,28 @@ class InfoScreen extends StatelessWidget {
                 description:
                     'Zaloguj się kontem Google, aby synchronizować '
                     'dane między urządzeniami przez Google Drive.',
+              ),
+              const _HowToItem(
+                icon: Icons.tablet_android,
+                title: 'Tablet w samochodzie',
+                description:
+                    'Na wspólnym urządzeniu loguje się konto jednostki. Gdy '
+                    'administrator oznaczy je jako wspólne (Ustawienia → '
+                    'Członkowie jednostki), działa jak konto zwykłego członka, '
+                    'a przy zapisie wyjazdu i przekazania mienia pyta „Kto '
+                    'wpisuje?". W dokumencie widać wtedy osobę, a nie tylko '
+                    'konto jednostki.',
+              ),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 32, bottom: 12),
+                  child: TextButton.icon(
+                    onPressed: () => showSharedAccountGuide(context),
+                    icon: const Icon(Icons.help_outline, size: 18),
+                    label: const Text('Samouczek: tablet krok po kroku'),
+                  ),
+                ),
               ),
               const _HowToItem(
                 icon: Icons.bluetooth,

@@ -10,6 +10,7 @@ import '../../services/bluetooth_print_service.dart';
 import '../../services/google_drive_service.dart';
 import '../../widgets/admin_only_notice.dart';
 import '../../widgets/bluetooth_printer_picker.dart';
+import '../../widgets/shared_account_guide.dart';
 import '../../widgets/sync_feedback.dart';
 import '../../widgets/unit_account_dialogs.dart';
 import 'unit_members_section.dart';
@@ -201,7 +202,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 // Z uprawnień jednostki, a nie z pola zapisanego przy
                 // pierwszym uruchomieniu — inaczej osoba, której
                 // administrator nadał uprawnienia, widziała tu „Użytkownik".
-                _InfoRow('Rola', isAdmin ? 'Administrator' : 'Użytkownik'),
+                _InfoRow(
+                    'Rola',
+                    isAdmin
+                        ? 'Administrator'
+                        : ref.watch(syncStateProvider).isSharedAccount
+                            ? 'Wspólne konto jednostki'
+                            : 'Użytkownik'),
                 const SizedBox(height: 8),
                 TextButton.icon(
                   onPressed: () => context.push('/info'),
@@ -623,9 +630,29 @@ class _GoogleSyncSectionState extends ConsumerState<_GoogleSyncSection> {
               icon: const Icon(Icons.folder_open, size: 18),
               label: const Text('Otwórz folder jednostki na Dysku'),
             ),
+            // Wspólne konto (np. tablet w samochodzie) nie przełącza się na
+            // „swoje" — przełączenie nadaje podanemu adresowi uprawnienia
+            // administratora, a tablet ma ich nie mieć.
+            if (syncState.isSharedAccount) ...[
+              const SizedBox(height: 16),
+              _Notice(
+                icon: Icons.tablet_android,
+                color: OspTheme.info,
+                background: OspTheme.infoSurface,
+                text: 'To wspólne konto jednostki. Działa jak konto zwykłego '
+                    'członka, a przy wyjazdach i przekazaniach mienia pyta, '
+                    'kto wpisuje. Zmienić to może administrator na własnym '
+                    'koncie.',
+              ),
+              TextButton.icon(
+                onPressed: () => showSharedAccountGuide(context),
+                icon: const Icon(Icons.help_outline, size: 18),
+                label: const Text('Jak to działa?'),
+              ),
+            ]
             // Jednostkę często zakłada się na wspólnym koncie jednostki,
             // a wyjazdy podpisują się kontem, na którym się jest.
-            if (syncState.isFounder(email)) ...[
+            else if (syncState.isFounder(email)) ...[
               const SizedBox(height: 16),
               _Notice(
                 icon: Icons.person_outline,

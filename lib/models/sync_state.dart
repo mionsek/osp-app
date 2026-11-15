@@ -35,6 +35,12 @@ class SyncState {
   /// (`config/admins.json`).
   final List<String> adminEmails;
 
+  /// Konto założyciela to wspólne konto jednostki, np. na tablecie
+  /// w samochodzie (`sharedFounder` w `config/admins.json`). Działa wtedy
+  /// jak zwykły członek, a przy wpisach pyta, kto wpisuje — patrz
+  /// [isAdmin] i [isSharedAccount].
+  final bool sharedFounder;
+
   /// Pliki z Dysku pominięte przy ostatniej synchronizacji, bo nie dało się
   /// ich odczytać. Dawniej jeden taki plik przerywał całą synchronizację.
   final int skippedFiles;
@@ -57,6 +63,7 @@ class SyncState {
     this.duplicateReportNumbers = const [],
     this.founderEmail,
     this.adminEmails = const [],
+    this.sharedFounder = false,
     this.skippedFiles = 0,
     this.renumberNotes = const [],
   });
@@ -74,6 +81,7 @@ class SyncState {
     List<String>? duplicateReportNumbers,
     String? founderEmail,
     List<String>? adminEmails,
+    bool? sharedFounder,
     int? skippedFiles,
     List<String>? renumberNotes,
     bool clearError = false,
@@ -92,6 +100,7 @@ class SyncState {
           duplicateReportNumbers ?? this.duplicateReportNumbers,
       founderEmail: founderEmail ?? this.founderEmail,
       adminEmails: adminEmails ?? this.adminEmails,
+      sharedFounder: sharedFounder ?? this.sharedFounder,
       skippedFiles: skippedFiles ?? this.skippedFiles,
       renumberNotes: renumberNotes ?? this.renumberNotes,
     );
@@ -111,11 +120,37 @@ class SyncState {
     if (!isConnected || unitFolderId == null) return true;
     final me = userEmail;
     if (me == null || me.isEmpty) return false;
-    final normalized = _normalize(me);
-    if (founderEmail != null && _normalize(founderEmail!) == normalized) {
-      return true;
-    }
+    return isAdmin(me);
+  }
+
+  /// Czy [email] ma w jednostce uprawnienia administratora.
+  ///
+  /// Założyciel jest administratorem zawsze — chyba że jego konto jest
+  /// wspólne ([sharedFounder]) i jest jeszcze administrator na własnym
+  /// koncie. Bez takiego administratora wspólne konto zachowuje
+  /// uprawnienia, żeby jednostka nigdy nie została bez nikogo, kto nią
+  /// zarządza.
+  bool isAdmin(String email) {
+    if (isFounder(email)) return !(sharedFounder && hasPersonalAdmin);
+    final normalized = _normalize(email);
     return adminEmails.any((e) => _normalize(e) == normalized);
+  }
+
+  /// Administratorzy na własnych kontach — wszyscy poza założycielem.
+  List<String> get personalAdminEmails =>
+      adminEmails.where((e) => !isFounder(e)).toList();
+
+  bool get hasPersonalAdmin => personalAdminEmails.isNotEmpty;
+
+  /// Zalogowane jest wspólne konto jednostki — wpisy nie mówią same, kto
+  /// je wpisał, więc formularze pytają „Kto wpisuje?".
+  bool get isSharedAccount {
+    final me = userEmail;
+    return sharedFounder &&
+        isConnected &&
+        unitFolderId != null &&
+        me != null &&
+        isFounder(me);
   }
 
   /// Czy podany adres jest założycielem jednostki.

@@ -110,6 +110,16 @@ class DatabaseService {
   Future<void> cacheAdminEmails(List<String> emails) =>
       settingsBox.put(_adminEmailsKey, emails);
 
+  /// Konto założyciela jest wspólne — z tego samego pliku co lista
+  /// administratorów i z tego samego powodu trzymane też lokalnie: tablet
+  /// bez zasięgu nie może po restarcie wrócić do uprawnień administratora.
+  static const String _sharedFounderKey = 'sharedFounder';
+
+  bool get cachedSharedFounder => settingsBox.get(_sharedFounderKey) == true;
+
+  Future<void> cacheSharedFounder(bool shared) =>
+      settingsBox.put(_sharedFounderKey, shared);
+
   // --- Dane jednostki: kiedy ostatnio zmienione na tym telefonie ---
   //
   // Nazwa jednostki i adres remizy są wspólne dla wszystkich telefonów.

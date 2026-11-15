@@ -89,6 +89,11 @@ class PropertyHandover extends HiveObject {
   @HiveField(19)
   String? propertyKind;
 
+  /// Ratownik, który wpisał przekazanie na wspólnym koncie jednostki —
+  /// jak [Report.enteredById].
+  @HiveField(20)
+  String? enteredById;
+
   PropertyHandover({
     required this.id,
     this.reportId,
@@ -110,6 +115,7 @@ class PropertyHandover extends HiveObject {
     required this.updatedAt,
     this.createdBy = '',
     this.syncStatus = 'local',
+    this.enteredById,
   });
 
   /// Etykieta rodzaju przejmującego do wyświetlenia/druku — pusty string,

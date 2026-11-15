@@ -412,7 +412,8 @@ Future<bool> showInviteCodeDialog(
                   'Wyjazdy i przekazania podpisują się kontem, na którym '
                   'jesteś zalogowany. Jeśli założyłeś jednostkę na wspólnym '
                   'koncie jednostki, przełącz się na swoje — wtedy dodasz '
-                  'je jako Ty, a nie jako jednostka.',
+                  'je jako Ty, a nie jako jednostka. Konto jednostki może '
+                  'potem służyć np. na tablecie w samochodzie.',
                   style: TextStyle(fontSize: 13),
                 ),
               ),
@@ -559,15 +560,20 @@ class _JoinUnitDialogState extends ConsumerState<_JoinUnitDialog> {
 ///
 /// Pyta o adres, udostępnia mu jednostkę z uprawnieniami administratora,
 /// a potem otwiera wybór konta Google. Wynik pokazuje na pasku.
+///
+/// W tym samym oknie można od razu oznaczyć konto jednostki jako wspólne
+/// (np. tablet w samochodzie) — to jedyna chwila przy zakładaniu jednostki,
+/// kiedy jest już komu zostawić uprawnienia administratora.
 Future<void> runSwitchToPersonalAccount(
   BuildContext context,
   WidgetRef ref,
 ) async {
-  final email = await showDialog<String>(
+  final choice = await showDialog<({String email, bool shared})>(
     context: context,
     builder: (_) => const _PersonalAccountDialog(),
   );
-  if (email == null || !context.mounted) return;
+  if (choice == null || !context.mounted) return;
+  final email = choice.email;
 
   final messenger = ScaffoldMessenger.of(context);
   final navigator = Navigator.of(context, rootNavigator: true);
@@ -596,7 +602,11 @@ Future<void> runSwitchToPersonalAccount(
   try {
     final result = await ref
         .read(syncStateProvider.notifier)
-        .switchToPersonalAccount(email);
+        .switchToPersonalAccount(email, sharedAccount: choice.shared);
+    final sharedNote = choice.shared &&
+            result != AccountSwitchResult.sameAccount
+        ? ' Konto jednostki jest teraz wspólne — można nim zalogować tablet.'
+        : '';
     message = switch (result) {
       AccountSwitchResult.done => 'Zalogowano jako $email. Jednostka bez '
           'zmian — nowe wyjazdy podpiszą się Twoim kontem, a uprawnienia '
@@ -610,7 +620,7 @@ Future<void> runSwitchToPersonalAccount(
           'konto" i wybierz $email.',
       AccountSwitchResult.noAccess => 'Konto $email jeszcze nie widzi '
           'jednostki. Spróbuj za chwilę „Synchronizuj teraz".',
-    };
+    } + sharedNote;
   } catch (e) {
     message = 'Nie udało się przełączyć konta: $e';
   }
@@ -632,6 +642,7 @@ class _PersonalAccountDialog extends StatefulWidget {
 class _PersonalAccountDialogState extends State<_PersonalAccountDialog> {
   final _email = TextEditingController();
   String? _error;
+  bool _shared = false;
 
   @override
   void dispose() {
@@ -645,7 +656,7 @@ class _PersonalAccountDialogState extends State<_PersonalAccountDialog> {
       setState(() => _error = 'To nie wygląda na adres e-mail.');
       return;
     }
-    Navigator.of(context).pop(email);
+    Navigator.of(context).pop((email: email, shared: _shared));
   }
 
   @override
@@ -675,6 +686,20 @@ class _PersonalAccountDialogState extends State<_PersonalAccountDialog> {
               keyboardType: TextInputType.emailAddress,
               autofocus: true,
               onSubmitted: (_) => _submit(),
+            ),
+            const SizedBox(height: 8),
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              value: _shared,
+              onChanged: (v) => setState(() => _shared = v ?? false),
+              title: const Text('Konto jednostki będzie wspólne'),
+              subtitle: const Text(
+                'Np. tablet w samochodzie. Konto jednostki straci '
+                'uprawnienia administratora, a przy wpisach zapyta, kto '
+                'wpisuje. Można to zmienić później w Ustawieniach.',
+                style: TextStyle(fontSize: 12),
+              ),
             ),
           ],
         ),

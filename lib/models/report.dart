@@ -60,6 +60,12 @@ class Report extends HiveObject {
   @HiveField(16)
   String syncStatus;
 
+  /// Ratownik, który wpisał wyjazd na wspólnym koncie jednostki (np. tablet
+  /// w samochodzie) — tam [createdBy] mówi tylko, z którego konta. Na
+  /// prywatnych kontach puste: autorem jest właściciel konta.
+  @HiveField(18)
+  String? enteredById;
+
   Report({
     required this.id,
     required this.reportNumber,
@@ -79,6 +85,7 @@ class Report extends HiveObject {
     required this.updatedAt,
     this.createdBy = '',
     this.syncStatus = 'local',
+    this.enteredById,
   }) : crewAssignments = crewAssignments ?? [];
 
   int get vehicleCount => crewAssignments.length;

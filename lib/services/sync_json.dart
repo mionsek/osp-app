@@ -238,6 +238,7 @@ class SyncJson {
         'createdAt': r.createdAt.toIso8601String(),
         'updatedAt': r.updatedAt.toIso8601String(),
         'createdBy': r.createdBy,
+        if (r.enteredById != null) 'enteredById': r.enteredById,
         'syncStatus': 'synced',
       };
 
@@ -265,7 +266,13 @@ class SyncJson {
         updatedAt: DateTime.parse(j['updatedAt'] as String),
         createdBy: j['createdBy'] as String? ?? '',
         syncStatus: 'synced',
+        enteredById: _optionalId(j['enteredById']),
       );
+
+  /// Identyfikator ratownika z pliku — pusty albo innego typu traktujemy
+  /// jak brak, żeby zły wpis na Dysku nie zatrzymał synchronizacji.
+  static String? _optionalId(Object? value) =>
+      value is String && value.isNotEmpty ? value : null;
 
   /// Skład zastępu — część raportu.
   static Map<String, dynamic> crewToJson(CrewAssignment c) => {
@@ -404,6 +411,7 @@ class SyncJson {
         'createdAt': h.createdAt.toIso8601String(),
         'updatedAt': h.updatedAt.toIso8601String(),
         'createdBy': h.createdBy,
+        if (h.enteredById != null) 'enteredById': h.enteredById,
         'syncStatus': 'synced',
       };
 
@@ -429,5 +437,6 @@ class SyncJson {
         updatedAt: DateTime.parse(j['updatedAt'] as String),
         createdBy: j['createdBy'] as String? ?? '',
         syncStatus: 'synced',
+        enteredById: _optionalId(j['enteredById']),
       );
 }

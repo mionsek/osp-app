@@ -1035,6 +1035,38 @@ Ekrany wyjazdu i przekazania miały domek zamiast strzałki, reszta ekranów —
 - [x] 10 nowych testów na prawdziwym drzewie tras: po zapisie przekazania wstecz do listy i do menu (aplikacja się nie zamyka), po „Lista wyjazdów" wstecz do menu, strzałka i domek na każdym z 19 ekranów, kreator cofa o krok i pyta na pierwszym, bez wpisanych danych bez pytania, „Zostań" zostawia, formularz pyta domkiem i wstecz, zapis zamyka bez pytania, Ustawienia pytają przed zapisem, a po nim nie. Łącznie **364**
 - [x] Wersja **1.7.8+21**
 
+## Zrobione (feature/058-wspolne-konto-jednostki)
+Decyzja Dawida z 12.11.2026: tablet w samochodzie ma działać na jednym koncie
+jednostki (tym, na którym ją założono), bez zakładania drugiego konta. Bez
+zmian każdy, kto weźmie tablet, byłby administratorem (założyciel jest nim
+zawsze), a „Dodał" przy każdym wpisie pokazywałby adres jednostki.
+
+- [x] **Przełącznik „Konto jednostki jest wspólne"** w Ustawieniach → Członkowie jednostki (widzi go administrator). Zapisany w `config/admins.json` jako `sharedFounder: true` i trzymany też lokalnie, jak lista administratorów — tablet bez zasięgu nie wraca po restarcie do uprawnień. Przed zmianą okno z opisem skutków
+- [x] **Wspólne konto działa jak zwykły członek**: dodaje wyjazdy, przekazania i przejazdy, poprawia i usuwa tylko wpisy z konta jednostki; bez zarządzania członkami, uprawnieniami, listami i danymi jednostki. Z tabletu przełącznika nie widać, więc wyłączyć go może tylko administrator na własnym koncie. W Ustawieniach tabletu opis zamiast „Przełącz na swoje konto" (przełączenie nadawało wpisanemu adresowi uprawnienia administratora), rola „Wspólne konto jednostki", na czerwonym pasku „wspólne konto"
+- [x] **Bezpiecznik**: włączyć można tylko przy co najmniej jednym administratorze na własnym koncie, a ostatniemu takiemu administratorowi nie da się odebrać uprawnień ani dostępu, dopóki przełącznik jest włączony. Gdyby mimo to nikogo takiego nie było (np. plik zmieniony ręcznie na Dysku), wspólne konto zachowuje uprawnienia — jednostka nie zostaje bez administratora. Wartość inna niż `true` w pliku = zwykły założyciel
+- [x] **„Kto wpisuje?"** na wspólnym koncie — w podsumowaniu kreatora wyjazdu (podpowiedź: dowódca pierwszego zastępu) i w formularzu przekazania mienia (podpowiedź: przekazujący). Wybór z listy ratowników z wyszukiwarką, wymagany przy zapisie (chyba że lista ratowników jest pusta). Nie zapamiętuje ostatniej osoby — po zmianie załogi wpisy szłyby na złe nazwisko. Nowe pole `enteredById` (identyfikator ratownika, jak w obsadzie) w wyjeździe i przekazaniu, przez Dysk; wpisy z prywatnych kont mają plik bez zmian
+- [x] **Szczegóły**: przy wpisie z tabletu „Wpisał: Nazwisko Imię" i „Konto: adres jednostki" zamiast „Dodał". Ratownik usunięty z listy — kreska. Poprawka z prywatnego konta (np. administratora) nie kasuje, kto wpisał. Wydruk bez zmian
+- Ewidencja przejazdów i karta pracy sprzętu bez „Kto wpisuje?" — nie mają też „Dodał"; do dołożenia, jeśli tablet będzie wpisywał przejazdy
+- **Ograniczenia**: blokada działa w aplikacji, nie na Dysku — konto jednostki zostaje właścicielem folderu, więc ktoś z tabletem mógłby otworzyć Dysk w przeglądarce. Na tablecie warto przypiąć aplikację (Ustawienia → Bezpieczeństwo → Przypinanie aplikacji). Wybór „Kto wpisuje?" to deklaracja, nie logowanie. Starsza wersja aplikacji nie zna nowego pola: poprawiając wpis z tabletu, zgubi „Wpisał", a zmieniając administratorów — wyłączy wspólne konto (konto jednostki odzyskuje wtedy uprawnienia). Format synchronizacji celowo bez podbicia, żeby test nie blokował telefonów kolegów na 1.9.6; przed publikacją rozważyć `syncFormat` 3
+- [x] 24 nowe testy: reguła uprawnień (wspólne konto bez uprawnień przy administratorze na własnym koncie, bezpiecznik bez niego, założyciel na liście administratorów, telefon kolegi bez zmian, tablet poprawia tylko wpisy z konta jednostki), przełącznik na Dysku (bez administratora na własnym koncie się nie włączy, utrata uprawnień od razu i po restarcie, kolega widzi po synchronizacji, wyłączenie przywraca uprawnienia, ostatni administrator chroniony przy odbieraniu uprawnień i dostępu, zła wartość w pliku), pole na Dysku (przechodzi, stare wpisy bez zmian, zła wartość), ekrany (szczegóły z „Wpisał" i „Konto", ratownik usunięty, kreator na tablecie wymaga wyboru i go zapisuje, podpowiedź dowódcy, prywatne konto bez pytania i bez kasowania, przekazanie z podpowiedzią przekazującego, prywatne konto bez pola), Ustawienia (tablet bez „Przełącz na swoje konto" i bez zarządzania, administrator włącza po potwierdzeniu). Łącznie **491**
+- [x] Wersja **1.9.7+30**
+
+Dopytanie Dawida z 13.11.2026: czy opcja „konto współdzielone" nie powinna
+być już przy zakładaniu jednostki, do tego samouczek i opis w „O aplikacji".
+
+- [x] **Wspólne konto przy zakładaniu jednostki** — nie na ekranie „Nowa jednostka", tylko w oknie „Przełącz na swoje konto", które pojawia się zaraz po założeniu (i w Ustawieniach założyciela). Pole „Konto jednostki będzie wspólne": prywatne konto dostaje administratora i w tym samym kroku konto jednostki staje się wspólne. Na samym ekranie zakładania nie miałoby to skutku — nie ma jeszcze nikogo innego, kto byłby administratorem, więc konto jednostki i tak by nim zostało. W oknie z kodem zaproszenia dopisek, że konto jednostki może potem służyć np. na tablecie
+- [x] **Samouczek „Tablet w samochodzie"** — okno z czterema krokami (administrator na własnym koncie → oznaczenie konta jako wspólne → zalogowanie tabletu kodem → „Kto wpisuje?") i „Dobrze wiedzieć" (co tablet może, kto wyłącza, co zrobić ze zgubionym tabletem). Otwiera się z Członków jednostki („Tablet w samochodzie — krok po kroku"), z Ustawień wspólnego konta („Jak to działa?") i z „O aplikacji"
+- [x] **„O aplikacji" → „Jak korzystać"**: nowa pozycja „Tablet w samochodzie" z przyciskiem do samouczka
+- [x] 7 nowych testów: przełączenie z zaznaczonym wspólnym kontem (konto jednostki bez uprawnień, prywatne administratorem) i bez zaznaczenia, okno przełączania przekazuje wybór i mówi o wspólnym koncie, samouczek z Członków jednostki, ze wspólnego konta i z „O aplikacji". Łącznie **498**
+- [x] Wersja **1.9.8+31**
+
+### Do sprawdzenia przez Dawida
+- [ ] Samouczek: Ustawienia → Członkowie jednostki → „Tablet w samochodzie — krok po kroku" oraz „O aplikacji" → „Samouczek: tablet krok po kroku" — czy kroki są zrozumiałe
+- [ ] (Opcjonalnie, na jednostce testowej) założenie jednostki na koncie jednostki → „Przełącz na swoje konto" z zaznaczonym „Konto jednostki będzie wspólne" — po przełączeniu Ty administratorem, konto jednostki w Członkach jako wspólne
+- [ ] Na swoim telefonie: Ustawienia → Członkowie jednostki → „Konto jednostki jest wspólne"
+- [ ] Na drugim telefonie (albo tablecie) zalogowanym kontem jednostki: po synchronizacji rola „Wspólne konto jednostki", brak „Członków jednostki" i list do edycji; nowy wyjazd i przekazanie pytają „Kto wpisuje?"; u Ciebie w szczegółach „Wpisał" i „Konto"
+- [ ] Wyłączenie przełącznika ze swojego telefonu — konto jednostki znów administratorem
+
 ## Zrobione (feature/056-kto-dodal)
 Prośba Dawida z 11.11.2026, po teście na dwóch telefonach (wyjazd kolegi
 widoczny u niego): przy wyjeździe i przekazaniu mienia mała informacja, kto

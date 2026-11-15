@@ -121,6 +121,152 @@ void main() {
     expect(find.text('Przełącz na swoje konto'), findsNothing);
   });
 
+  // Wspólne konto jednostki (feature/058) — np. tablet w samochodzie.
+  testWidgets('wspólne konto jednostki: bez przejścia na „swoje", które '
+      'nadałoby uprawnienia administratora, i bez zarządzania jednostką',
+      (tester) async {
+    await pumpSettings(
+      tester,
+      const SyncState(
+        status: SyncStatus.idle,
+        userEmail: 'ospkielno@gmail.com',
+        unitFolderId: 'folder',
+        unitInviteCode: 'ABC234',
+        founderEmail: 'ospkielno@gmail.com',
+        adminEmails: ['dawid@gmail.com'],
+        sharedFounder: true,
+      ),
+    );
+
+    expect(find.text('Przełącz na swoje konto'), findsNothing);
+    expect(find.textContaining('To wspólne konto jednostki'), findsOneWidget);
+    expect(find.text('Wspólne konto jednostki'), findsOneWidget);
+    expect(find.text('Członkowie jednostki'), findsNothing);
+  });
+
+  testWidgets('administrator na własnym koncie włącza wspólne konto '
+      'jednostki po potwierdzeniu', (tester) async {
+    await pumpSettings(
+      tester,
+      const SyncState(
+        status: SyncStatus.idle,
+        userEmail: 'dawid@gmail.com',
+        unitFolderId: 'folder',
+        unitInviteCode: 'ABC234',
+        founderEmail: 'ospkielno@gmail.com',
+        adminEmails: ['dawid@gmail.com'],
+      ),
+    );
+    when(() => sync.setSharedFounder(any())).thenAnswer((_) async {});
+
+    final toggle = find.widgetWithText(
+        SwitchListTile, 'Konto jednostki jest wspólne');
+    await tester.ensureVisible(toggle);
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+    expect(find.text('Konto jednostki jako wspólne?'), findsOneWidget);
+
+    await tester.tap(find.text('Włącz'));
+    await tester.pumpAndSettle();
+    verify(() => sync.setSharedFounder(true)).called(1);
+  });
+
+  /// Okno samouczka „Tablet w samochodzie" — jego treść jest w jednym
+  /// miejscu, więc wystarczy sprawdzić, że się otwiera.
+  Future<void> expectGuideFrom(WidgetTester tester, String button) async {
+    await tester.ensureVisible(find.text(button));
+    await tester.tap(find.text(button));
+    await tester.pumpAndSettle();
+    expect(find.text('Tablet w samochodzie'), findsOneWidget);
+    expect(find.text('Zaloguj tablet'), findsOneWidget);
+    expect(find.text('Wpisuj z tabletu'), findsOneWidget);
+    await tester.tap(find.text('Rozumiem'));
+    await tester.pumpAndSettle();
+    expect(find.text('Zaloguj tablet'), findsNothing);
+  }
+
+  testWidgets('samouczek tabletu u administratora przy przełączniku '
+      'wspólnego konta', (tester) async {
+    await pumpSettings(
+      tester,
+      const SyncState(
+        status: SyncStatus.idle,
+        userEmail: 'dawid@gmail.com',
+        unitFolderId: 'folder',
+        unitInviteCode: 'ABC234',
+        founderEmail: 'ospkielno@gmail.com',
+        adminEmails: ['dawid@gmail.com'],
+      ),
+    );
+    await expectGuideFrom(tester, 'Tablet w samochodzie — krok po kroku');
+  });
+
+  testWidgets('samouczek tabletu na samym wspólnym koncie', (tester) async {
+    await pumpSettings(
+      tester,
+      const SyncState(
+        status: SyncStatus.idle,
+        userEmail: 'ospkielno@gmail.com',
+        unitFolderId: 'folder',
+        unitInviteCode: 'ABC234',
+        founderEmail: 'ospkielno@gmail.com',
+        adminEmails: ['dawid@gmail.com'],
+        sharedFounder: true,
+      ),
+    );
+    await expectGuideFrom(tester, 'Jak to działa?');
+  });
+
+  testWidgets('przełączenie na swoje konto może od razu zrobić z konta '
+      'jednostki wspólne', (tester) async {
+    await pumpSettings(tester, founderInUnit);
+    when(() => sync.switchToPersonalAccount(any(),
+            sharedAccount: any(named: 'sharedAccount')))
+        .thenAnswer((_) async => AccountSwitchResult.done);
+
+    await tester.ensureVisible(find.text('Przełącz na swoje konto'));
+    await tester.tap(find.text('Przełącz na swoje konto'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.descendant(
+          of: find.byType(AlertDialog), matching: find.byType(TextField)),
+      'dawid@gmail.com',
+    );
+    await tester.tap(find.text('Konto jednostki będzie wspólne'));
+    await tester.pump();
+    await tester.tap(find.text('Dalej'));
+    await tester.pumpAndSettle();
+
+    verify(() => sync.switchToPersonalAccount('dawid@gmail.com',
+        sharedAccount: true)).called(1);
+    expect(find.textContaining('Konto jednostki jest teraz wspólne'),
+        findsOneWidget);
+  });
+
+  testWidgets('bez zaznaczenia przełączenie nie zmienia konta jednostki',
+      (tester) async {
+    await pumpSettings(tester, founderInUnit);
+    when(() => sync.switchToPersonalAccount(any(),
+            sharedAccount: any(named: 'sharedAccount')))
+        .thenAnswer((_) async => AccountSwitchResult.done);
+
+    await tester.ensureVisible(find.text('Przełącz na swoje konto'));
+    await tester.tap(find.text('Przełącz na swoje konto'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.descendant(
+          of: find.byType(AlertDialog), matching: find.byType(TextField)),
+      'dawid@gmail.com',
+    );
+    await tester.tap(find.text('Dalej'));
+    await tester.pumpAndSettle();
+
+    verify(() => sync.switchToPersonalAccount('dawid@gmail.com',
+        sharedAccount: false)).called(1);
+    expect(find.textContaining('Konto jednostki jest teraz wspólne'),
+        findsNothing);
+  });
+
   /// Otwiera okno dołączania i wysyła w nim kod.
   Future<void> submitCode(WidgetTester tester, String code) async {
     await tester.ensureVisible(find.text('Dołącz do jednostki kodem'));

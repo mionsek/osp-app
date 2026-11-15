@@ -334,7 +334,8 @@ class _Greeting extends StatelessWidget {
     if (!syncState.isConnected || syncState.unitFolderId == null) {
       return 'dane tylko na tym telefonie';
     }
-    return syncState.isCurrentUserAdmin ? 'administrator' : 'członek jednostki';
+    if (syncState.isCurrentUserAdmin) return 'administrator';
+    return syncState.isSharedAccount ? 'wspólne konto' : 'członek jednostki';
   }
 
   @override

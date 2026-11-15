@@ -194,6 +194,21 @@ void main() {
       expect(icon(Icons.handyman), findsNothing);
     });
 
+    testWidgets('„O aplikacji" opisuje tablet w samochodzie i otwiera '
+        'samouczek', (tester) async {
+      tallScreen(tester);
+      await tester.pumpWidget(testApp(const InfoScreen()));
+      await tester.pumpAndSettle();
+      expect(find.text('Tablet w samochodzie'), findsOneWidget);
+
+      final guide = find.text('Samouczek: tablet krok po kroku');
+      await tester.ensureVisible(guide);
+      await tester.tap(guide);
+      await tester.pumpAndSettle();
+      expect(find.text('Zaloguj tablet'), findsOneWidget);
+      expect(find.text('Oznacz konto jednostki jako wspólne'), findsOneWidget);
+    });
+
     testWidgets('ewidencja: każdy cel przejazdu ma swoją ikonę',
         (tester) async {
       tallScreen(tester);

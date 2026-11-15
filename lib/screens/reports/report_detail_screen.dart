@@ -123,8 +123,14 @@ class ReportDetailScreen extends ConsumerWidget {
                     _Row('Pojazdy', '${report.vehicleCount}'),
                     _Row('Ratownicy', '${report.totalFirefighters}'),
                     // Konto, z którego wyjazd zapisano — tylko na ekranie,
-                    // nie na wydruku. Bez logowania autora nie ma.
-                    if (report.createdBy.isNotEmpty)
+                    // nie na wydruku. Bez logowania autora nie ma. Na
+                    // wspólnym koncie jednostki adres nie mówi, kto to był.
+                    if (report.enteredById != null) ...[
+                      _Row('Wpisał',
+                          findFF(report.enteredById)?.lastNameFirst ?? '—'),
+                      if (report.createdBy.isNotEmpty)
+                        _Row('Konto', report.createdBy),
+                    ] else if (report.createdBy.isNotEmpty)
                       _Row('Dodał', report.createdBy),
                     if (report.notes != null && report.notes!.isNotEmpty)
                       _Row('Uwagi', report.notes!),

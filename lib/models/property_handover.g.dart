@@ -37,13 +37,14 @@ class PropertyHandoverAdapter extends TypeAdapter<PropertyHandover> {
       updatedAt: fields[16] as DateTime,
       createdBy: fields[17] as String,
       syncStatus: fields[18] as String,
+      enteredById: fields[20] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, PropertyHandover obj) {
     writer
-      ..writeByte(20)
+      ..writeByte(21)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -83,7 +84,9 @@ class PropertyHandoverAdapter extends TypeAdapter<PropertyHandover> {
       ..writeByte(18)
       ..write(obj.syncStatus)
       ..writeByte(19)
-      ..write(obj.propertyKind);
+      ..write(obj.propertyKind)
+      ..writeByte(20)
+      ..write(obj.enteredById);
   }
 
   @override

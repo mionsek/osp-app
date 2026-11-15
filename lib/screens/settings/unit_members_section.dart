@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../providers/providers.dart';
 import '../../services/google_drive_service.dart';
+import '../../services/sync_service.dart' show LastPersonalAdminException;
 import '../../core/theme/osp_theme.dart';
+import '../../widgets/shared_account_guide.dart';
 
 /// Zarządzanie dostępem do jednostki: kto może z niej korzystać i kto ma
 /// uprawnienia administratora.
@@ -118,6 +120,58 @@ class _UnitMembersSectionState extends ConsumerState<UnitMembersSection> {
         await sync.revokeAdmin(member.email);
       }
       if (mounted) setState(() {});
+    } on LastPersonalAdminException catch (e) {
+      if (mounted) setState(() => _error = '$e');
+    } catch (e) {
+      if (mounted) setState(() => _error = 'Nie udało się zmienić: $e');
+    }
+  }
+
+  /// Wspólne konto jednostki, np. tablet w samochodzie — patrz
+  /// [SyncState.sharedFounder].
+  Future<void> _toggleShared(bool shared) async {
+    final syncState = ref.read(syncStateProvider);
+    final founder = syncState.founderEmail ?? '';
+    final onThisAccount = syncState.isFounder(syncState.userEmail ?? '');
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(shared
+            ? 'Konto jednostki jako wspólne?'
+            : 'Wyłączyć wspólne konto?'),
+        content: Text(shared
+            ? '$founder będzie działać jak konto zwykłego członka: doda '
+                'wyjazdy i przekazania mienia i poprawi tylko te dodane '
+                'z niego, ale nie zmieni ustawień jednostki, list ani '
+                'uprawnień. Przy każdym wpisie zapyta, kto wpisuje.\n\n'
+                'Cofnąć to może tylko administrator na własnym koncie.'
+                '${onThisAccount ? '\n\nTo konto, na którym jesteś — '
+                    'od razu stracisz tu uprawnienia administratora.' : ''}'
+            : '$founder odzyska uprawnienia administratora na każdym '
+                'urządzeniu, na którym jest zalogowane, i przestanie pytać, '
+                'kto wpisuje.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Anuluj'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(shared ? 'Włącz' : 'Wyłącz'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await ref.read(syncServiceProvider).setSharedFounder(shared);
+      if (mounted) setState(() => _error = null);
+    } on LastPersonalAdminException {
+      if (mounted) {
+        setState(() => _error =
+            'Najpierw nadaj uprawnienia administratora komuś na jego własnym '
+            'koncie — to on będzie zarządzał jednostką.');
+      }
     } catch (e) {
       if (mounted) setState(() => _error = 'Nie udało się zmienić: $e');
     }
@@ -151,6 +205,8 @@ class _UnitMembersSectionState extends ConsumerState<UnitMembersSection> {
     try {
       await ref.read(syncServiceProvider).revokeMember(member);
       await _loadMembers();
+    } on LastPersonalAdminException catch (e) {
+      if (mounted) setState(() => _error = '$e');
     } catch (e) {
       if (mounted) setState(() => _error = 'Nie udało się odebrać: $e');
     }
@@ -183,6 +239,25 @@ class _UnitMembersSectionState extends ConsumerState<UnitMembersSection> {
           icon: const Icon(Icons.person_add_alt),
           label: const Text('Zaproś strażaka'),
         ),
+        if (syncState.founderEmail != null) ...[
+          const SizedBox(height: 8),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: syncState.sharedFounder,
+            onChanged: _loading ? null : _toggleShared,
+            title: const Text('Konto jednostki jest wspólne'),
+            subtitle: Text(
+              'Np. tablet w samochodzie. ${syncState.founderEmail} działa '
+              'wtedy jak zwykły członek, a przy wpisach pyta, kto wpisuje.',
+              style: const TextStyle(fontSize: 12),
+            ),
+          ),
+          TextButton.icon(
+            onPressed: () => showSharedAccountGuide(context),
+            icon: const Icon(Icons.help_outline, size: 18),
+            label: const Text('Tablet w samochodzie — krok po kroku'),
+          ),
+        ],
         const SizedBox(height: 8),
         if (_members == null)
           TextButton.icon(
@@ -200,9 +275,9 @@ class _UnitMembersSectionState extends ConsumerState<UnitMembersSection> {
             _MemberTile(
               member: m,
               isFounder: syncState.isFounder(m.email),
-              isAdmin: syncState.isFounder(m.email) ||
-                  syncState.adminEmails.any((e) =>
-                      e.trim().toLowerCase() == m.email.trim().toLowerCase()),
+              sharedAccount:
+                  syncState.isFounder(m.email) && syncState.sharedFounder,
+              isAdmin: syncState.isAdmin(m.email),
               isMe: (syncState.userEmail ?? '').trim().toLowerCase() ==
                   m.email.trim().toLowerCase(),
               onToggleAdmin: (v) => _toggleAdmin(m, v),
@@ -222,6 +297,9 @@ class _UnitMembersSectionState extends ConsumerState<UnitMembersSection> {
 class _MemberTile extends StatelessWidget {
   final UnitMemberAccess member;
   final bool isFounder;
+
+  /// Założyciel z włączonym wspólnym kontem jednostki.
+  final bool sharedAccount;
   final bool isAdmin;
   final bool isMe;
   final ValueChanged<bool> onToggleAdmin;
@@ -230,6 +308,7 @@ class _MemberTile extends StatelessWidget {
   const _MemberTile({
     required this.member,
     required this.isFounder,
+    this.sharedAccount = false,
     required this.isAdmin,
     required this.isMe,
     required this.onToggleAdmin,
@@ -259,9 +338,14 @@ class _MemberTile extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    locked
-                        ? 'Założyciel — stały administrator'
-                        : (isAdmin ? 'Administrator' : 'Użytkownik'),
+                    sharedAccount
+                        ? (isAdmin
+                            ? 'Wspólne konto — administrator, dopóki nikt '
+                                'inny nim nie jest'
+                            : 'Wspólne konto jednostki — jak zwykły członek')
+                        : locked
+                            ? 'Założyciel — stały administrator'
+                            : (isAdmin ? 'Administrator' : 'Użytkownik'),
                     style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                   ),
                 ],

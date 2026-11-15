@@ -91,6 +91,32 @@ void main() {
       expect(sync.state.isCurrentUserAdmin, isTrue);
     });
 
+    // feature/058: przy zakładaniu jednostki od razu tablet w samochodzie.
+    test('z zaznaczonym wspólnym kontem konto jednostki od razu przestaje '
+        'być administratorem, a prywatne nim jest', () async {
+      await sync.createUnit('OSP w Kielnie');
+      auth.nextAccount = 'dawid@gmail.com';
+
+      final result = await sync.switchToPersonalAccount('dawid@gmail.com',
+          sharedAccount: true);
+
+      expect(result, AccountSwitchResult.done);
+      expect(sync.state.sharedFounder, isTrue);
+      expect(sync.state.adminEmails, ['dawid@gmail.com']);
+      expect(sync.state.isAdmin('ospkielno@gmail.com'), isFalse);
+      expect(sync.state.isCurrentUserAdmin, isTrue);
+    });
+
+    test('bez zaznaczenia konto jednostki zostaje administratorem', () async {
+      await sync.createUnit('OSP w Kielnie');
+      auth.nextAccount = 'dawid@gmail.com';
+
+      await sync.switchToPersonalAccount('dawid@gmail.com');
+
+      expect(sync.state.sharedFounder, isFalse);
+      expect(sync.state.isAdmin('ospkielno@gmail.com'), isTrue);
+    });
+
     test('adres konta, na którym już się jest, niczego nie zmienia', () async {
       await sync.createUnit('OSP w Kielnie');
 

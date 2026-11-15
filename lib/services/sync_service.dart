@@ -448,7 +448,15 @@ class SyncService {
   /// Kolejność ma znaczenie: udostępnić folder i nadać uprawnienia
   /// administratora może tylko konto, które już ma dostęp, więc robimy to
   /// na obecnym koncie, a dopiero potem je zmieniamy.
-  Future<AccountSwitchResult> switchToPersonalAccount(String email) async {
+  ///
+  /// Z [sharedAccount] konto jednostki od razu staje się wspólne (np. na
+  /// tablet w samochodzie, [SyncState.sharedFounder]) — w tym samym kroku,
+  /// w którym prywatne konto dostaje administratora, bo wcześniej nie byłoby
+  /// komu zarządzać jednostką.
+  Future<AccountSwitchResult> switchToPersonalAccount(
+    String email, {
+    bool sharedAccount = false,
+  }) async {
     final folderId = _state.unitFolderId;
     if (folderId == null) {
       throw StateError('Brak połączenia z jednostką.');
@@ -459,6 +467,7 @@ class SyncService {
     }
     await _driveService.shareFolderWithUser(folderId, address);
     await grantAdmin(address);
+    if (sharedAccount) await setSharedFounder(true);
 
     if (!await switchAccount()) return AccountSwitchResult.cancelled;
     if (_normalizeEmail(authService.userEmail ?? '') !=
@@ -483,6 +492,9 @@ class SyncService {
   Future<void> revokeMember(UnitMemberAccess member) async {
     final folderId = _state.unitFolderId;
     if (folderId == null) return;
+    // Przed odebraniem dostępu — inaczej kolega wypadłby z folderu, a jego
+    // uprawnienia administratora zostałyby na liście.
+    _ensureNotLastPersonalAdmin(member.email);
     await _driveService.revokeFolderAccess(folderId, member.permissionId);
     if (_isAdminEmail(member.email)) {
       await revokeAdmin(member.email);
@@ -507,23 +519,51 @@ class SyncService {
   /// żadnego administratora i nikt nie mógłby już nic zmienić.
   Future<void> revokeAdmin(String email) async {
     if (_state.isFounder(email)) return;
+    _ensureNotLastPersonalAdmin(email);
     final normalized = email.trim().toLowerCase();
     await _writeAdmins(_state.adminEmails
         .where((e) => e.trim().toLowerCase() != normalized)
         .toList());
   }
 
-  Future<void> _writeAdmins(List<String> admins) async {
+  /// Przy wspólnym koncie jednostki ostatni administrator na własnym koncie
+  /// zostaje — bez niego uprawnienia wróciłyby po cichu na tablet.
+  void _ensureNotLastPersonalAdmin(String email) {
+    if (!_state.sharedFounder || _state.isFounder(email)) return;
+    final normalized = email.trim().toLowerCase();
+    final others = _state.personalAdminEmails
+        .where((e) => e.trim().toLowerCase() != normalized);
+    if (_isAdminEmail(email) && others.isEmpty) {
+      throw const LastPersonalAdminException();
+    }
+  }
+
+  /// Włącza albo wyłącza wspólne konto jednostki ([SyncState.sharedFounder]).
+  ///
+  /// Włączyć można tylko przy co najmniej jednym administratorze na własnym
+  /// koncie — to on potem zarządza jednostką i tylko on może to cofnąć,
+  /// bo wspólne konto przestaje być administratorem.
+  Future<void> setSharedFounder(bool shared) async {
+    if (shared && !_state.hasPersonalAdmin) {
+      throw const LastPersonalAdminException();
+    }
+    await _writeAdmins(_state.adminEmails, sharedFounder: shared);
+  }
+
+  Future<void> _writeAdmins(List<String> admins, {bool? sharedFounder}) async {
     final folderId = _state.unitFolderId;
     if (folderId == null) return;
+    final shared = sharedFounder ?? _state.sharedFounder;
     var configFolderId = await _driveService.findConfigFolder(folderId);
     configFolderId ??= await _driveService.createSubfolder(folderId, 'config');
     await _driveService.writeJsonFile(configFolderId, 'admins.json', {
       'admins': admins,
+      if (shared) 'sharedFounder': true,
       'updatedAt': DateTime.now().toIso8601String(),
     });
     await _db.cacheAdminEmails(admins);
-    _updateState(_state.copyWith(adminEmails: admins));
+    await _db.cacheSharedFounder(shared);
+    _updateState(_state.copyWith(adminEmails: admins, sharedFounder: shared));
   }
 
   /// Disconnect from the unit (keep local data).
@@ -536,6 +576,7 @@ class SyncService {
     // jednostką — także po zalogowaniu innym kontem.
     await _db.configBox.delete('driveSync');
     await _db.cacheAdminEmails(const []);
+    await _db.cacheSharedFounder(false);
     await _resetUnitState();
     _updateState(const SyncState());
   }
@@ -900,10 +941,15 @@ class SyncService {
               if (e is String && e.contains('@')) e,
           ]
         : const <String>[];
+    // Brak pola albo cokolwiek innego niż `true` — konto założyciela
+    // zostaje administratorem, jak przed wprowadzeniem wspólnego konta.
+    final sharedFounder = adminsData?['sharedFounder'] == true;
     await _db.cacheAdminEmails(admins);
+    await _db.cacheSharedFounder(sharedFounder);
     _updateState(_state.copyWith(
       founderEmail: _text(configData?['createdBy']),
       adminEmails: admins,
+      sharedFounder: sharedFounder,
     ));
   }
 
@@ -1575,6 +1621,7 @@ class SyncService {
             ? null
             : _db.getConfig().ownerEmail,
         adminEmails: _db.cachedAdminEmails,
+        sharedFounder: _db.cachedSharedFounder,
       ),
     );
   }
@@ -1671,6 +1718,19 @@ class SyncService {
 /// Jednostka zapisała dane w formacie nowszym, niż ta wersja aplikacji
 /// rozumie.
 class SyncFormatTooNewException implements Exception {}
+
+/// Zmiana zostawiłaby jednostkę ze wspólnym kontem bez żadnego
+/// administratora na własnym koncie ([SyncService.setSharedFounder],
+/// [SyncService.revokeAdmin], [SyncService.revokeMember]).
+class LastPersonalAdminException implements Exception {
+  const LastPersonalAdminException();
+
+  @override
+  String toString() =>
+      'Przy wspólnym koncie jednostki musi zostać co najmniej jeden '
+      'administrator na własnym koncie. Najpierw nadaj uprawnienia '
+      'komuś innemu albo wyłącz wspólne konto.';
+}
 
 /// Wynik [SyncService.lookupUnit].
 sealed class UnitLookup {

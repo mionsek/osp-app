@@ -8,6 +8,7 @@ import '../../core/constants/handover_recipient_types.dart';
 import '../../models/models.dart';
 import '../../providers/providers.dart';
 import '../../services/location_service.dart';
+import '../../widgets/entered_by_field.dart';
 import '../../widgets/firefighter_picker.dart';
 import '../../core/theme/osp_theme.dart';
 import '../../core/utils/time_format.dart';
@@ -60,6 +61,14 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
   String? _handoverFirefighterId;
   String? _linkedReportId;
   bool _locating = false;
+
+  /// „Kto wpisuje?" wybrane ręcznie — tylko na wspólnym koncie jednostki.
+  String? _enteredById;
+  bool _enteredByMissing = false;
+
+  /// Wybrany „Kto wpisuje?", a bez wyboru przekazujący — zwykle to on
+  /// wypełnia potwierdzenie.
+  String? get _enteredBy => _enteredById ?? _handoverFirefighterId;
 
   bool get _isEditing => widget.handoverId != null;
 
@@ -133,6 +142,7 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
         _propertyKind = h.propertyKind;
         _notesController.text = h.notes ?? '';
         _handoverFirefighterId = h.handoverFirefighterId;
+        _enteredById = h.enteredById;
         _signLocalityController.text = h.signLocality;
         // Zapisany druk ma już ustaloną miejscowość — traktujemy ją jak
         // decyzję autora, a nie jak wartość do podmiany.
@@ -179,7 +189,13 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
   }
 
   Future<void> _onSave() async {
+    final shared = ref.read(syncStateProvider).isSharedAccount;
+    final askEnteredBy = shared && ref.read(firefightersProvider).isNotEmpty;
+    if (askEnteredBy && _enteredBy == null) {
+      setState(() => _enteredByMissing = true);
+    }
     if (!_formKey.currentState!.validate()) return;
+    if (askEnteredBy && _enteredBy == null) return;
 
     // Bez numeru telefonu: przejmujący ma prawo go nie podać (dane osobowe),
     // więc jego brak nie jest niedopatrzeniem do zgłaszania przy zapisie.
@@ -229,6 +245,8 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
           ..handoverFirefighterId = _handoverFirefighterId
           ..signLocality = _signLocalityController.text.trim()
           ..signDate = _signDate
+          // Poprawka z prywatnego konta nie kasuje, kto wpisał na tablecie.
+          ..enteredById = shared ? _enteredBy : h.enteredById
           ..updatedAt = now;
         await ref.read(handoversProvider.notifier).update(h);
         if (mounted) _afterSave(h.id);
@@ -260,6 +278,7 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
       createdAt: now,
       updatedAt: now,
       createdBy: syncState.userEmail ?? '',
+      enteredById: shared ? _enteredBy : null,
     );
     await ref.read(handoversProvider.notifier).add(handover);
     if (mounted) _afterSave(handover.id);
@@ -621,6 +640,19 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
                           'uzupełnienia długopisem.'
                       : 'Nie wybrano przekazującego — pole na wydruku '
                           'zostanie puste, do uzupełnienia długopisem.',
+                ),
+              ],
+              if (ref.watch(syncStateProvider).isSharedAccount &&
+                  firefighters.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                EnteredByField(
+                  firefighters: firefighters,
+                  selectedId: _enteredBy,
+                  missing: _enteredByMissing && _enteredBy == null,
+                  onChanged: (id) => setState(() {
+                    _enteredById = id;
+                    _enteredByMissing = false;
+                  }),
                 ),
               ],
               const SizedBox(height: 12),

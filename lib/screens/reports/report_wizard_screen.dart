@@ -67,6 +67,23 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
 
   String _notes = '';
 
+  /// „Kto wpisuje?" wybrane ręcznie — tylko na wspólnym koncie jednostki.
+  String? _enteredById;
+
+  /// Zapis zatrzymany, bo nikt nie wybrał, kto wpisuje.
+  bool _enteredByMissing = false;
+
+  /// Wybrany „Kto wpisuje?", a bez wyboru dowódca pierwszego zastępu —
+  /// na tablecie w samochodzie zwykle to on wypełnia wyjazd.
+  String? get _enteredBy {
+    if (_enteredById != null) return _enteredById;
+    for (final crew in _crewAssignments.values) {
+      final id = crew.commanderId;
+      if (id != null && id.isNotEmpty) return id;
+    }
+    return null;
+  }
+
   bool get _isEditing => widget.reportId != null;
 
   @override
@@ -211,6 +228,7 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
       _crewAssignments[crew.vehicleId] = crew;
     }
     _notes = report.notes ?? '';
+    _enteredById = report.enteredById;
   }
 
   @override
@@ -325,6 +343,14 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
       return;
     }
 
+    // Bez ratowników na liście nie ma kogo wybrać — wtedy zostaje samo konto.
+    if (ref.read(syncStateProvider).isSharedAccount &&
+        _enteredBy == null &&
+        ref.read(firefightersProvider).isNotEmpty) {
+      setState(() => _enteredByMissing = true);
+      return;
+    }
+
     if (_saving) return;
     setState(() => _saving = true);
     try {
@@ -386,6 +412,11 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
           (ref.read(syncStateProvider).userEmail ?? ''),
       // Kreator tego pola nie edytuje, więc nie może go kasować.
       operationCommanderId: previous?.operationCommanderId,
+      // Poprawka z prywatnego konta (np. administratora) nie kasuje tego,
+      // kto wpisał wyjazd na tablecie.
+      enteredById: ref.read(syncStateProvider).isSharedAccount
+          ? _enteredBy
+          : previous?.enteredById,
     );
 
     if (_isEditing) {
@@ -586,6 +617,14 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
             onSave: _saveReport,
             onBack: _prevPage,
             saving: _saving,
+            askEnteredBy: ref.watch(syncStateProvider).isSharedAccount,
+            enteredById: _enteredBy,
+            enteredByMissing: _enteredByMissing,
+            onEnteredByChanged: (id) => setState(() {
+              _touched = true;
+              _enteredById = id;
+              _enteredByMissing = false;
+            }),
           ),
         ],
       ),

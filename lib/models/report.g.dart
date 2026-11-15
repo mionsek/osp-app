@@ -35,13 +35,14 @@ class ReportAdapter extends TypeAdapter<Report> {
       updatedAt: fields[14] as DateTime,
       createdBy: fields[15] as String,
       syncStatus: fields[16] as String,
+      enteredById: fields[18] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, Report obj) {
     writer
-      ..writeByte(18)
+      ..writeByte(19)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -77,7 +78,9 @@ class ReportAdapter extends TypeAdapter<Report> {
       ..writeByte(15)
       ..write(obj.createdBy)
       ..writeByte(16)
-      ..write(obj.syncStatus);
+      ..write(obj.syncStatus)
+      ..writeByte(18)
+      ..write(obj.enteredById);
   }
 
   @override

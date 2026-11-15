@@ -173,7 +173,13 @@ class HandoverDetailScreen extends ConsumerWidget {
                         '${handover.signLocality}, ${TimeFormat.date(handover.signDate)}'),
                     // Konto, z którego przekazanie zapisano — tylko na
                     // ekranie, nie na wydruku. Bez logowania autora nie ma.
-                    if (handover.createdBy.isNotEmpty)
+                    // Na wspólnym koncie jednostki adres nie mówi, kto to był.
+                    if (handover.enteredById != null) ...[
+                      _Row('Wpisał',
+                          findFF(handover.enteredById)?.lastNameFirst ?? '—'),
+                      if (handover.createdBy.isNotEmpty)
+                        _Row('Konto', handover.createdBy),
+                    ] else if (handover.createdBy.isNotEmpty)
                       _Row('Dodał', handover.createdBy),
                   ],
                 ),

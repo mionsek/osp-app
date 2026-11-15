@@ -5,6 +5,7 @@ import '../../../models/models.dart';
 import '../../../providers/providers.dart';
 import '../../../core/theme/osp_theme.dart';
 import '../../../core/utils/time_format.dart';
+import '../../../widgets/entered_by_field.dart';
 
 class StepSummary extends ConsumerWidget {
   final String reportNumber;
@@ -25,6 +26,12 @@ class StepSummary extends ConsumerWidget {
   /// drugie stuknięcie nie dodało drugiego wyjazdu.
   final bool saving;
 
+  /// Wspólne konto jednostki — nad zapisem pole „Kto wpisuje?".
+  final bool askEnteredBy;
+  final String? enteredById;
+  final bool enteredByMissing;
+  final ValueChanged<String>? onEnteredByChanged;
+
   const StepSummary({
     super.key,
     required this.reportNumber,
@@ -41,6 +48,10 @@ class StepSummary extends ConsumerWidget {
     required this.onSave,
     required this.onBack,
     this.saving = false,
+    this.askEnteredBy = false,
+    this.enteredById,
+    this.enteredByMissing = false,
+    this.onEnteredByChanged,
   });
 
   @override
@@ -162,6 +173,16 @@ class StepSummary extends ConsumerWidget {
             ),
           ],
           const SizedBox(height: 24),
+
+          if (askEnteredBy && firefighters.isNotEmpty) ...[
+            EnteredByField(
+              firefighters: firefighters,
+              selectedId: enteredById,
+              missing: enteredByMissing,
+              onChanged: (id) => onEnteredByChanged?.call(id),
+            ),
+            const SizedBox(height: 16),
+          ],
 
           ElevatedButton.icon(
             onPressed: saving ? null : onSave,
