@@ -337,13 +337,6 @@ Rozstrzygnięte przez Dawida 5.11.2026 — **bez zmian w aplikacji**:
 - licznik motogodzin ma tylko jedno urządzenie — rubryki licznika zostają puste i uzupełnia je jednostka; normy urządzeń (od Deringa) wpisuje administrator na liście sprzętu;
 - na karcie wozu są wszystkie przejazdy (akcje, tankowanie, ćwiczenia), bez pilarek i agregatów — tak, jak liczy aplikacja.
 
-Zostaje:
-
-- [ ] **Przybycie na miejsce w kreatorze wyjazdu** — wyjazd alarmowy dopisuje się do ewidencji z odjazdem i powrotem z raportu, ale bez godzin na miejscu, więc w wierszach wyjazdu i „Powrót" karty drogowej te rubryki zostają puste, dopóki ktoś nie uzupełni przejazdu. Do rozważenia: godzina przybycia na miejsce i zakończenia działań w raporcie (przyda się też PSP)
-- [ ] **Excel „Praca sprzętu"** do pobrania (Udostępnij, jak PDF): arkusz szczegółów (data, wóz, numer wyjazdu, urządzenie, czas, obsługujący, norma, wyliczone paliwo, rodzaj paliwa) i zestawienie dla każdego urządzenia (godziny i paliwo osobno: benzyna, mieszanka, ON). Prawdziwy .xlsx, nie CSV — polski Excel psuje w CSV polskie znaki i przecinki dziesiętne. Mniej pilne, odkąd jest wydruk karty, a od feature/053 każda karta urządzenia jest też w Excelu — zostaje zestawienie wszystkich urządzeń naraz (generator .xlsx jest gotowy: `services/xlsx_writer.dart`)
-- [ ] **Statystyki pracy sprzętu** — godziny pracy i paliwo każdego urządzenia w roku
-- [ ] **Pobrane paliwo na karcie drogowej wozu** — pusta dziś tabela „Pobrano" (patrz feature/033)
-
 ### Funkcje ratownika — możliwe rozszerzenia
 Obecnie „Ratownik" jest **wyliczany**: brak kierowcy/dowódcy/KPP = ratownik.
 W feature/024 doszła stała, zaznaczona i nieaktywna pozycja „Ratownik" na górze
@@ -369,16 +362,56 @@ Obecnie druk startuje od razu po kliknięciu.
 ### Przed publikacją w Play Store
 - [x] **Własny klucz podpisu** — dziś APK jest podpisany kluczem debug. Po zmianie klucza Android potraktuje aplikację jako inną i **każdy będzie musiał odinstalować przed aktualizacją, tracąc dane lokalne**. Im więcej osób dostanie wersję na kluczu debug, tym boleśniejsze. Wymaga dopisania nowego odcisku SHA-1 do klienta OAuth w Google Cloud, inaczej przestanie działać logowanie Google (błąd 10). **Zrobione w chore/039** — patrz sekcja niżej
 - [x] **Dopisać SHA-1 klucza wydań do Google Cloud** — **podmienione 15.10.2026** (patrz chore/045 niżej) — klient OAuth typu Android „Raporty OSP – wydania" już istnieje (od 30.09.2026), trzeba w nim **podmienić odcisk**. Pakiet `pl.osp.osp_app`, SHA-1 `AC:02:42:F2:89:F3:E9:75:E1:04:9E:54:0F:4A:35:F0:40:36:35:BB` (klucz z chore/045; `59:9C:…` z chore/043 przepadł z poprzednim komputerem, a wcześniejszy `B4:8D:…` przepadł razem z laptopem Lenovo). **Do czasu dopisania logowanie Google zwraca błąd 10** i działa tylko tryb offline
-- [ ] **Weryfikacja uprawnienia `drive` przez Google** — od fix/046 aplikacja prosi o pełny dostęp do Dysku, a to uprawnienie z grupy zastrzeżonych. W trybie testowym działa dla najwyżej 100 testerów (z ostrzeżeniem o niezweryfikowanej aplikacji); publikacja dla wszystkich wymaga weryfikacji Google z płatną oceną bezpieczeństwa. Węższe `drive.file` odpada — przy nim koledzy nie widzą nawzajem swoich plików (opis w fix/046)
-- [ ] Grafiki do sklepu: ikona 512×512, feature graphic 1024×500, min. 2 screenshoty
-- [ ] Polityka prywatności — po usunięciu reklam aplikacja nie zbiera praktycznie nic (dane leżą na Dysku Google użytkownika), więc mieści się w akapicie. Opisać w niej też wyłączoną kopię zapasową Androida i „Wyloguj i usuń dane" (fix/047)
 - [x] (opcjonalnie) Ikona monochromatyczna `<monochrome>` w adaptive icon — motywy Android 13+ — **zrobione w feature/055** razem z logo A
+- [x] Wymagania techniczne Play spełnione: `targetSdk` 36 (domyślny we Flutterze 3.47), paczka AAB ok. 12 MB do pobrania, własny klucz wydań
+
+**Plan z 11.11.2026, w tej kolejności.** Punkty 4 i 5 trwają najdłużej
+(14 dni i raczej tygodnie) — idą równolegle, więc najpierw strona i konto.
+
+1. [ ] **Strona główna i polityka prywatności pod jednym adresem** — wymagają ich i Play, i weryfikacja Google (polityka musi leżeć w tej samej domenie co strona główna, a domena musi być zweryfikowana w Google Search Console; link do sklepu Play nie liczy się jako strona główna). Np. darmowa strona na GitHubie albo własna domena. Treść polityki: aplikacja nie ma serwera, reklam ani statystyk; dane leżą w telefonie i w folderze jednostki na Dysku Google; wyłączona kopia zapasowa Androida i „Wyloguj i usuń dane" (fix/047); dane ratowników (nazwiska, telefony, daty badań) przetwarza jednostka
+2. [ ] **Konto w Play Console** — osobiste: 25 USD jednorazowo i weryfikacja tożsamości. Konto jednostki jako organizacji zwalnia z testu zamkniętego (pkt 4), ale wymaga numeru D-U-N-S (do ok. 30 dni)
+3. [ ] **Podpisywanie w Play: wgrać własny klucz, nie generować nowego** — przy zakładaniu aplikacji wybrać eksport klucza z naszego keystore'a (narzędzie PEPK z Play Console). Wtedy koledzy z APK zaktualizują się ze sklepu bez odinstalowania, odcisk SHA-1 w kliencie OAuth zostaje ten sam (bez błędu 10), a Google trzyma kopię klucza podpisu — klucz przepadł już dwa razy. Przy kluczu wygenerowanym przez Google: jednorazowe odinstalowanie u wszystkich i dopisanie nowego SHA-1 w Google Cloud. **Decyzji nie da się cofnąć**
+4. [ ] **Test zamknięty: co najmniej 12 testerów przez 14 dni z rzędu** — warunek dostępu do produkcji dla nowych kont osobistych. Testerami mogą być koledzy z jednostki: konto Google, zgoda z linku do testu, instalacja ze sklepu. Liczy się tylko test zamknięty (nie wewnętrzny); wstrzymanie ścieżki testu liczy dni od nowa, nowa wersja w trakcie testu — nie
+5. [ ] **Weryfikacja uprawnienia `drive` przez Google** — od fix/046 aplikacja prosi o pełny dostęp do Dysku, a to uprawnienie z grupy zastrzeżonych. Węższe `drive.file` odpada — przy nim koledzy nie widzą nawzajem swoich plików (opis w fix/046). Do zgłoszenia: strona i polityka z pkt 1, niepubliczny film na YouTube z logowaniem i pracą na Dysku, uzasadnienie, czemu węższe uprawnienie nie wystarcza
+   - Płatna ocena bezpieczeństwa (CASA, co 12 miesięcy) według dokumentacji Google dotyczy aplikacji, które trzymają lub przesyłają dane przez serwer. My serwera nie mamy, ale Google nie pisze wprost, że to zwalnia — potwierdzić przy zgłoszeniu
+   - **Wariant pośredni**: ekran zgody „W produkcji" bez weryfikacji — zostaje ostrzeżenie o niezweryfikowanej aplikacji i limit 100 kont, ale znika wygasanie zgody co 7 dni (dziś „Testowanie": loguje się tylko lista testerów — patrz „Tryb ekranu zgody OAuth" niżej). Na kilka jednostek wystarczy
+6. [ ] **Grafiki do sklepu**: ikona 512×512 (z logo A, feature/055), grafika 1024×500, min. 2 zrzuty ekranu (z emulatora)
+7. [ ] **Formularze w Play Console**: opis krótki (do 80 znaków) i pełny, kategoria, ankieta klasyfikacji treści, grupa docelowa (dorośli), „Bezpieczeństwo danych", reklamy: brak, dostęp dla recenzenta (aplikacja działa bez logowania w trybie offline; logowanie opisać)
+8. [ ] Produkcja — po 14 dniach testu i (albo) wariancie pośrednim z pkt 5
 
 **Publikacja w Play daje też odpowiedź na pytanie o statystyki**: konsola pokazuje
 liczbę instalacji, odinstalowań, kraje i wersje Androida — bez dokładania
 czegokolwiek do aplikacji. Rozdawanie APK z Dysku nie daje żadnych liczb.
 Czego Play **nie** poda: nazw jednostek — te leżą na Dyskach użytkowników,
 a zbieranie ich wymagałoby zgód i polityki przetwarzania.
+
+**Rozdawanie APK poza sklepem będzie trudniejsze**: Google wprowadza obowiązkową
+weryfikację twórców także dla aplikacji instalowanych z pliku — od września
+2026 w czterech krajach (Brazylia, Indonezja, Singapur, Tajlandia), globalnie
+od 2027, bez dat dla Polski. Konto w Play i tak będzie potrzebne.
+
+### Wersja na iOS (MacBook Dawida)
+Projekt nie ma jeszcze katalogu `ios/` — to osobna praca, nie tylko testy.
+Plan z 11.11.2026.
+
+**Narzędzia na Macu**, w kolejności instalacji:
+- [ ] **macOS Sequoia 15.6 lub nowszy** — starszy nie uruchomi Xcode 26, a Apple przyjmuje do App Store tylko wersje zbudowane na Xcode 26+ (od 28.04.2026). Sprawdzić: menu Apple → Ten Mac. Sequoia nie wejdzie na MacBooki Pro sprzed 2018 i MacBooki Air sprzed 2020
+- [ ] **Xcode** z App Store (z symulatorem iOS ok. 20 GB), potem w Terminalu: `sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer`, `sudo xcodebuild -runFirstLaunch`, `sudo xcodebuild -license accept`. Symulator iOS: Xcode → Settings → Components
+- [ ] **Flutter 3.47.7** — ta sama wersja co na Windows (git przychodzi z narzędziami Xcode)
+- [ ] **CocoaPods** — tylko jeśli `flutter doctor` o nie poprosi; Flutter 3.44+ używa Swift Package Managera, a `print_bluetooth_thermal` od 1.2.2 obsługuje już tylko SPM
+- [ ] **VS Code** z rozszerzeniami Flutter i Claude Code; repozytorium `git clone` z GitHuba (konto mionsek)
+- [ ] **iPhone z kablem** i włączonym trybem dewelopera (Ustawienia → Prywatność i ochrona → Tryb dewelopera, pojawia się po podłączeniu do Xcode) — Bluetooth nie działa w symulatorze
+- [ ] **Apple ID** — darmowe wystarczy do instalacji na własnym iPhonie (aplikacja wygasa po 7 dniach); **Apple Developer Program 99 USD rocznie** — TestFlight dla kolegów i App Store. Podpisywanie Xcode robi sam (Signing & Capabilities → Automatically manage signing)
+- [ ] Na koniec `flutter doctor` — sekcja Xcode ma być zielona
+
+**Do przerobienia w aplikacji**:
+- [ ] `flutter create --platforms ios .` — dokłada `ios/` bez ruszania reszty
+- [ ] **Logowanie Google**: klient OAuth typu iOS w Google Cloud (identyfikator pakietu jak w Xcode), w `ios/Runner/Info.plist` `GIDClientID` i odwrócony identyfikator klienta jako schemat URL
+- [ ] Opisy uprawnień w `Info.plist`: Bluetooth (`NSBluetoothAlwaysUsageDescription`), lokalizacja (adres z GPS, `NSLocationWhenInUseUsageDescription`)
+- [ ] **Druk Bluetooth — największa niewiadoma, sprawdzić najpierw**: NETUM XL-P801 drukujemy przez klasyczny Bluetooth (RFCOMM), a iPhone nie wpuszcza do niego aplikacji bez certyfikatu MFi. `print_bluetooth_thermal` na iOS łączy się tylko przez Bluetooth Low Energy — zadziała, jeśli drukarka ma też BLE. Parowanie z aplikacji (`bluetooth_pairing_service.dart`, kod natywny Androida) na iOS ukryć
+- [ ] Zwykły „Drukuj" (pakiet `printing`) idzie na iOS przez AirPrint — powinien działać bez zmian; „Wyślij" (PDF) też
+- [ ] Ikona: `flutter_launcher_icons` z `ios: true` i `remove_alpha_ios: true` (App Store odrzuca ikony z przezroczystością)
+- [ ] App Store Connect: polityka prywatności (ta sama strona co dla Play), etykieta prywatności, zrzuty z iPhone'a. Logowanie przez Apple niewymagane — Google służy tu tylko do dostępu do własnego Dysku (wyjątek w zasadzie 4.8 Apple)
 
 ### Adresy e-mail jednostek PSP — wysyłka raportu
 Raport da się dziś wysłać („Udostępnij / Wyślij"), ale adresata trzeba za każdym
@@ -442,11 +475,6 @@ Wydruk karty z feature/032 odtwarzał tylko środkową część druku. Dawid zap
 ### Poprzednia wersja wydruku — co było źle
 - [x] ~~Tabela „Rozliczenie zużycia paliwa" (Wyszczególnienie / Norma / Ilość / Zużycie)~~ — **wymyślona przeze mnie**, nie odpowiadała niczemu w druku. Napisałem wtedy, że „zostawiam miejsce na długopis, bo nie znam norm", ale w praktyce wydrukowałem zmyśloną tabelę wyglądającą na urzędową — gorzej, niż gdybym nie drukował nic
 - [x] ~~Podpisy „Sporządził / Sprawdził / Zatwierdził"~~ — w druku są dwa: „Obliczył" i „Sprawdził"
-
-### Do rozstrzygnięcia
-- [ ] **Reguła dodatku zimowego** — których miesięcy dotyczy i jaki jest narzut. Po ustaleniu doliczy się automatycznie (poz. 6 rozliczenia)
-- [ ] **Ilości pobranego paliwa** — dziś tabela „Pobrano" drukuje się pusta. Do rozważenia osobny ekran wpisywania kwitów (data, stan licznika, ON, ET), który wypełniłby też pozycje 1–3 i 10–12 rozliczenia
-- [ ] **Stan autopompy na początek i koniec miesiąca** — pole jest na wydruku, ale aplikacja go nie zbiera
 
 ## Zrobione (refactor/034-przeglad-kodu)
 Przegląd kodu na prośbę Dawida: wydajność, jakość, magic numbers, komentarze, testy.
@@ -830,7 +858,7 @@ odinstalować przed instalacją nowej.
 
 ### Do zrobienia przez Dawida
 - [x] **Podmienić SHA-1 w kliencie OAuth** na `AC:02:…:35:BB` — podmienione 15.10.2026; do tego czasu logowanie Google zwracało błąd 10
-- [ ] **Kopia klucza i `key.properties` w dwóch miejscach poza komputerem** (pendrive + prywatny Dysk), hasło w menedżerze haseł. Klucz przepadł już dwa razy, za każdym razem razem z komputerem
+- [ ] **Kopia klucza i `key.properties` w dwóch miejscach poza komputerem** (pendrive + prywatny Dysk), hasło w menedżerze haseł. Klucz przepadł już dwa razy, za każdym razem razem z komputerem. **Stan na 13.11.2026:** kopia obu plików w `Downloads\Dawid-files\.keys` (sprawdzona sumą kontrolną), ale na tym samym dysku, więc jeszcze nie chroni. Zostaje: hasło do menedżera haseł (`storePassword` = `keyPassword`, jedno hasło; na passwords.google.com nie było przycisku „Dodaj" — spróbować w Chrome: `chrome://password-manager/passwords`), sam `.jks` na prywatny Dysk, oba pliki na pendrive, potem usunąć kopię z Pobranych
 - [ ] **Konta kolegów jako użytkownicy testowi** albo publikacja aplikacji na ekranie zgody — w trybie „Testowanie" loguje się tylko lista, a zgoda wygasa po 7 dniach
 - [ ] **Przejście kolegów na 1.7.1**: synchronizacja na starej wersji (żeby dane były na Dysku), odinstalowanie, instalacja, logowanie Google i dołączenie do jednostki kodem zaproszenia. Kto pracował w trybie offline, straci dane lokalne
 
