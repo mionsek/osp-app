@@ -490,6 +490,45 @@ void main() {
     });
   });
 
+  group('Znacznik usunięcia (fix/062)', () {
+    test('tylko id i chwila usunięcia — bez treści rekordu', () {
+      final at = DateTime(2026, 11, 16, 12);
+      final tomb = SyncJson.tombstone({
+        'id': 'h1',
+        'recipientName': 'Jan Właściciel',
+        'recipientPhone': '600 100 200',
+        'recipientAddress': 'Kielno, Oliwska 1',
+      }, at);
+      expect(tomb, {
+        'id': 'h1',
+        'updatedAt': at.toIso8601String(),
+        'deleted': true,
+        'deletedAt': at.toIso8601String(),
+      });
+      expect(SyncJson.isTombstone(tomb), isTrue);
+      expect(SyncJson.stampOf(tomb), at);
+    });
+
+    test('stary pełny znacznik odchudza się, zwykły zostaje bez zmian', () {
+      final full = {
+        'id': 'f1',
+        'firstName': 'Jan',
+        'lastName': 'Kowalski',
+        'updatedAt': '2026-09-01T00:00:00.000',
+        'deleted': true,
+        'deletedAt': '2026-09-01T00:00:00.000',
+      };
+      final slim = SyncJson.slimTombstone(full);
+      expect(slim.keys.toSet(), {'id', 'updatedAt', 'deleted', 'deletedAt'});
+      expect(SyncJson.slimTombstone(slim), slim);
+    });
+
+    test('format danych podbity — starsza wersja nie odeśle pełnych '
+        'znaczników', () {
+      expect(SyncService.syncFormat, greaterThanOrEqualTo(3));
+    });
+  });
+
   group('Ratownik — JSON na Dysku', () {
     Firefighter sample() => Firefighter(
           id: 'f1',

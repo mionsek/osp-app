@@ -843,7 +843,13 @@ class SyncService {
   /// z wyższą wersją (nowsza aplikacja u kolegi) blokuje synchronizację
   /// z komunikatem „zaktualizuj", zamiast pozwolić staremu telefonowi
   /// nadpisać dane w formacie, którego nie rozumie.
-  static const int syncFormat = 2;
+  ///
+  /// 3 — znaczniki usunięcia bez treści rekordu (fix/062), a przy okazji
+  /// wspólne konto jednostki i „Wpisał" (feature/058). Starsza wersja trzyma
+  /// w telefonie pełne znaczniki i odsyłałaby je na Dysk w miejsce
+  /// odchudzonych — przy każdej synchronizacji, na zmianę z nową — oraz
+  /// gubiłaby „Wpisał" i ustawienie wspólnego konta.
+  static const int syncFormat = 3;
 
   // ── Pamięć plików Dysku ────────────────────────────────────────────
   //
@@ -1591,6 +1597,10 @@ class SyncService {
 
   /// Try to restore sync state from saved config.
   Future<void> restoreState() async {
+    // Znaczniki usunięcia sprzed fix/062 — bez treści rekordów, zanim
+    // cokolwiek pójdzie na Dysk. Za drugim razem nic nie zmienia.
+    await _db.slimStoredTombstones();
+
     if (!authService.isSignedIn) {
       _updateState(const SyncState());
       return;

@@ -29,21 +29,38 @@ class SyncJson {
 
   // ── Znaczniki usunięcia ─────────────────────────────────────────────
 
-  /// Znacznik usunięcia: pełna ostatnia treść rekordu plus `deleted`.
+  /// Znacznik usunięcia: sam identyfikator rekordu, chwila usunięcia
+  /// i `deleted` — **bez treści rekordu**.
   ///
-  /// Pełna, a nie samo `id`: starsza wersja aplikacji czyta taki plik jak
-  /// zwykły rekord i nie wywraca się na brakujących polach. `updatedAt`
-  /// równy chwili usunięcia, żeby usunięcie wygrywało ze starszymi kopiami
-  /// według tej samej reguły „nowszy wygrywa", co zwykła edycja.
+  /// Do fix/062 znacznik był pełną ostatnią treścią rekordu (żeby wersje
+  /// sprzed znaczników nie wywracały się na brakujących polach). Przez to
+  /// usunięty ratownik albo osoba z przekazania mienia zostawali na Dysku
+  /// jednostki z nazwiskiem, adresem i telefonem — nie dało się ich naprawdę
+  /// usunąć (RODO). Scalanie potrzebuje tylko `id`, `updatedAt` i `deleted`,
+  /// a wersje sprzed znaczników (≤ 1.6.1) od dawna nie mogą się połączyć.
+  ///
+  /// `updatedAt` równy chwili usunięcia, żeby usunięcie wygrywało ze
+  /// starszymi kopiami według tej samej reguły „nowszy wygrywa", co zwykła
+  /// edycja.
   static Map<String, dynamic> tombstone(
     Map<String, dynamic> lastJson,
     DateTime deletedAt,
   ) =>
       {
-        ...lastJson,
+        'id': lastJson['id'],
         'updatedAt': deletedAt.toIso8601String(),
         'deleted': true,
         'deletedAt': deletedAt.toIso8601String(),
+      };
+
+  /// Pola, które zostają w znaczniku usunięcia.
+  static const _tombstoneFields = {'id', 'updatedAt', 'deleted', 'deletedAt'};
+
+  /// Znacznik bez treści rekordu — także stary, pełny (sprzed fix/062),
+  /// który przyszedł z Dysku albo leży w telefonie.
+  static Map<String, dynamic> slimTombstone(Map<String, dynamic> json) => {
+        for (final e in json.entries)
+          if (_tombstoneFields.contains(e.key)) e.key: e.value,
       };
 
   static bool isTombstone(Map<String, dynamic> json) => json['deleted'] == true;

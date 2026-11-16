@@ -80,6 +80,109 @@ void main() {
     expect(await b.joinUnit(code), isTrue);
   }
 
+  group('usunięcie bez danych osobowych (fix/062)', () {
+    const slimKeys = {'id', 'updatedAt', 'deleted', 'deletedAt'};
+
+    FakeFile fileOf(String id) => drive.files.values.firstWhere((f) {
+          if (f.isFolder || f.content == null) return false;
+          final json = jsonDecode(f.content!);
+          return json is Map && json['id'] == id;
+        });
+
+    Set<String> keysOnDrive(String id) =>
+        (jsonDecode(fileOf(id).content!) as Map<String, dynamic>).keys.toSet();
+
+    bool driveMentions(String text) =>
+        drive.files.values.any((f) => f.content?.contains(text) ?? false);
+
+    test('usunięty raport i ratownik: na Dysku zostaje sam znacznik, bez '
+        'nazwiska i adresu', () async {
+      await twoPhones();
+      final a = await phone('a');
+      await db.addReport(report('r1'));
+      await db.addFirefighter(ff('f1', 'Kowalski', at: DateTime(2026, 8, 1)));
+      await a.syncAll();
+      expect(driveMentions('Kowalski'), isTrue);
+      expect(driveMentions('Kielno'), isTrue);
+
+      await db.deleteReport('r1');
+      await db.deleteFirefighter('f1');
+      await a.syncAll();
+
+      expect(keysOnDrive('r1'), slimKeys);
+      expect(driveMentions('Kowalski'), isFalse,
+          reason: 'nazwisko zniknęło z listy ratowników na Dysku');
+      expect(driveMentions('Kielno'), isFalse,
+          reason: 'adres zniknął z pliku wyjazdu');
+
+      final b = await phone('b');
+      await b.syncAll();
+      expect(db.getReport('r1'), isNull, reason: 'usunięcie dalej dociera');
+      expect(db.getFirefighter('f1'), isNull);
+    });
+
+    test('stary pełny znacznik w telefonie: po aktualizacji odchudzony '
+        'i wysłany na Dysk w miejsce pełnego', () async {
+      await twoPhones();
+      var a = await phone('a');
+      await db.addReport(report('r1'));
+      await a.syncAll();
+
+      // Tak usuwała wersja sprzed fix/062: pełna treść z dopiskiem `deleted`,
+      // w telefonie i na Dysku.
+      final deletedAt = DateTime(2026, 9, 1).toIso8601String();
+      final full = {
+        ...SyncJson.reportToJson(db.getReport('r1')!),
+        'updatedAt': deletedAt,
+        'deleted': true,
+        'deletedAt': deletedAt,
+      };
+      await db.reportsBox.delete('r1');
+      await db.settingsBox.put(
+          'syncTombstones', {'${SyncKind.report}:r1': jsonEncode(full)});
+      fileOf('r1')
+        ..content = jsonEncode(full)
+        ..modified = DateTime.utc(2030);
+
+      a = await phone('a'); // start nowej wersji
+      expect(db.tombstoneOf(SyncKind.report, 'r1')!.keys.toSet(), slimKeys);
+      await a.syncAll();
+
+      expect(keysOnDrive('r1'), slimKeys);
+      expect(driveMentions('Kielno'), isFalse);
+      expect(db.getReport('r1'), isNull);
+    });
+
+    test('pełny znacznik z Dysku (ze starszej wersji): w telefonie bez '
+        'treści, a na Dysku zastąpiony odchudzonym', () async {
+      await twoPhones();
+      final a = await phone('a');
+      await db.addReport(report('r1'));
+      await a.syncAll();
+      final b = await phone('b');
+      await b.syncAll();
+      expect(db.getReport('r1'), isNotNull);
+
+      final file = fileOf('r1');
+      final deletedAt = DateTime(2026, 9, 1).toIso8601String();
+      file
+        ..content = jsonEncode({
+          ...jsonDecode(file.content!) as Map<String, dynamic>,
+          'updatedAt': deletedAt,
+          'deleted': true,
+          'deletedAt': deletedAt,
+        })
+        ..modified = DateTime.utc(2030);
+
+      await b.syncAll();
+
+      expect(db.getReport('r1'), isNull);
+      expect(db.tombstoneOf(SyncKind.report, 'r1')!.keys.toSet(), slimKeys);
+      expect(keysOnDrive('r1'), slimKeys);
+      expect(driveMentions('Kielno'), isFalse);
+    });
+  });
+
   test('usuniety raport nie wraca z Dysku', () async {
     await twoPhones();
     var a = await phone('a');
@@ -256,8 +359,9 @@ void main() {
     await twoPhones();
     final config = drive.files.values
         .firstWhere((f) => f.name == 'unit_config.json');
-    config.content = config.content!
-        .replaceFirst('"syncFormat":2', '"syncFormat":99');
+    config.content = config.content!.replaceFirst(
+        '"syncFormat":${SyncService.syncFormat}', '"syncFormat":99');
+    expect(config.content, contains('"syncFormat":99'));
 
     final a = await phone('a');
     await db.addReport(report('r1'));

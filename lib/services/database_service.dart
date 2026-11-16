@@ -139,8 +139,9 @@ class DatabaseService {
   //
   // Usunięty rekord znika z bazy, ale ślad po nim musi zostać: inaczej przy
   // najbliższej synchronizacji wracał z Dysku, bo plik nadal tam leżał, a
-  // telefony kolegów wysyłały swoją kopię z powrotem. Znacznik to ostatnia
-  // treść rekordu z dopiskiem `deleted` — trafia na Dysk w miejsce rekordu.
+  // telefony kolegów wysyłały swoją kopię z powrotem. Znacznik to sam
+  // identyfikator i chwila usunięcia (`SyncJson.tombstone`) — trafia na Dysk
+  // w miejsce rekordu. Od fix/062 bez treści rekordu, także te starsze.
   //
   // Trzymany jako tekst JSON: Hive oddaje zagnieżdżone mapy jako
   // Map<dynamic, dynamic>, a znacznik ma wyglądać dokładnie jak plik na Dysku.
@@ -165,11 +166,29 @@ class DatabaseService {
             jsonDecode(e.value) as Map<String, dynamic>,
       ];
 
+  /// Zapisuje znacznik — zawsze bez treści rekordu, także gdy z Dysku
+  /// przyszedł stary, pełny znacznik.
   Future<void> saveTombstone(
       String kind, String id, Map<String, dynamic> json) async {
     final store = Map<String, String>.of(_tombstoneStore);
-    store[_tombstoneKey(kind, id)] = jsonEncode(json);
+    store[_tombstoneKey(kind, id)] = jsonEncode(SyncJson.slimTombstone(json));
     await settingsBox.put(_tombstonesKey, store);
+  }
+
+  /// Usuwa treść rekordów ze znaczników zapisanych przed fix/062. Kolejna
+  /// synchronizacja wyśle te odchudzone znaczniki na Dysk w miejsce starych
+  /// plików z pełną treścią.
+  Future<void> slimStoredTombstones() async {
+    final store = _tombstoneStore;
+    var changed = false;
+    final slim = <String, String>{};
+    for (final e in store.entries) {
+      final json = jsonDecode(e.value) as Map<String, dynamic>;
+      final thin = SyncJson.slimTombstone(json);
+      if (thin.length != json.length) changed = true;
+      slim[e.key] = jsonEncode(thin);
+    }
+    if (changed) await settingsBox.put(_tombstonesKey, slim);
   }
 
   /// Zdejmuje znacznik — rekord wrócił, bo ktoś edytował go później, niż
