@@ -9,6 +9,14 @@
 /// dla której uniknięcia zrezygnowaliśmy z reklam.
 const String kCoffeeUrl = 'https://buycoffee.to/mionsek';
 
+/// Strona aplikacji i polityka prywatności (GitHub Pages z folderu `docs/`).
+///
+/// Sklep Play wymaga linku do polityki prywatności także w samej aplikacji,
+/// nie tylko w opisie w sklepie. Po przejściu na własną domenę wystarczy
+/// zmienić adres tutaj.
+const String kWebsiteUrl = 'https://mionsek.github.io/osp-app/';
+const String kPrivacyPolicyUrl = '${kWebsiteUrl}polityka-prywatnosci.html';
+
 /// Komunikat pokazywany, gdy zbiórka nie ma jeszcze adresu.
 const String kCoffeeNotReadyMessage =
     'Zbiórka nie jest jeszcze uruchomiona — dzięki za chęci!';

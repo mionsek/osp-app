@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Privacy Policy — Raporty OSP</title>
+  <meta name="description" content="What data the Raporty OSP app processes, where it is stored and who can access it.">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <img src="icon.svg" alt="">
+      <div>
+        <a class="name" href="./">Raporty OSP</a>
+        <div class="tag">Privacy Policy</div>
+      </div>
+      <nav>
+        <a href="./" lang="pl">Strona główna</a>
+        <a href="polityka-prywatnosci.html" lang="pl">Polski</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <h1>Raporty OSP — Privacy Policy</h1>
+    <p class="meta">Effective 16 November 2026. The Polish version
+      (<a href="polityka-prywatnosci.html" lang="pl">Polityka prywatności</a>) is the primary text.</p>
+
+    <div class="note">
+      <p><strong>In short:</strong> the app has no server, no ads and no usage analytics.
+        The developer receives no data. Everything users enter is stored on their
+        phone and — if their fire brigade unit uses synchronisation — in the unit's
+        folder on the Google Drive of the account that created the unit.</p>
+    </div>
+
+    <h2>1. Who is responsible for the app</h2>
+    <p>Raporty OSP (“the app”) is developed and distributed by its author (mionsek),
+      contact: <a href="mailto:mionskowski.dawid@gmail.com">mionskowski.dawid@gmail.com</a>.</p>
+    <p>The app is a tool for Polish volunteer fire brigades (Ochotnicza Straż Pożarna, OSP).
+      The fire brigade unit using the app is the controller of the personal data entered
+      into it — data of its members and of people named in its documents. The developer
+      has no access to this data and does not process it.</p>
+
+    <h2>2. What data the app holds</h2>
+    <p>The app stores only what users enter:</p>
+    <ul>
+      <li><strong>Unit details</strong> — name, town and station address.</li>
+      <li><strong>Firefighters</strong> — first and last name, rank, roles (driver, commander, first aid) and medical examination expiry date.</li>
+      <li><strong>Vehicles and equipment</strong> — names, designations, registration numbers, fuel consumption rates.</li>
+      <li><strong>Call-outs</strong> — date, times, incident address, type of hazard, vehicle crews.</li>
+      <li><strong>Property handovers</strong> — place and time, description of the property, and the name, address and phone number of the person who took it over.</li>
+      <li><strong>Vehicle trips and equipment work</strong> — odometer readings, routes, purposes, drivers, equipment running time.</li>
+      <li><strong>Entry author</strong> — when synchronising, call-outs, handovers and trips record the e-mail address of the Google account that added them and, on a shared unit account, which firefighter entered them.</li>
+    </ul>
+
+    <h2>3. Where data is stored</h2>
+    <h3>On the phone</h3>
+    <p>All data is stored in the app's private storage on the device. The app disables
+      Android backup, so its data is not copied to the user's Google device backup.</p>
+    <h3>On the unit's Google Drive (optional)</h3>
+    <p>If a user signs in with Google and creates or joins a unit, the unit's data is
+      stored in an <code>OSP_App_…</code> folder on the Google Drive of the account that
+      created the unit, and shared with people invited by the unit's administrator.
+      When someone is invited, Google sends them an e-mail with the unit name and invitation
+      code. Data on Google Drive is subject to the
+      <a href="https://policies.google.com/privacy">Google Privacy Policy</a>.</p>
+
+    <h2>4. Access to the Google account</h2>
+    <p>When signing in, the app requests access to Google Drive. This is needed because
+      one person creates the unit's folder and other members add and read documents in it —
+      Google's narrower Drive permission does not let users see files created by their
+      colleagues. The app works only with the unit's folder; it does not read, modify or
+      delete any other files on Drive. From the Google account the app also reads the e-mail
+      address and name, to show who is signed in and to mark the author of entries.</p>
+    <p>The app's use and transfer of information received from Google APIs adheres to the
+      <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>,
+      including the Limited Use requirements. Google user data is not transferred to the
+      developer or anyone else, is not used for advertising, and is not used to develop,
+      improve or train generalised AI or machine-learning models.</p>
+    <p>Access can be revoked at any time at
+      <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>.</p>
+
+    <h2>5. Location and Bluetooth</h2>
+    <ul>
+      <li><strong>Location</strong> is used only when the user taps “Wstaw adres z GPS” (insert address from GPS)
+        on a call-out or handover. The app then determines the phone's position once and
+        converts it into an address using the Android system geocoding service (on most
+        phones provided by Google). Only the address is saved — not coordinates or a
+        location history.</li>
+      <li><strong>Bluetooth</strong> is used to find, pair and connect to a portable thermal
+        printer. Only the printed document is sent to the printer. On older Android versions
+        (up to 11) the system also requires location permission to scan for Bluetooth devices.</li>
+    </ul>
+
+    <h2>6. Sharing of data</h2>
+    <p>The developer does not collect, sell or share any data. Data leaves the phone only:</p>
+    <ul>
+      <li>to the unit's folder on Google Drive — when the unit uses synchronisation;</li>
+      <li>where the user sends it — a printout, PDF or Excel file sent through an app of
+        the user's choice (e.g. e-mail or a messenger) or to a printer;</li>
+      <li>to the geocoding service — only with “Wstaw adres z GPS”, as described above.</li>
+    </ul>
+
+    <h2>7. Retention and deletion</h2>
+    <ul>
+      <li>Data on the phone is kept until the user deletes it. In the app's Settings,
+        “Wyloguj” → “Wyloguj i usuń dane” (sign out and delete data) removes the unit's data from the phone;
+        uninstalling the app removes all of its data from the phone.</li>
+      <li>Data in the unit's Google Drive folder remains there when one user signs out —
+        its retention and deletion are decided by the unit (the folder owner). An entry
+        deleted in the app disappears from all of the unit's phones; its file in the Drive
+        folder remains with a deletion marker (so that the entry does not come back from
+        another phone) and can be removed permanently directly in the unit's Drive folder.</li>
+      <li>The retention period for documents is determined by the unit in line with the
+        regulations that apply to it.</li>
+    </ul>
+
+    <h2>8. Rights of data subjects</h2>
+    <p>People whose data was entered into the app (unit members, people taking over property)
+      can exercise their rights under the GDPR — including access, rectification and
+      erasure — by contacting the fire brigade unit that entered the data. The developer has
+      no access to this data but is happy to help with questions about how the app works.</p>
+
+    <h2>9. Security</h2>
+    <p>Connections to Google are encrypted (HTTPS). Only people invited by the unit's
+      administrator can access the unit's folder. Users should protect phones holding unit
+      data with a screen lock.</p>
+
+    <h2>10. Children</h2>
+    <p>The app is intended for adult members of fire brigade units and is not directed at children.</p>
+
+    <h2>11. Changes to this policy</h2>
+    <p>Changes are published on this page with a new effective date. Significant changes
+      are also described in the release notes of the app.</p>
+
+    <h2>12. Contact</h2>
+    <p>Privacy questions:
+      <a href="mailto:mionskowski.dawid@gmail.com">mionskowski.dawid@gmail.com</a>.</p>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <span>Raporty OSP · author: mionsek</span>
+      <a href="./" lang="pl">Strona główna</a>
+      <a href="polityka-prywatnosci.html" lang="pl">Polityka prywatności (polski)</a>
+    </div>
+  </footer>
+</body>
+</html>

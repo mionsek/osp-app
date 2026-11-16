@@ -1,0 +1,114 @@
+/* Strona aplikacji Raporty OSP — bez zewnętrznych czcionek i skryptów:
+   strona o prywatności sama nie powinna niczego wysyłać do innych firm. */
+:root {
+  --bg: #fffaf9;
+  --surface: #ffffff;
+  --fg: #2a1f1d;
+  --muted: #6b5c59;
+  --line: #eadcd9;
+  --accent: #b71c1c;
+  --accent-soft: #fbe9e7;
+  --link: #a31515;
+  --bar: #b71c1c;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1b1514;
+    --surface: #251d1c;
+    --fg: #f3ebe9;
+    --muted: #b8a9a6;
+    --line: #3d3130;
+    --accent: #e0574f;
+    --accent-soft: #3a2220;
+    --link: #ff8a80;
+    --bar: #8e1717;
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+a { color: var(--link); }
+
+.top {
+  /* Pasek zawsze w ciemnej czerwieni OSP — biały napis musi być czytelny. */
+  background: var(--bar);
+  color: #fff;
+}
+.top .wrap {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-block: 18px;
+}
+.top img { width: 48px; height: 48px; border-radius: 12px; flex: none; }
+.top .name { font-size: 1.3rem; font-weight: 700; letter-spacing: .01em; color: #fff; text-decoration: none; }
+.top .tag { font-size: .9rem; opacity: .9; }
+.top nav { margin-left: auto; display: flex; gap: 16px; flex-wrap: wrap; }
+.top nav a { color: #fff; font-size: .95rem; text-decoration: none; opacity: .92; }
+.top nav a:hover { text-decoration: underline; }
+
+.wrap {
+  max-width: 760px;
+  margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+
+main.wrap { padding-block: 32px 48px; }
+
+h1 { font-size: 2rem; line-height: 1.2; margin: 0 0 12px; text-wrap: balance; }
+h2 { font-size: 1.3rem; margin: 36px 0 10px; text-wrap: balance; }
+h3 { font-size: 1.05rem; margin: 22px 0 6px; }
+p, ul { margin: 0 0 14px; }
+ul { padding-left: 22px; }
+li { margin-bottom: 6px; }
+
+.lead { font-size: 1.12rem; color: var(--muted); max-width: 62ch; }
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin: 18px 0 8px;
+}
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+.card h3 { margin: 0 0 6px; color: var(--accent); }
+.card p { margin: 0; color: var(--muted); font-size: .95rem; }
+
+.note {
+  background: var(--accent-soft);
+  border-left: 4px solid var(--accent);
+  border-radius: 8px;
+  padding: 14px 18px;
+  margin: 20px 0;
+}
+.note p:last-child { margin-bottom: 0; }
+
+.meta { color: var(--muted); font-size: .92rem; }
+
+footer {
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: .9rem;
+}
+footer .wrap { padding-block: 20px; display: flex; flex-wrap: wrap; gap: 8px 20px; }
+
+@media (max-width: 560px) {
+  .top .wrap { flex-wrap: wrap; }
+  .top nav { margin-left: 0; width: 100%; }
+  h1 { font-size: 1.6rem; }
+}

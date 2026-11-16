@@ -56,6 +56,18 @@ class InfoScreen extends StatelessWidget {
     }
   }
 
+  /// Strona w przeglądarce — np. polityka prywatności.
+  Future<void> _openPage(BuildContext context, String url) async {
+    if (!await launchUrl(Uri.parse(url),
+        mode: LaunchMode.externalApplication)) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Nie udało się otworzyć strony: $url')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -387,6 +399,13 @@ class InfoScreen extends StatelessWidget {
                   context,
                   'Raporty OSP — Propozycja usprawnienia',
                 ),
+              ),
+              const SizedBox(height: 8),
+              _ContactButton(
+                icon: Icons.privacy_tip_outlined,
+                label: 'Polityka prywatności',
+                subtitle: 'Jakie dane są w aplikacji i gdzie',
+                onTap: () => _openPage(context, kPrivacyPolicyUrl),
               ),
               const SizedBox(height: 8),
               _ContactButton(
