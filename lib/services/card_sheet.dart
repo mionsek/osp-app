@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/services.dart' show rootBundle;
@@ -319,11 +320,20 @@ class CardSheet {
     int col(double x) => xl.indexOf(_round(x));
     int row(double y) => yl.indexOf(_round(y));
 
+    // Szerokość kolumny w pliku to piksele przy 96 dpi przez 7 (Calibri 11 —
+    // czcionka domyślna skoroszytu ma cyfrę szeroką na 7 px), już RAZEM
+    // z 5 px marginesu komórki: Excel zamienia ją na
+    // Truncate(((256·w + 18) / 256) · 7) pikseli (ECMA-376, 18.3.1.13),
+    // więc w = px / 7 daje dokładnie px. Dawniej zapis odejmował margines
+    // i każda kolumna wychodziła o 5 px węższa — strona o 7–16% węższa niż
+    // PDF (fix/065). Krawędzie zaokrąglone do pełnych pikseli od lewego
+    // brzegu, żeby błąd nie rósł wzdłuż strony.
+    int px(double mm) => ((mm - xl.first) / 25.4 * 96).round();
+    var edge = 0;
     for (var c = 0; c + 1 < xl.length; c++) {
-      // Szerokość Excela: piksele przy 96 dpi minus 5 px marginesu, przez
-      // 7 px na znak (Calibri 11 — czcionka domyślna skoroszytu).
-      final px = (xl[c + 1] - xl[c]) / 25.4 * 96;
-      sheet.width(c, px > 12 ? (px - 5) / 7 : px / 12);
+      final next = math.max(px(xl[c + 1]), edge + 1);
+      sheet.width(c, (next - edge) / 7);
+      edge = next;
     }
     for (var r = 0; r + 1 < yl.length; r++) {
       sheet.height(r, (yl[r + 1] - yl[r]) / 25.4 * 72);

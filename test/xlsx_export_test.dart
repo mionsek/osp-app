@@ -251,9 +251,75 @@ void main() {
           .where((b) => b.text == 'ROZLICZANIE MATERIAŁÓW PĘDNYCH')
           .toList();
       expect(rozliczenia, hasLength(2));
-      expect(texts(back), containsAll(['1 godz. 30 min', '3', '30 min', '1', '4']));
+      expect(texts(back), containsAll(['1 godz. 30 min', '3', '1', '4']));
       // Litry tylko po stronie Niagary (prawa połowa).
       expect(box(back, '3').x, greaterThan(CardPage.width / 2));
+    });
+
+    test('tył jak na zdjęciu karty z 5.11 (fix/065)', () {
+      final back = sheets()[1];
+      final niagara =
+          back.boxes.where((b) => b.x >= CardPage.width / 2).toList();
+      Iterable<String> right() =>
+          niagara.map((b) => b.text).where((t) => t.isNotEmpty);
+      CardBox at(String t) => niagara.firstWhere((b) => b.text == t);
+
+      // Ciąg dalszy tabeli pracy i tabela licznika na wspólnych kolumnach.
+      for (final t in [
+        'Nazwisko i imię\nobsługującego',
+        'Z przeniesienia',
+        'xxxxxx',
+        'Stan Licznika',
+        'Minuty\npracy',
+        'Zużycie\npaliwa',
+        'POBRANO W LITRACH',
+        'Podpis\nmechanika',
+        'LITRÓW :',
+        '5.  zużyto',
+        '8 POZOSTAŁO NA MIESIĄC NASTĘPNY',
+      ]) {
+        expect(right(), contains(t), reason: t);
+      }
+      expect(at('Z przeniesienia').w, closeTo(16 + 33.5, 0.01));
+      expect(at('POBRANO W LITRACH').w, closeTo(124.5 * 4 / 6, 0.01));
+      expect(at('Podpis\nmechanika').h, closeTo(9.5, 0.01));
+
+      // „Razem" tylko pod czterema kolumnami litrów, a ostatni wiersz tabeli
+      // licznika — pod trzema pierwszymi kolumnami.
+      final razem = at('Razem');
+      final rowRight = niagara
+          .where((b) => b.y == razem.y)
+          .map((b) => b.x + b.w)
+          .reduce((a, b) => a > b ? a : b);
+      expect(rowRight - razem.x, closeTo(124.5 * 4 / 6, 0.01));
+      final licznikTail = niagara.where((b) => b.y == 53.75 && b.h == 5);
+      expect(licznikTail, hasLength(2));
+
+      // Pozycje 4 i 5 w jednym wierszu: czas pracy w okienku, litry obok.
+      final four = at('4. Przepracowano godz. i min.');
+      expect(at('5.  zużyto').y, four.y);
+      expect(at('1 godz. 30 min').y, four.y);
+      expect(at('3').y, four.y);
+      // Czasu rozruchów papier nie ma — tylko litry w pozycji 6.
+      expect(right(), isNot(contains('30 min')));
+      expect(at('1').y, at('6. zużyto na rozruchy i kontrole').y);
+      // Wszystko zwykłym krojem 9 pt, jak na papierze.
+      for (final t in [four, at('7. zużyto w ciągu mies. Razem'),
+          at('8 POZOSTAŁO NA MIESIĄC NASTĘPNY'), at('4')]) {
+        expect(t.style.bold, isFalse, reason: t.text);
+        expect(t.style.size, 9, reason: t.text);
+      }
+
+      // Nagłówek „LITRÓW :" bez pionowych linii między rubrykami.
+      final head = niagara.where((b) => b.y == at('LITRÓW :').y).toList()
+        ..sort((a, b) => a.x.compareTo(b.x));
+      expect(head.map((b) => b.text), ['LITRÓW :', 'ET', 'ON']);
+      expect([head[0].right, head[1].left, head[1].right, head[2].left],
+          everyElement(0));
+
+      // Podpisy na linii, bez dopisków pod spodem.
+      expect(right(), containsAll(['Obliczył', 'Sprawdził']));
+      expect(right(), isNot(contains('(imię i nazwisko)')));
     });
   });
 
@@ -363,6 +429,46 @@ void main() {
       expect(styles, contains('<name val="Arial"/>'));
       final inner = part(bytes, 'xl/styles.xml');
       expect(inner, contains('<name val="Times New Roman"/>'));
+    });
+
+    test('Excel ma te same szerokości co PDF (fix/065)', () {
+      // Szerokość kolumny w pliku zawiera już 5 px marginesu komórki —
+      // Excel zamienia ją na Truncate(((256·w + 18) / 256) · 7) pikseli
+      // przy 96 dpi (ECMA-376, 18.3.1.13). Dawniej każda kolumna wychodziła
+      // o 5 px węższa i okładka karty drogowej miała 236 mm zamiast 273 mm.
+      final pages = [
+        ...card(),
+        ...EquipmentCardSheet.pages(
+            cards: [(Equipment(id: 'e', name: 'Pilarka'), const []),
+                (Equipment(id: 'f', name: 'Agregat'), const [])],
+            config: config,
+            year: 2026,
+            month: 11),
+      ];
+      final bytes = CardSheet.xlsx(pages);
+      for (var i = 0; i < pages.length; i++) {
+        double r(double v) => (v * 10).roundToDouble() / 10;
+        final edges = <double>{
+          for (final b in pages[i].boxes) ...[r(b.x), r(b.x + b.w)],
+        }.toList()
+          ..sort();
+        final sheet = part(bytes, 'xl/worksheets/sheet${i + 1}.xml');
+        final px = [
+          for (final m in RegExp(r'<col min="\d+" max="\d+" width="([\d.]+)"')
+              .allMatches(sheet))
+            ((256 * double.parse(m.group(1)!) + 18) / 256 * 7).floor(),
+        ];
+        expect(px, hasLength(edges.length - 1), reason: pages[i].title);
+        expect(px, everyElement(greaterThan(0)), reason: pages[i].title);
+        // Każda krawędź ramki w Excelu najwyżej pół piksela od PDF.
+        var at = 0;
+        for (var c = 0; c < px.length; c++) {
+          at += px[c];
+          final mm = edges.first + at / 96 * 25.4;
+          expect(mm, closeTo(edges[c + 1], 0.2),
+              reason: '${pages[i].title}: kolumna $c');
+        }
+      }
     });
 
     test('liczniki jako liczby, daty i godziny jako tekst', () {

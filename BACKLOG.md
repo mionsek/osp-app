@@ -1036,13 +1036,30 @@ Ekrany wyjazdu i przekazania miały domek zamiast strzałki, reszta ekranów —
 - [x] 10 nowych testów na prawdziwym drzewie tras: po zapisie przekazania wstecz do listy i do menu (aplikacja się nie zamyka), po „Lista wyjazdów" wstecz do menu, strzałka i domek na każdym z 19 ekranów, kreator cofa o krok i pyta na pierwszym, bez wpisanych danych bez pytania, „Zostań" zostawia, formularz pyta domkiem i wstecz, zapis zamyka bez pytania, Ustawienia pytają przed zapisem, a po nim nie. Łącznie **364**
 - [x] Wersja **1.7.8+21**
 
+## Zrobione (fix/065-karty-excel-i-tyl)
+Pytanie Dawida z 18.11.2026: czy PDF i Excel mają „DOKŁADNIE taki sam
+format" jak jego karty. Porównanie ze zdjęciami (karta drogowa i przody kart
+sprzętu z 8.11, tył karty motopompy Niagara z 5.11) wykazało dwie różnice —
+obie poprawione.
+
+- [x] **Excel o 7–16% węższy niż PDF** — szerokość kolumny w pliku `.xlsx` zawiera już 5 px marginesu komórki (ECMA-376, 18.3.1.13; Excel liczy `Truncate(((256·w + 18)/256)·7)` pikseli), a zapis go odejmował. Każda kolumna wychodziła o 5 px węższa: okładka karty drogowej 236 mm zamiast 273 mm, tabela przejazdów 255 mm, karty sprzętu ok. 230 mm, a wąskie kolumny traciły najwięcej. Teraz `w = px / 7`, krawędzie zaokrąglone do pełnych pikseli od lewego brzegu (błąd się nie sumuje) — 273,1 mm na 273,0 mm PDF. Wysokości wierszy (w punktach), scalenia, linie i kroje były dobre
+- [x] **Tył karty pracy sprzętu jak na zdjęciu** — dotąd uproszczony. Teraz:
+  - u góry ciąg dalszy tabeli pracy (nagłówek jak z przodu, wiersz „Z przeniesienia" z „xxxxxx" nad celem i podpisem, trzy puste wiersze), pod nim na tych samych kolumnach tabela „Data / Stan Licznika / Minuty pracy / Stan Licznika / Zużycie paliwa" (pogrubiona), ostatni wiersz tylko pod trzema pierwszymi kolumnami
+  - „POBRANO W LITRACH" jako scalony nagłówek nad „Dnia / Nr kwitu / paliwa / oleju", podpisy mechanika i magazyniera na dwa wiersze nagłówka, sześć równych kolumn, „Razem" tylko pod czterema kolumnami litrów
+  - „LITRÓW :" — nagłówek bez pionowych linii, pozycje 4 i 5 w jednym wierszu (czas pracy w okienku, „5. zużyto", litry z prawej), „8 POZOSTAŁO…" bez kropki; wszystko zwykłym krojem 9 pt — szerokości napisów zgadzają się ze zdjęciem co do milimetra (np. pozycja 8: 59,3 mm)
+  - „Obliczył" i „Sprawdził" z linią w tym samym wierszu, bez dopisków pod spodem
+  - **czas rozruchów znika z karty** (decyzja Dawida) — papier nie ma na niego rubryki, zostają litry w pozycji 6; na ekranie karty urządzenia czas rozruchów jest dalej
+- [x] Sprawdzone: PDF tyłu obok zdjęcia; Excel — linie ramek odtworzone z pliku (szerokości wzorem Excela, wysokości, marginesy) nałożone na stronę PDF: przed poprawką rozjechane, po — na liniach PDF na wszystkich czterech stronach; w pliku żadnej linii w środku scalonych komórek
+- [x] Testy: tył jak na zdjęciu (napisy, scalenia, „Razem" i ostatni wiersz licznika w kształcie L, pozycje 4 i 5 w jednym wierszu, bez czasu rozruchów, krój 9 pt, nagłówek bez linii, podpisy bez dopisków), szerokości w Excelu (każda krawędź najwyżej 0,2 mm od PDF, wzorem Excela). Łącznie **527**
+- [x] Wersja **1.9.14+37** (nowy AAB do testu zamkniętego zamiast 1.9.13+36)
+
 ## W toku (chore/064-paczka-play)
 18.11.2026 konto osobiste w Play Console założone i zweryfikowane
 (osoba niebędąca przedsiębiorcą — Dawid nie prowadzi działalności; publiczny
 e-mail `raporty.osp@gmail.com`). Paczka do sklepu: AAB, wpis, grafiki
 i odpowiedzi do formularzy. Kod aplikacji bez zmian — wersja zostaje **1.9.13+36**.
 
-- [x] **AAB 1.9.13+36** podpisany kluczem wydań (SHA-1 `AC:02:…:BB`, ten sam co w kliencie OAuth), kopia w `Pobrane\Raporty-OSP-1.9.13-36.aab`. Uprawnienia w paczce sprawdzone: bez `AD_ID`, zdjęć i filmów, usług na pierwszym planie — te deklaracje nie dotyczą
+- [x] **AAB 1.9.13+36** podpisany kluczem wydań (SHA-1 `AC:02:…:BB`, ten sam co w kliencie OAuth), kopia w `Pobrane\Raporty-OSP-1.9.13-36.aab` — **zastąpiony przez 1.9.14+37** (fix/065). Uprawnienia w paczce sprawdzone: bez `AD_ID`, zdjęć i filmów, usług na pierwszym planie — te deklaracje nie dotyczą
 - [x] **`store/sklep-play.md`** — nazwa, krótki opis (77/80 znaków), pełny opis (z zastrzeżeniem, że to nie aplikacja PSP ani ZOSP RP), kategoria, dostęp dla recenzenta (po angielsku — tryb offline bez logowania), ankieta IARC, grupa docelowa 18+, pozostałe deklaracje, test zamknięty, informacje o wersji
 - [x] **„Bezpieczeństwo danych"**: według pomocy Google wysłanie z telefonu to „zbieranie", a wyjątek dla Dysku obejmuje tylko kopię zapasową, której aplikacja nie czyta — my czytamy (synchronizacja), więc deklarujemy dane jako zbierane (imię i nazwisko, e-mail, adres, telefon, dokładna lokalizacja z „Wstaw adres z GPS", termin badań jako informacja o zdrowiu, treści użytkownika), opcjonalne, nieudostępniane, szyfrowane w przesyle. Na stronie „bez zbierania danych" → „autor nie zbiera danych", żeby nie przeczyć etykiecie w sklepie
 - [x] **Strona „Usuwanie konta i danych"** (`docs/usuwanie-danych.html`, PL + EN) — Play wymaga linku, gdy aplikacja ma logowanie (Google jako OAuth): wylogowanie z usunięciem danych, odebranie dostępu na koncie Google, odebranie dostępu członkowi, folder `OSP_App_…` na Dysku, co zostaje u jednostki. Link ze strony głównej i obu wersji polityki
@@ -1051,7 +1068,7 @@ i odpowiedzi do formularzy. Kod aplikacji bez zmian — wersja zostaje **1.9.13+
 - [x] Test: strona usuwania danych podlinkowana, z nazwą aplikacji i krokami; przyciski, do których prowadzi („Wyloguj i usuń dane", „Członkowie jednostki", „Odbierz dostęp"), istnieją w aplikacji. Łącznie **525**
 
 ### Do zrobienia przez Dawida (kolejność)
-- [ ] Scalić (strona usuwania danych musi działać, zanim link trafi do formularza)
+- [x] Scalić (strona usuwania danych działa od 18.11.2026)
 - [ ] Google Cloud: ekran zgody OAuth „W produkcji" — inaczej recenzent nie zaloguje się swoim kontem (plan publikacji, pkt 5)
 - [ ] Play Console: utworzyć aplikację, wpis w sklepie, „Zawartość aplikacji" według `store/sklep-play.md`
 - [ ] Test zamknięty: lista 12+ testerów, pierwsza wersja — **podpisywanie: „Użyj innego klucza" → eksport z magazynu kluczy Java (PEPK)**; pobrać `pepk.jar` i klucz szyfrowania, eksport zrobimy razem

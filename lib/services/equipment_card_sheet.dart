@@ -92,75 +92,99 @@ class EquipmentCardSheet {
     ]);
   }
 
+  /// Tył karty ze zdjęcia karty motopompy Niagara (5.11.2026): ciąg dalszy
+  /// tabeli pracy („Z przeniesienia") z tabelą licznika pod spodem,
+  /// „POBRANO W LITRACH" i rozliczenie w litrach. Szerokości kolumn
+  /// i wysokości wierszy odmierzone ze zdjęcia w proporcji do szerokości
+  /// tabeli, krój 9 pt jak na papierze. Pola bez danych z aplikacji zostają
+  /// puste — do wypełnienia długopisem.
   static void _back(
       CardPage p, double ox, (Equipment, List<EquipmentCardRow>) card) {
     final (device, rows) = card;
     final x = ox + 12;
+    const plain = CardText(size: 9);
     const center = CardText(size: 9, align: CardAlign.center);
-    p.table(x, 14, const [19, 30, 22, 30, 23.5], const [8, 7, 7], const [
-      Cell(0, 0, 'Data', style: center),
-      Cell(0, 1, 'Stan licznika', style: center),
-      Cell(0, 2, 'Minuty pracy', style: center),
-      Cell(0, 3, 'Stan licznika', style: center),
-      Cell(0, 4, 'Zużycie paliwa', style: center),
-    ]);
-    p.text(x, 40, 124.5, 6, 'ROZLICZANIE MATERIAŁÓW PĘDNYCH',
+    const centerTop = CardText(size: 9, align: CardAlign.center, top: true);
+    const bold = CardText(size: 9, bold: true);
+    const boldTop = CardText(size: 9, bold: true, top: true);
+
+    // Ciąg dalszy tabeli z przodu i tabela licznika — wspólne kolumny.
+    const cols = [16.0, 33.5, 18.5, 32.5, 24.0];
+    p.table(x, 12, cols, const [8.5, 4.75, 4.75, 4.75, 4.75, 9.5, 4.75], const [
+      Cell(0, 0, 'Data', style: centerTop),
+      Cell(0, 1, 'Nazwisko i imię\nobsługującego', style: center),
+      Cell(0, 2, 'Minut\npracy', style: center),
+      Cell(0, 3, 'Cel użycia', style: centerTop),
+      Cell(0, 4, 'Podpis\ndysponenta', style: center),
+      Cell(1, 0, 'Z przeniesienia', cs: 2),
+      Cell(1, 3, 'xxxxxx', cs: 2, style: CardText(size: 8, align: CardAlign.center)),
+      Cell(5, 0, 'Data', style: bold),
+      Cell(5, 1, 'Stan Licznika', style: boldTop),
+      Cell(5, 2, 'Minuty\npracy', style: bold),
+      Cell(5, 3, 'Stan Licznika', style: boldTop),
+      Cell(5, 4, 'Zużycie\npaliwa', style: bold),
+    ], style: plain);
+    // Ostatni wiersz tylko pod trzema pierwszymi kolumnami, jak na papierze.
+    p.table(x, 53.75, [cols[0] + cols[1], cols[2]], const [5], const []);
+
+    p.text(x, 62, 124.5, 6, 'ROZLICZANIE MATERIAŁÓW PĘDNYCH',
         const CardText(size: 11, bold: true, align: CardAlign.center));
-    p.text(x, 50, 60, 5, 'Pobrano w litrach',
-        const CardText(size: 9.5, bold: true));
-    p.table(x, 55.5, const [18, 22, 18, 18, 24, 24.5],
-        const [8, 6, 6, 6, 6, 6, 6.5], const [
-      Cell(0, 0, 'Dnia', style: center),
-      Cell(0, 1, 'Nr kwitu', style: center),
-      Cell(0, 2, 'paliwa', style: center),
-      Cell(0, 3, 'oleju', style: center),
-      Cell(0, 4, 'Podpis\nmechanika', style: center),
-      Cell(0, 5, 'Podpis\nmagazyn.', style: center),
-      Cell(6, 0, 'Razem', style: CardText(size: 9.5, bold: true)),
+
+    const fuelCol = 124.5 / 6;
+    p.table(x, 73.5, const [fuelCol, fuelCol, fuelCol, fuelCol, fuelCol, fuelCol],
+        const [4.5, 5, 5.25, 5.25, 5.25, 5.25, 5.25], const [
+      Cell(0, 0, 'POBRANO W LITRACH', cs: 4,
+          style: CardText(size: 9.5, align: CardAlign.center)),
+      Cell(0, 4, 'Podpis\nmechanika', rs: 2, style: center),
+      Cell(0, 5, 'Podpis\nmagazyn.', rs: 2, style: center),
+      Cell(1, 0, 'Dnia', style: center),
+      Cell(1, 1, 'Nr kwitu', style: center),
+      Cell(1, 2, 'paliwa', style: center),
+      Cell(1, 3, 'oleju', style: center),
+    ]);
+    // „Razem" tylko pod czterema kolumnami litrów, bez rubryk podpisów.
+    p.table(x, 109.25, const [fuelCol * 2, fuelCol, fuelCol], const [6], const [
+      Cell(0, 0, 'Razem', style: plain),
     ]);
 
     // Litry w kolumnie paliwa urządzenia (ET albo ON); bez rodzaju paliwa
-    // albo normy — puste, do wpisania ręcznie.
+    // albo normy — puste, do wpisania ręcznie. Czas rozruchów nie ma na
+    // papierze swojej rubryki — tylko litry w pozycji 6.
     final totals = EquipmentCard.totals(device, rows);
     final column = device.settlementColumn;
-    const value = CardText(size: 9.5, align: CardAlign.center);
-    List<Cell> litres(int r, double? fuel, int minutes, {bool bold = false}) => [
-          for (final (c, col) in [(2, 'ET'), (3, 'ON')])
+    List<Cell> litres(int r, double? fuel, int minutes) => [
+          for (final (c, col) in [(3, 'ET'), (4, 'ON')])
             if (fuel != null && minutes > 0 && column == col)
-              Cell(r, c, PdfOutput.number(fuel),
-                  style: value.copyWith(bold: bold)),
+              Cell(r, c, PdfOutput.number(fuel), style: center),
         ];
-    String time(int minutes) =>
-        minutes == 0 ? '' : EquipmentCard.hoursAndMinutes(minutes);
-    const strong = CardText(size: 9.5, bold: true);
+    final work = totals.workMinutes;
     final all = totals.workMinutes + totals.startupMinutes;
-    p.table(x, 106, const [70, 20.5, 17, 17],
-        [for (var i = 0; i < 9; i++) 6.5], [
-      const Cell(0, 0, 'LITRÓW:', style: strong),
-      const Cell(0, 2, 'ET', style: value),
-      const Cell(0, 3, 'ON', style: value),
-      const Cell(1, 0, '1. pozostało z ubiegłego mies.'),
-      const Cell(2, 0, '2. pobrano w mies. bieżącym'),
-      const Cell(3, 0, '3. Razem'),
+    p.table(x, 123, const [45.5, 16, 21.5, 21, 20.5],
+        const [4.75, 4.5, 4.5, 4.5, 4.5, 4.5, 4.5, 5.25], [
+      // Wiersz nagłówka bez pionowych linii — „ET" i „ON" nad kolumnami.
+      const Cell(0, 0, 'LITRÓW :', cs: 3, open: 'r'),
+      const Cell(0, 3, 'ET', style: center, open: 'lr'),
+      const Cell(0, 4, 'ON', style: center, open: 'l'),
+      const Cell(1, 0, '1. pozostało z ubiegłego mies.', cs: 3),
+      const Cell(2, 0, '2. pobrano w mies. bieżącym', cs: 3),
+      const Cell(3, 0, '3. Razem', cs: 3),
+      // Pozycje 4 i 5 w jednym wierszu: czas pracy w okienku, litry z prawej.
       const Cell(4, 0, '4. Przepracowano godz. i min.'),
-      Cell(4, 1, time(totals.workMinutes), style: value, fit: true),
-      const Cell(5, 0, '5. zużyto'),
-      ...litres(5, totals.workFuel, totals.workMinutes),
-      const Cell(6, 0, '6. zużyto na rozruchy i kontrole'),
-      Cell(6, 1, time(totals.startupMinutes), style: value, fit: true),
-      ...litres(6, totals.startupFuel, totals.startupMinutes),
-      const Cell(7, 0, '7. zużyto w ciągu mies. Razem', style: strong),
-      ...litres(7, totals.totalFuel, all, bold: true),
-      const Cell(8, 0, '8. POZOSTAŁO NA MIESIĄC NASTĘPNY', style: strong),
-    ], style: const CardText(size: 9.5));
+      Cell(4, 1, work == 0 ? '' : EquipmentCard.hoursAndMinutes(work),
+          style: center, fit: true),
+      const Cell(4, 2, '5.  zużyto'),
+      ...litres(4, totals.workFuel, work),
+      const Cell(5, 0, '6. zużyto na rozruchy i kontrole', cs: 3),
+      ...litres(5, totals.startupFuel, totals.startupMinutes),
+      const Cell(6, 0, '7. zużyto w ciągu mies. Razem', cs: 3),
+      ...litres(6, totals.totalFuel, all),
+      const Cell(7, 0, '8 POZOSTAŁO NA MIESIĄC NASTĘPNY', cs: 3),
+    ], style: plain);
 
     const sign = CardText(size: 9.5);
-    const hint = CardText(size: 7.5, align: CardAlign.center);
-    p.text(x + 5, 172, 40, 5, 'Obliczył', sign);
-    p.text(x + 5, 177, 100, 4, TripCard.dots(100), sign, true);
-    p.text(x + 5, 181, 100, 3.5, '(imię i nazwisko)', hint);
-    p.text(x + 5, 187, 18, 5, 'Sprawdził', sign);
-    p.text(x + 23, 187.5, 100, 4, TripCard.dots(100), sign, true);
-    p.text(x + 23, 192, 100, 3.5, '(imię i nazwisko, podpis, data)', hint);
+    p.text(x + 1, 170, 15, 5, 'Obliczył', sign);
+    p.text(x + 16, 170, 97, 5, TripCard.dots(97), sign, true);
+    p.text(x + 1, 178.5, 18, 5, 'Sprawdził', sign);
+    p.text(x + 19, 178.5, 94, 5, TripCard.dots(94), sign, true);
   }
 }
