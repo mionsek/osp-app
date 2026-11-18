@@ -1063,7 +1063,10 @@ zmian).
 - [x] **Cel jazdy pełną nazwą, bez skrótów**: przy wyjeździe z raportu rodzaj zdarzenia z raportu („Pożar", „Miejscowe Zagrożenie", „Fałszywy Alarm") — na liście przejazdów (z ikonami jak na liście wyjazdów), w formularzu (tylko do odczytu, zmiana w raporcie), na karcie drogowej i karcie pracy sprzętu („Miejscowe Zagrożenie, Kielno"). Do wyboru przy przejeździe bez raportu te trzy zdarzenia zamiast „Wyjazd alarmowy"; „Ćwiczenia" zamiast „Ć". W zapisie przejazd z raportu ma dalej znacznik „Wyjazd alarmowy" — rozumieją go starsze wersje u kolegów, bez zmiany formatu synchronizacji. Długa nazwa zmniejsza się w rubryce (karta drogowa: „Miejscowe Zagrożenie" ok. 6,5 pt)
 - [x] Sprawdzone na emulatorze (zmyślone dane z testu zrzutów): lista z pełnymi nazwami i nowymi przyciskami, podpowiedź połowy drogi, cel z raportu, lista celów, lista dysponentów. Karty PDF z pełnymi nazwami obejrzane. Odświeżone zrzuty do sklepu 05 (ewidencja) i 06 (karta pracy)
 - [x] Testy: połowa drogi (zaokrąglenie, brak danych, sprzeczny licznik), podpowiedź i zapis, wpisana wartość wygrywa, przeliczenie po poprawce licznika, kursor w „Po powrocie" przy podpowiedzi, dysponent z listy i z ręki, lista celów bez „Wyjazd alarmowy", cel z raportu w formularzu i na liście, pełne nazwy na kartach, nowe napisy przycisków na obu ekranach. Łącznie **536**
-- [x] Wersja **1.9.15+38**
+- [x] Wersja **1.9.15+38** — UAT Dawida 18.11.2026: w porządku poza drobnym „Miejscowe Zagrożenie" na karcie drogowej
+- [x] **„Miejscowe Zagrożenie" w dwóch liniach** w rubryce „Cel jazdy" karty drogowej (tabela bez zmian): „Miejscowe / Zagrożenie" 7,5 pt zamiast ok. 6,5 pt w jednej linii. W Excelu komórka z podziałem linii jest zawijana zamiast zmniejszana (inaczej Excel skleja linie), dlatego krój stały — dwie linie 7,5 pt mieszczą się w wierszu 7 mm także tam; 8 pt by się ucinało. Krótsze nazwy bez zmian. Na karcie pracy sprzętu („Miejscowe Zagrożenie, Kielno") wiersz ma 5,8 mm — dwie linie nie byłyby większe niż jedna, więc zostaje w jednej
+- [x] Testy: dwie linie na karcie (także cel wybrany bez raportu), w Excelu zawijanie bez zmniejszania, reszta wiersza zmniejsza się jak dotąd. Łącznie **537**
+- [x] Wersja **1.9.16+39**
 
 ## W toku (chore/064-paczka-play)
 18.11.2026 konto osobiste w Play Console założone i zweryfikowane

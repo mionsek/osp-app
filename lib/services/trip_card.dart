@@ -247,6 +247,12 @@ class TripCard {
 
   static const _serif = CardText(size: 9.5, font: CardFont.serif);
 
+  /// Krój napisu w dwóch liniach w wierszu 7 mm (26,5 px przy 96 dpi).
+  /// Linia Times New Roman z odstępem to ok. 1,15 wysokości kroju, w Excelu
+  /// zaokrąglona w górę do piksela: przy 7,5 pt 2 × 12 px + ok. 2 px
+  /// marginesu = 26 px. Przy 8 pt linia ma już 13 px i druga by się ucinała.
+  static const double _twoLineSize = 7.5;
+
   /// Wyrównanie kolumn: liczby, godziny i cel na środku, nazwiska i trasa
   /// do lewej.
   static const _left = {1, 2, 4};
@@ -283,6 +289,9 @@ class TripCard {
             Cell(r + 2, c, rows[r][c],
                 fit: true,
                 style: _serif.copyWith(
+                    // Dwie linie („Miejscowe / Zagrożenie") muszą zmieścić
+                    // się w 7 mm także w Excelu, który zawija bez zmniejszania.
+                    size: rows[r][c].contains('\n') ? _twoLineSize : null,
                     align: _left.contains(c) ? CardAlign.left : CardAlign.center)),
       ],
     );
@@ -318,7 +327,7 @@ class TripCard {
         day(t.date),
         t.dispatcherName,
         TripLabels.route(from, to),
-        TripLabels.purpose(t, report),
+        TripLabels.cardPurpose(t, report),
         t.driverName,
         hhmm(t.departureTime),
         t.odometerStart?.toString() ?? '',

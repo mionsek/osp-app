@@ -86,6 +86,14 @@ void main() {
     );
     expect(TripLabels.purpose(trip(), fire), 'Pożar');
     expect(TripLabels.purpose(trip(), report), 'Miejscowe Zagrożenie');
+    // Na karcie drogowej — w dwóch liniach, reszta w jednej.
+    expect(TripLabels.cardPurpose(trip(), report), 'Miejscowe\nZagrożenie');
+    expect(TripLabels.cardPurpose(trip(), fire), 'Pożar');
+    expect(
+        TripLabels.cardPurpose(
+            trip(purpose: TripPurposes.localThreat, reportId: null), null),
+        'Miejscowe\nZagrożenie',
+        reason: 'także wybrane w formularzu, bez raportu');
     expect(
         TripLabels.purpose(
             trip(purpose: TripPurposes.training, reportId: null), null),
@@ -121,7 +129,8 @@ void main() {
 
       expect(rows, hasLength(2));
       expect(rows[0], [
-        '03.04', 'Kwapisz O.', 'OSP – Kielno', 'Miejscowe Zagrożenie',
+        // Dwie linie w rubryce (Dawid, 18.11.2026).
+        '03.04', 'Kwapisz O.', 'OSP – Kielno', 'Miejscowe\nZagrożenie',
         'Mielewczyk M.',
         '19:40', '3523', '19:43', '3525', '61', '', '25', '',
       ]);

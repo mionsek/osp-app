@@ -388,8 +388,11 @@ class CardSheet {
             _ => XlsxAlign.left,
           },
           top: s?.top ?? false,
-          wrap: box != null && !box.fit,
-          shrink: box?.fit ?? false,
+          // Napis z podziałem linii („Miejscowe / Zagrożenie") zawijany —
+          // bez tego Excel skleja linie w jedną. Zawijanie i zmniejszanie
+          // się wykluczają, więc krój dobiera opis strony.
+          wrap: box != null && (!box.fit || box.text.contains('\n')),
+          shrink: box != null && box.fit && !box.text.contains('\n'),
           left: weight(b[0]),
           topLine: weight(b[1]),
           right: weight(b[2]),

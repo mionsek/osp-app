@@ -43,6 +43,16 @@ class TripLabels {
     return category.isNotEmpty ? category : t.purpose;
   }
 
+  /// Cel jazdy w rubryce karty drogowej: „Miejscowe Zagrożenie" w dwóch
+  /// liniach (Dawid, 18.11.2026) — w jednej zmniejszało się do ok. 6,5 pt.
+  /// Krótsze nazwy mieszczą się w jednej linii, więc zostają bez zmian.
+  static String cardPurpose(VehicleTrip t, Report? report) {
+    final p = purpose(t, report);
+    return p.toLowerCase() == TripPurposes.localThreat.toLowerCase()
+        ? p.replaceFirst(' ', '\n')
+        : p;
+  }
+
   /// „OSP – Kielno" — puste strony trasy pominięte.
   static String route(String from, String to) =>
       [from, to].where((s) => s.isNotEmpty).join(' – ');

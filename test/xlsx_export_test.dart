@@ -471,6 +471,36 @@ void main() {
       }
     });
 
+    test('„Miejscowe Zagrożenie" w dwóch liniach — w PDF i w Excelu '
+        '(Dawid, 18.11.2026)', () {
+      final mz = trip('t1', 4310, 4330)..purpose = TripPurposes.localThreat;
+      final pages = card(trips: [mz]);
+      final cel = box(pages[1], 'Miejscowe\nZagrożenie');
+      expect(cel.style.size, 7.5,
+          reason: 'dwie linie po 7,5 pt mieszczą się w 7 mm także w Excelu');
+      expect(cel.h, 7);
+      expect(box(pages[1], 'Mielewczyk M.').style.size, 9.5,
+          reason: 'reszta wiersza bez zmian');
+
+      final bytes = CardSheet.xlsx(pages);
+      // Pierwszy styl (domyślny) jest pusty: `<xf …/>`.
+      final xfs = RegExp(r'<xf [^>]*?(?:/>|>(.*?)</xf>)', dotAll: true)
+          .allMatches(RegExp(r'<cellXfs[^>]*>(.*?)</cellXfs>', dotAll: true)
+              .firstMatch(part(bytes, 'xl/styles.xml'))!
+              .group(1)!)
+          .map((m) => m.group(1) ?? '')
+          .toList();
+      String alignment(String text) => xfs[int.parse(cells(bytes, sheet: 2)
+          .values
+          .firstWhere((c) => c.value == text)
+          .style!)];
+      expect(alignment('Miejscowe\nZagrożenie'),
+          allOf(contains('wrapText="1"'), isNot(contains('shrinkToFit'))),
+          reason: 'bez zawijania Excel skleja linie w jedną');
+      expect(alignment('Mielewczyk M.'),
+          allOf(contains('shrinkToFit="1"'), isNot(contains('wrapText'))));
+    });
+
     test('liczniki jako liczby, daty i godziny jako tekst', () {
       final bytes = CardSheet.xlsx(card());
       final inner = part(bytes, 'xl/worksheets/sheet2.xml');
