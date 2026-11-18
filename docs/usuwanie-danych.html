@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Usuwanie konta i danych — Raporty OSP</title>
+  <meta name="description" content="Jak usunąć swoje dane z aplikacji Raporty OSP: z telefonu, z Dysku Google jednostki i dostęp aplikacji do konta Google.">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <img src="icon.svg" alt="">
+      <div>
+        <a class="name" href="./">Raporty OSP</a>
+        <div class="tag">Usuwanie konta i danych</div>
+      </div>
+      <nav>
+        <a href="./">Strona główna</a>
+        <a href="#english" lang="en">English</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <h1>Usuwanie konta i danych w aplikacji Raporty OSP</h1>
+
+    <div class="note">
+      <p><strong>W skrócie:</strong> aplikacja nie zakłada kont na żadnym serwerze —
+        logujesz się swoim kontem Google, a dane są na telefonie i w folderze jednostki
+        na Dysku Google. Autor aplikacji nie przechowuje żadnych Twoich danych, więc
+        usunięcie konta to kroki poniżej, które wykonujesz w aplikacji i na koncie Google.</p>
+    </div>
+
+    <h2>1. Dane na telefonie</h2>
+    <ul>
+      <li>W aplikacji: <strong>Ustawienia → Wyloguj → „Wyloguj i usuń dane”</strong>.
+        Aplikacja najpierw wysyła na Dysk jednostki zmiany, których jeszcze nie wysłała,
+        a potem usuwa dane jednostki z telefonu i odłącza telefon od jednostki.</li>
+      <li>Odinstalowanie aplikacji usuwa wszystkie jej dane z telefonu.</li>
+    </ul>
+
+    <h2>2. Dostęp aplikacji do konta Google</h2>
+    <p>Na stronie <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>
+      wybierz „Raporty OSP” i usuń dostęp. Aplikacja przestaje wtedy widzieć Twój Dysk
+      Google; dane na telefonie i na Dysku zostają, dopóki ich nie usuniesz (punkty 1 i 4).</p>
+
+    <h2>3. Członkostwo w jednostce</h2>
+    <p>Administrator jednostki może odebrać członkowi dostęp do folderu jednostki:
+      <strong>Ustawienia → Członkowie jednostki → Odbierz dostęp</strong>. Po wylogowaniu
+      z usunięciem danych (punkt 1) dostęp warto odebrać także w ten sposób.</p>
+
+    <h2>4. Dane jednostki na Dysku Google</h2>
+    <ul>
+      <li>Wspólne dane jednostki są w folderze <code>OSP_App_…</code> na Dysku Google konta,
+        na którym założono jednostkę. Usunięcie tego folderu przez jego właściciela
+        usuwa wszystkie dane jednostki — ostatecznie po opróżnieniu kosza Dysku Google
+        (Google opróżnia go sam po 30 dniach).</li>
+      <li>Pojedynczy wpis (wyjazd, przekazanie mienia, przejazd) usuwa się w aplikacji.
+        Znika ze wszystkich telefonów jednostki, a w folderze zostaje po nim tylko znacznik
+        z identyfikatorem i datą usunięcia — bez treści, nazwisk, adresów i telefonów.</li>
+    </ul>
+
+    <h2>5. Co zostaje</h2>
+    <p>Dokumenty jednostki, w których jesteś wymieniony (np. potwierdzenia udziału,
+      wpisy z Twoim adresem e-mail jako autora), należą do jednostki OSP, która jest
+      administratorem tych danych. Jednostka przechowuje je zgodnie z przepisami o swojej
+      dokumentacji — o ich usunięcie lub poprawienie poproś jednostkę.</p>
+
+    <h2>6. Pomoc</h2>
+    <p>Pytania: <a href="mailto:raporty.osp@gmail.com">raporty.osp@gmail.com</a>.
+      Autor pomoże przejść przez te kroki, ale nie ma dostępu do danych jednostki
+      i nie może ich usunąć za Ciebie.</p>
+
+    <h2 id="english" lang="en">Deleting your account and data (English)</h2>
+    <div lang="en">
+      <p>Raporty OSP has no server and creates no accounts of its own: you sign in with
+        your Google account, and data is kept on the phone and in the unit's folder on
+        Google Drive. The developer stores none of your data. To delete your account and data:</p>
+      <ol>
+        <li><strong>Phone:</strong> in the app, Settings → “Wyloguj” (Sign out) →
+          “Wyloguj i usuń dane” (Sign out and delete data). Uninstalling the app removes
+          all of its data from the phone.</li>
+        <li><strong>Google access:</strong> remove “Raporty OSP” at
+          <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>.</li>
+        <li><strong>Unit membership:</strong> a unit admin can revoke a member's access in
+          Settings → “Członkowie jednostki” (Unit members) → “Odbierz dostęp” (Revoke access).</li>
+        <li><strong>Unit data on Google Drive:</strong> the owner of the unit's
+          <code>OSP_App_…</code> folder can delete it; Google Drive empties its trash
+          after 30 days. A single entry deleted in the app leaves only a marker with its
+          id and deletion date.</li>
+      </ol>
+      <p>Records of the fire brigade unit that mention you are controlled by that unit;
+        ask the unit to delete or correct them. Help:
+        <a href="mailto:raporty.osp@gmail.com">raporty.osp@gmail.com</a>.</p>
+    </div>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <span>Raporty OSP · autor: mionsek</span>
+      <a href="./">Strona główna</a>
+      <a href="polityka-prywatnosci.html">Polityka prywatności</a>
+    </div>
+  </footer>
+</body>
+</html>

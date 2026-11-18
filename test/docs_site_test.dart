@@ -19,6 +19,7 @@ void main() {
     'index': read('docs/index.html'),
     'pl': read('docs/polityka-prywatnosci.html'),
     'en': read('docs/privacy-policy.html'),
+    'usuwanie': read('docs/usuwanie-danych.html'),
   };
 
   test('strona główna prowadzi do obu wersji polityki', () {
@@ -71,6 +72,34 @@ void main() {
     }
     expect(read('lib/screens/info/info_screen.dart'),
         isNot(contains('mionskowski')));
+  });
+
+  test('usuwanie konta i danych: link dla Play, kroki zgodne z aplikacją '
+      '(chore/064)', () {
+    final page = pages['usuwanie']!;
+    expect(pages['index'], contains('href="usuwanie-danych.html"'));
+    expect(pages['pl'], contains('href="usuwanie-danych.html"'));
+    expect(pages['en'], contains('href="usuwanie-danych.html#english"'));
+    expect(page, contains('id="english"'));
+    // Play wymaga nazwy aplikacji i kroków na stronie.
+    expect(page, contains('Raporty OSP'));
+    expect(page, contains('myaccount.google.com/permissions'));
+    expect(page, contains('OSP_App_'));
+
+    // Strona prowadzi do przycisków, które muszą istnieć w aplikacji.
+    final settings = read('lib/screens/settings/settings_screen.dart');
+    expect(settings, contains("Text('Wyloguj')"));
+    expect(settings, contains("Text('Wyloguj i usuń dane')"));
+    final lib = Directory('lib')
+        .listSync(recursive: true)
+        .whereType<File>()
+        .where((f) => f.path.endsWith('.dart'))
+        .map((f) => f.readAsStringSync())
+        .join();
+    for (final label in ['Członkowie jednostki', 'Odbierz dostęp']) {
+      expect(page, contains(label), reason: label);
+      expect(lib, contains("'$label'"), reason: label);
+    }
   });
 
   test('adres polityki w aplikacji wskazuje plik z folderu docs', () {
