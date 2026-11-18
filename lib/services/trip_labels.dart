@@ -1,13 +1,15 @@
 import '../models/models.dart';
 
 /// Trasa i cel przejazdu tak, jak wpisuje się je długopisem na kartach
-/// w Kielnie: „OSP – Kielno", „MZ", „Powrót" (wypełniona karta drogowa,
-/// zdjęcie z 7.08.2026).
+/// w Kielnie: „OSP – Kielno", „Powrót" (wypełniona karta drogowa, zdjęcie
+/// z 7.08.2026).
 ///
 /// W aplikacji trasa trzyma pełne adresy (podpowiedź „Skąd" to adres remizy,
-/// „Dokąd" z raportu to miejscowość i ulica), a cel wyjazdu alarmowego to
-/// „Wyjazd alarmowy". Na wąskich rubrykach karty to się nie mieściło i nie
-/// wyglądało jak karta, którą gmina zna.
+/// „Dokąd" z raportu to miejscowość i ulica). Na wąskich rubrykach karty to
+/// się nie mieściło i nie wyglądało jak karta, którą gmina zna.
+///
+/// Cel jazdy — pełną nazwą, bez skrótów „MZ", „P", „Ć" (Dawid, 18.11.2026);
+/// za długi napis zmniejsza się w rubryce.
 class TripLabels {
   TripLabels._();
 
@@ -15,15 +17,6 @@ class TripLabels {
 
   /// Cel drugiego wiersza wyjazdu na karcie drogowej.
   static const String returnLeg = 'Powrót';
-
-  /// Skrót rodzaju zdarzenia: MZ, P, AF.
-  static String threatShort(String category) =>
-      switch (category.trim().toLowerCase()) {
-        'miejscowe zagrożenie' => 'MZ',
-        'pożar' => 'P',
-        'fałszywy alarm' || 'alarm fałszywy' => 'AF',
-        _ => category.trim(),
-      };
 
   /// „OSP" dla remizy, inaczej sama miejscowość — część adresu przed
   /// pierwszym przecinkiem („Kielno, Szkolna 5" → „Kielno").
@@ -41,17 +34,14 @@ class TripLabels {
   static String _normalize(String s) =>
       s.toLowerCase().replaceAll(RegExp(r'[\s,.]+'), '');
 
-  /// Skrót ćwiczeń w rubryce „Cel jazdy".
-  static const String training = 'Ć';
-
-  /// Cel jazdy jak na karcie Kielna (Dawid, 9.11.2026): „P" przy pożarze,
-  /// „MZ" przy miejscowym zagrożeniu, „Ć" przy ćwiczeniach, „Tankowanie";
-  /// drugi wiersz wyjazdu to [returnLeg]. Pozostałe cele bez zmian.
-  static String purpose(VehicleTrip t, Report? report) => report != null
-      ? threatShort(report.threatCategory)
-      : t.purpose == TripPurposes.training
-          ? training
-          : t.purpose;
+  /// Cel jazdy na ekranie i na karcie: przy przejeździe z raportu rodzaj
+  /// zdarzenia („Pożar", „Miejscowe Zagrożenie", „Fałszywy Alarm"), inaczej
+  /// cel przejazdu („Ćwiczenia", „Tankowanie"); drugi wiersz wyjazdu na
+  /// karcie to [returnLeg].
+  static String purpose(VehicleTrip t, Report? report) {
+    final category = report?.threatCategory.trim() ?? '';
+    return category.isNotEmpty ? category : t.purpose;
+  }
 
   /// „OSP – Kielno" — puste strony trasy pominięte.
   static String route(String from, String to) =>

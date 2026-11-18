@@ -178,14 +178,14 @@ void main() {
       expect(box(p, 'Cel jazdy').style.font, CardFont.serif);
     });
 
-    test('24 wiersze, dwa na przejazd; cel „Ć" na środku', () {
+    test('24 wiersze, dwa na przejazd; cel „Ćwiczenia" na środku', () {
       final p = card()[1];
       final dates = p.boxes
           .where((b) => b.hasBorder && b.x == 12 && b.y >= 14 + 13)
           .toList();
       expect(dates, hasLength(TripCard.rowsPerPage));
       expect(dates.first.text, '04.11');
-      final cel = p.boxes.firstWhere((b) => b.text == 'Ć');
+      final cel = p.boxes.firstWhere((b) => b.text == 'Ćwiczenia');
       expect(cel.style.align, CardAlign.center);
       expect(texts(p), containsAll(['OSP – Szemud', 'Szemud – OSP', 'Powrót', '4310']));
     });

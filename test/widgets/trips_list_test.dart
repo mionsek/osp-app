@@ -173,13 +173,15 @@ void main() {
   });
 
   group('druk karty', () {
-    testWidgets('sa trzy drogi wyjscia: system, Bluetooth i udostepnianie',
+    testWidgets('drogi wyjscia: system, Bluetooth, Wyślij PDF i Wyślij Excel',
         (tester) async {
       await pumpScreen(tester);
 
       expect(find.byIcon(Icons.print), findsOneWidget);
       expect(find.byIcon(Icons.bluetooth), findsOneWidget);
-      expect(find.byIcon(Icons.share), findsOneWidget);
+      // Ikona formatu przy obu „Wyślij" (Dawid, 18.11.2026 — jednolicie).
+      expect(find.byIcon(Icons.picture_as_pdf), findsOneWidget);
+      expect(find.byIcon(Icons.table_view), findsOneWidget);
     });
 
     testWidgets('miesiac bez przejazdow pyta, zamiast blokowac druk',

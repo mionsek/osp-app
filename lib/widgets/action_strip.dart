@@ -39,7 +39,8 @@ class StripAction {
 /// tutaj, w tym samym miejscu na każdym ekranie, z podpisem pod ikoną
 /// i bez przewijania.
 ///
-/// Kolejność stała: Drukuj, Bluetooth, Wyślij, Excel, potem Edytuj i Usuń.
+/// Kolejność stała: Drukuj, Bluetooth, Wyślij (na kartach: Wyślij PDF
+/// i Wyślij Excel — Dawid, 18.11.2026: ma być jednolicie), potem Edytuj i Usuń.
 class ActionStrip extends StatelessWidget implements PreferredSizeWidget {
   final List<StripAction> actions;
   const ActionStrip(this.actions, {super.key});

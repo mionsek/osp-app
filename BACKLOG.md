@@ -1053,6 +1053,18 @@ obie poprawione.
 - [x] Testy: tył jak na zdjęciu (napisy, scalenia, „Razem" i ostatni wiersz licznika w kształcie L, pozycje 4 i 5 w jednym wierszu, bez czasu rozruchów, krój 9 pt, nagłówek bez linii, podpisy bez dopisków), szerokości w Excelu (każda krawędź najwyżej 0,2 mm od PDF, wzorem Excela). Łącznie **527**
 - [x] Wersja **1.9.14+37** (nowy AAB do testu zamkniętego zamiast 1.9.13+36)
 
+## Zrobione (fix/066-ewidencja-drobne) — czeka na UAT
+Uwagi Dawida z 18.11.2026 po sprawdzeniu kart z Deringiem (wygląd tabel bez
+zmian).
+
+- [x] **Licznik na miejscu — połowa drogi**: puste pole „Na miejscu" zapisuje się jako stan przed wyjazdem + połowa przejechanych km, przy nieparzystej liczbie w dół (1200 → 1221: 1210). W pustym polu widać tę liczbę jako podpowiedź z opisem „Puste — zapisze się połowa drogi: …", wpisana liczba wygrywa. Połowa zapisana wcześniej otwiera się jako puste pole, więc po poprawce licznika liczy się od nowa. Przejazdy zapisane przed zmianą dostaną połowę po otwarciu i zapisaniu; bez stanu przed albo po powrocie (lub przy sprzecznym liczniku) zostaje puste
+- [x] **Dysponent z listy** — jak kierowca: pole podpowiada wszystkich ratowników (nie tylko kierowców), nazwisko spoza kartoteki da się wpisać. Wcześniej lista była tylko przy wyjeździe z raportu (załoga zastępu); ta zostaje, a „Inna osoba…" też podpowiada z kartoteki
+- [x] **„Wyślij PDF" i „Wyślij Excel"** zamiast „Wyślij" i „Excel" na ewidencji przejazdów i karcie urządzenia, ikony formatu (PDF, arkusz). Na ekranach z samym PDF (wyjazd, przekazanie, statystyki) zostaje „Wyślij" — przy pięciu przyciskach dłuższy napis by się ucinał
+- [x] **Cel jazdy pełną nazwą, bez skrótów**: przy wyjeździe z raportu rodzaj zdarzenia z raportu („Pożar", „Miejscowe Zagrożenie", „Fałszywy Alarm") — na liście przejazdów (z ikonami jak na liście wyjazdów), w formularzu (tylko do odczytu, zmiana w raporcie), na karcie drogowej i karcie pracy sprzętu („Miejscowe Zagrożenie, Kielno"). Do wyboru przy przejeździe bez raportu te trzy zdarzenia zamiast „Wyjazd alarmowy"; „Ćwiczenia" zamiast „Ć". W zapisie przejazd z raportu ma dalej znacznik „Wyjazd alarmowy" — rozumieją go starsze wersje u kolegów, bez zmiany formatu synchronizacji. Długa nazwa zmniejsza się w rubryce (karta drogowa: „Miejscowe Zagrożenie" ok. 6,5 pt)
+- [x] Sprawdzone na emulatorze (zmyślone dane z testu zrzutów): lista z pełnymi nazwami i nowymi przyciskami, podpowiedź połowy drogi, cel z raportu, lista celów, lista dysponentów. Karty PDF z pełnymi nazwami obejrzane. Odświeżone zrzuty do sklepu 05 (ewidencja) i 06 (karta pracy)
+- [x] Testy: połowa drogi (zaokrąglenie, brak danych, sprzeczny licznik), podpowiedź i zapis, wpisana wartość wygrywa, przeliczenie po poprawce licznika, kursor w „Po powrocie" przy podpowiedzi, dysponent z listy i z ręki, lista celów bez „Wyjazd alarmowy", cel z raportu w formularzu i na liście, pełne nazwy na kartach, nowe napisy przycisków na obu ekranach. Łącznie **536**
+- [x] Wersja **1.9.15+38**
+
 ## W toku (chore/064-paczka-play)
 18.11.2026 konto osobiste w Play Console założone i zweryfikowane
 (osoba niebędąca przedsiębiorcą — Dawid nie prowadzi działalności; publiczny

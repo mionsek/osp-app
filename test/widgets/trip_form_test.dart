@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:osp_app/models/models.dart';
 import 'package:osp_app/screens/trips/trip_form_screen.dart';
+import 'package:osp_app/screens/trips/trips_list_screen.dart';
 import 'package:osp_app/services/database_service.dart';
 
 import '../helpers/test_app.dart';
@@ -96,13 +97,14 @@ void main() {
   /// „Dodaj przejazd" i nowy przejazd z bazy. Zapis Hive to prawdziwe
   /// operacje na dysku — na prawdziwym czasie.
   Future<VehicleTrip> saveNewTrip(WidgetTester tester) async {
+    final before = {for (final t in db.getAllTrips()) t.id};
     await tester.ensureVisible(find.text('Dodaj przejazd'));
     await tester.runAsync(() async {
       await tester.tap(find.text('Dodaj przejazd'));
       await Future<void>.delayed(const Duration(milliseconds: 300));
     });
     await tester.pumpAndSettle();
-    return db.getAllTrips().firstWhere((t) => t.id != 'trip_0');
+    return db.getAllTrips().firstWhere((t) => !before.contains(t.id));
   }
 
   Future<void> enterInto(
@@ -402,6 +404,265 @@ void main() {
       expect(trip.odometerStart, 1042);
       expect(trip.odometerEnd, 1060);
       expect(trip.sceneArrivalTime, isNull, reason: 'nikt nie wpisał');
+    });
+  });
+
+  group('licznik na miejscu — połowa drogi (Dawid, 18.11.2026)', () {
+    const scene = 'Na miejscu (km, opcjonalnie)';
+
+    /// Wyjazd z połową drogi wpisaną sama: 1100 → 1120, na miejscu 1110.
+    setUp(() async {
+      await db.addTrip(VehicleTrip(
+        id: 'trip_mid',
+        vehicleId: brandNew,
+        date: DateTime(2026, 8, 10),
+        departureTime: DateTime(2026, 8, 10, 10, 0),
+        returnTime: DateTime(2026, 8, 10, 11, 0),
+        odometerStart: 1100,
+        odometerEnd: 1120,
+        odometerStartManual: true,
+        sceneOdometer: 1110,
+        createdAt: DateTime(2026, 8, 10),
+        updatedAt: DateTime(2026, 8, 10),
+      ));
+    });
+
+    Future<void> pumpEdit(WidgetTester tester, String tripId) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(testRouterApp(GoRouter(
+        initialLocation: '/edit',
+        routes: [
+          GoRoute(
+            path: '/',
+            builder: (c, s) => const Text('LISTA'),
+            routes: [
+              GoRoute(
+                  path: 'edit',
+                  builder: (c, s) => TripFormScreen(tripId: tripId)),
+            ],
+          ),
+        ],
+      )));
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> saveChanges(WidgetTester tester) async {
+      await tester.ensureVisible(find.text('Zapisz zmiany'));
+      await tester.runAsync(() async {
+        await tester.tap(find.text('Zapisz zmiany'));
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+      });
+      await tester.pumpAndSettle();
+    }
+
+    test('połowa drogi, przy nieparzystej liczbie km w dół', () {
+      expect(VehicleTrip.halfwayOdometer(1200, 1220), 1210);
+      expect(VehicleTrip.halfwayOdometer(1200, 1221), 1210,
+          reason: '10,5 km — wpisujemy mniejszą');
+      expect(VehicleTrip.halfwayOdometer(1200, 1201), 1200);
+      expect(VehicleTrip.halfwayOdometer(1200, 1200), 1200);
+      expect(VehicleTrip.halfwayOdometer(null, 1220), isNull);
+      expect(VehicleTrip.halfwayOdometer(1200, null), isNull);
+      expect(VehicleTrip.halfwayOdometer(1220, 1200), isNull,
+          reason: 'sprzeczny licznik — nie zgadujemy');
+    });
+
+    testWidgets('puste pole pokazuje połowę drogi i ją zapisuje',
+        (tester) async {
+      await pumpForm(tester, routed: true);
+      expect(find.textContaining('zapisze się połowa drogi'), findsNothing,
+          reason: 'bez stanu po powrocie nie ma czego liczyć');
+
+      // Cyfra po cyfrze: podpowiedź w polu wyżej nie zabiera kursora.
+      final end = find.widgetWithText(TextFormField, 'Po powrocie (km)');
+      await tester.ensureVisible(end);
+      await tester.tap(end);
+      await tester.pump();
+      for (final typed in ['1', '10', '106', '1063']) {
+        await tester.enterText(end, typed);
+        await tester.pump();
+        expect(
+            tester
+                .widget<EditableText>(find.descendant(
+                    of: end, matching: find.byType(EditableText)))
+                .focusNode
+                .hasFocus,
+            isTrue,
+            reason: 'po wpisaniu „$typed"');
+      }
+      await tester.pumpAndSettle();
+
+      // 1042 → 1063 to 21 km: połowa 10,5 — w dół, czyli 1052.
+      expect(
+          find.text('Puste — zapisze się połowa drogi: 1052. '
+              'Wpisz, jeśli było inaczej'),
+          findsOneWidget);
+      final field = tester.widget<TextField>(find.descendant(
+          of: find.widgetWithText(TextFormField, scene),
+          matching: find.byType(TextField)));
+      expect(field.decoration?.hintText, '1052');
+      expect(field.controller?.text, '', reason: 'do poprawienia — pole puste');
+
+      final trip = await saveNewTrip(tester);
+      expect(trip.sceneOdometer, 1052);
+    });
+
+    testWidgets('wpisany stan na miejscu wygrywa z połową drogi',
+        (tester) async {
+      await pumpForm(tester, routed: true);
+      await enterInto(tester, scene, '1045');
+      await enterInto(tester, 'Po powrocie (km)', '1063');
+      expect(find.textContaining('zapisze się połowa drogi'), findsNothing);
+
+      final trip = await saveNewTrip(tester);
+      expect(trip.sceneOdometer, 1045);
+    });
+
+    testWidgets('po poprawce licznika połowa drogi liczy się od nowa',
+        (tester) async {
+      await pumpEdit(tester, 'trip_mid');
+      expect(find.textContaining('zapisze się połowa drogi: 1110'),
+          findsOneWidget,
+          reason: '1110 to połowa drogi — w polu podpowiedź, a nie liczba');
+
+      await enterInto(tester, 'Po powrocie (km)', '1130');
+      expect(find.textContaining('zapisze się połowa drogi: 1115'),
+          findsOneWidget);
+      await saveChanges(tester);
+      expect(db.getTrip('trip_mid')!.sceneOdometer, 1115);
+    });
+  });
+
+  group('dysponent z listy (Dawid, 18.11.2026)', () {
+    setUp(() async {
+      await db.addFirefighter(firefighter('ff2', 'Mateusz', 'Dering'));
+    });
+
+    testWidgets('przejazd bez zastępu podpowiada wszystkich ratowników, '
+        'także bez uprawnień kierowcy', (tester) async {
+      await pumpForm(tester, routed: true);
+      final dispatcher = find.widgetWithText(TextFormField, 'Dysponent');
+      expect(find.text('Kto zadysponował pojazd — z listy ratowników albo '
+          'wpisz nazwisko'), findsOneWidget);
+
+      await tester.ensureVisible(dispatcher);
+      await tester.tap(dispatcher);
+      await tester.pumpAndSettle();
+      expect(find.text('Dering Mateusz'), findsOneWidget);
+      expect(find.text('Kowalski Jan'), findsWidgets);
+
+      await tester.tap(find.text('Dering Mateusz'));
+      await tester.pumpAndSettle();
+      final trip = await saveNewTrip(tester);
+      expect(trip.dispatcherName, 'Dering Mateusz');
+    });
+
+    testWidgets('nazwisko spoza kartoteki da się wpisać z ręki',
+        (tester) async {
+      await pumpForm(tester, routed: true);
+      await enterInto(tester, 'Dysponent', 'SK KM PSP');
+      final trip = await saveNewTrip(tester);
+      expect(trip.dispatcherName, 'SK KM PSP');
+    });
+  });
+
+  group('cel jazdy pełną nazwą (Dawid, 18.11.2026)', () {
+    setUp(() async {
+      await db.addReport(Report(
+        id: 'r1',
+        reportNumber: '0007/2026',
+        year: 2026,
+        date: DateTime(2026, 8, 11),
+        departureTime: DateTime(2026, 8, 11, 19, 40),
+        addressLocality: 'Kielno',
+        addressStreet: 'Oliwska 85',
+        threatCategory: 'Pożar',
+        createdAt: DateTime(2026, 8, 11),
+        updatedAt: DateTime(2026, 8, 11),
+      ));
+      await db.addTrip(VehicleTrip(
+        id: 'trip_r1_v2',
+        vehicleId: brandNew,
+        date: DateTime(2026, 8, 11),
+        departureTime: DateTime(2026, 8, 11, 19, 40),
+        purpose: TripPurposes.alarm,
+        reportId: 'r1',
+        createdAt: DateTime(2026, 8, 11),
+        updatedAt: DateTime(2026, 8, 11),
+      ));
+      // Ten sam wyjazd w bieżącym miesiącu — do listy przejazdów.
+      final now = DateTime.now();
+      final day = DateTime(now.year, now.month, 1);
+      await db.addTrip(VehicleTrip(
+        id: 'trip_r1_now',
+        vehicleId: withHistory,
+        date: day,
+        departureTime: day.add(const Duration(hours: 10)),
+        odometerStart: 1042,
+        odometerEnd: 1050,
+        odometerStartManual: true,
+        purpose: TripPurposes.alarm,
+        reportId: 'r1',
+        createdAt: day,
+        updatedAt: day,
+      ));
+    });
+
+    testWidgets('do wyboru Pożar, Miejscowe Zagrożenie i Fałszywy Alarm — '
+        'bez „Wyjazd alarmowy"', (tester) async {
+      await pumpForm(tester, routed: true);
+      final purpose = find.widgetWithText(
+          DropdownButtonFormField<String>, 'Wyjazd gospodarczy');
+      await tester.ensureVisible(purpose);
+      await tester.tap(purpose);
+      await tester.pumpAndSettle();
+      for (final p in ['Miejscowe Zagrożenie', 'Pożar', 'Fałszywy Alarm',
+          'Tankowanie', 'Ćwiczenia']) {
+        expect(find.text(p), findsWidgets, reason: p);
+      }
+      expect(find.text('Wyjazd alarmowy'), findsNothing);
+
+      await tester.tap(find.text('Miejscowe Zagrożenie').last);
+      await tester.pumpAndSettle();
+      final trip = await saveNewTrip(tester);
+      expect(trip.purpose, TripPurposes.localThreat);
+    });
+
+    testWidgets('wyjazd z raportu pokazuje rodzaj zdarzenia z raportu',
+        (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+          testApp(const TripFormScreen(tripId: 'trip_r1_v2')));
+      await tester.pumpAndSettle();
+
+      expect(find.widgetWithText(InputDecorator, 'Pożar'), findsOneWidget);
+      expect(find.text('Z wyjazdu alarmowego — rodzaj zdarzenia zmienisz '
+          'w raporcie'), findsOneWidget);
+      expect(find.text('Wyjazd alarmowy'), findsNothing);
+    });
+
+    testWidgets('lista przejazdów: „Pożar" zamiast „Wyjazd alarmowy"',
+        (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(testApp(const TripsListScreen()));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('· Pożar'), findsOneWidget);
+      expect(find.textContaining('Wyjazd alarmowy'), findsNothing);
+      expect(
+          find.descendant(
+              of: find.byType(CircleAvatar),
+              matching: find.byIcon(Icons.local_fire_department)),
+          findsOneWidget);
     });
   });
 

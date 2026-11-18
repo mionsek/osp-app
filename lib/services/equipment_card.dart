@@ -115,8 +115,9 @@ class EquipmentCard {
     return rows;
   }
 
-  /// „MZ, Kielno" przy wyjeździe alarmowym, inaczej cel przejazdu i miejsce
-  /// („Ćwiczenia, Szemud") — skróty jak na karcie drogowej ([TripLabels]).
+  /// „Miejscowe Zagrożenie, Kielno" przy wyjeździe alarmowym, inaczej cel
+  /// przejazdu i miejsce („Ćwiczenia, Szemud") — pełne nazwy jak na karcie
+  /// drogowej ([TripLabels]).
   static String _tripPurpose(
     VehicleTrip t,
     Report? Function(String reportId)? reportOf,
@@ -124,7 +125,7 @@ class EquipmentCard {
   ) {
     final report = t.reportId == null ? null : reportOf?.call(t.reportId!);
     final parts = report != null
-        ? [TripLabels.threatShort(report.threatCategory), report.addressLocality]
+        ? [TripLabels.purpose(t, report), report.addressLocality]
         : [
             t.purpose,
             TripLabels.place(t.routeTo, stationAddress: stationAddress),

@@ -158,6 +158,20 @@ void main() {
     expect(button.onLongPress, isNotNull);
   });
 
+  testWidgets('karta urządzenia: „Wyślij PDF" i „Wyślij Excel" — jak na '
+      'ewidencji przejazdów (Dawid, 18.11.2026)', (tester) async {
+    await seed(tester, equipment: [saw()]);
+    await tester.pumpWidget(app(const EquipmentCardScreen(equipmentId: 'e-saw')));
+    await tester.pumpAndSettle();
+
+    Finder inBar(String label) => find.descendant(
+        of: find.byType(AppBar), matching: find.text(label));
+    expect(inBar('Wyślij PDF'), findsOneWidget);
+    expect(inBar('Wyślij Excel'), findsOneWidget);
+    expect(inBar('Wyślij'), findsNothing);
+    expect(inBar('Excel'), findsNothing);
+  });
+
   testWidgets('rozruch całego sprzętu: zaznaczone urządzenia z własnym '
       'silnikiem, 15 min, jeden wpis na urządzenie', (tester) async {
     await seed(tester, equipment: [niagara(), saw(), pump()]);

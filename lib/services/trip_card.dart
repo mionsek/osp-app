@@ -291,7 +291,8 @@ class TripCard {
   }
 
   /// Przejazd jako dwa wiersze, jak na karcie Kielna: wyjazd
-  /// („OSP – Kielno · MZ": odjazd z remizy, przyjazd na miejsce) i powrót
+  /// („OSP – Kielno · Miejscowe Zagrożenie": odjazd z remizy, przyjazd na
+  /// miejsce) i powrót
   /// („Kielno – OSP · Powrót": wyjazd z miejsca, przyjazd do remizy) —
   /// teksty 13 kolumn tabeli.
   ///

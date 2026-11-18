@@ -136,7 +136,15 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
         _sceneDeparture = trip.sceneDepartureTime == null
             ? null
             : TimeOfDay.fromDateTime(trip.sceneDepartureTime!);
-        _sceneOdometerCtrl.text = trip.sceneOdometer?.toString() ?? '';
+        // Połowa drogi wpisana sama zostaje w polu pusta (podpowiedź), żeby
+        // po poprawce licznika liczyła się od nowa, a nie została stara.
+        final scene = trip.sceneOdometer;
+        _sceneOdometerCtrl.text = scene == null ||
+                scene ==
+                    VehicleTrip.halfwayOdometer(
+                        trip.odometerStart, trip.odometerEnd)
+            ? ''
+            : '$scene';
         _purpose = trip.purpose;
         _dispatcherCtrl.text = trip.dispatcherName;
         _routeFromCtrl.text = trip.routeFrom;
@@ -613,11 +621,20 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
               labelText: 'Na miejscu (km, opcjonalnie)',
               border: const OutlineInputBorder(),
               isDense: true,
+              // Puste pole pokazuje połowę drogi, która się zapisze
+              // (Dawid, 18.11.2026) — etykieta u góry, żeby było ją widać.
+              hintText: _sceneHalfway?.toString(),
+              floatingLabelBehavior: _sceneHalfway == null
+                  ? null
+                  : FloatingLabelBehavior.always,
               helperText: _sceneOdometerOutOfRange
                   ? 'Licznik na miejscu jest poza zakresem przed wyjazdem – '
                       'po powrocie'
-                  : 'Koniec wiersza wyjazdu i początek wiersza „Powrót" '
-                      'na karcie drogowej',
+                  : _sceneHalfway != null
+                      ? 'Puste — zapisze się połowa drogi: $_sceneHalfway. '
+                          'Wpisz, jeśli było inaczej'
+                      : 'Koniec wiersza wyjazdu i początek wiersza „Powrót" '
+                          'na karcie drogowej',
               helperStyle: _sceneOdometerOutOfRange
                   ? const TextStyle(
                       fontWeight: FontWeight.w600, color: OspTheme.attention)
@@ -700,13 +717,43 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
     return end - start;
   }
 
+  /// Połowa drogi, gdy licznika na miejscu nikt nie wpisał — zapisze się
+  /// zamiast pustego pola.
+  int? get _sceneHalfway => _sceneOdometerCtrl.text.trim().isNotEmpty
+      ? null
+      : VehicleTrip.halfwayOdometer(
+          _effectiveStart, int.tryParse(_odometerEndCtrl.text.trim()));
+
   bool get _sceneOdometerOutOfRange => VehicleTrip.sceneOdometerOutOfRange(
         int.tryParse(_sceneOdometerCtrl.text.trim()),
         _effectiveStart,
         int.tryParse(_odometerEndCtrl.text.trim()),
       );
 
+  /// Cel jazdy pełną nazwą. Przy wyjeździe z raportu to rodzaj zdarzenia
+  /// z raportu („Pożar", „Miejscowe Zagrożenie") — tylko do odczytu, jak
+  /// pojazd, bo karta i tak bierze go z raportu.
   Widget _purposeField() {
+    final report = _linkedReport;
+    if (report != null && report.threatCategory.trim().isNotEmpty) {
+      return InputDecorator(
+        decoration: const InputDecoration(
+          labelText: 'Cel jazdy',
+          border: OutlineInputBorder(),
+          prefixIcon: Icon(Icons.flag_outlined),
+          helperText: 'Z wyjazdu alarmowego — rodzaj zdarzenia zmienisz '
+              'w raporcie',
+          helperMaxLines: 2,
+        ),
+        child: Text(report.threatCategory.trim()),
+      );
+    }
+    // Cel spoza listy (np. „Wyjazd alarmowy" wpisany ręcznie przed
+    // 18.11.2026) zostaje do wyboru, żeby rozwijana lista go nie zgubiła.
+    final purposes = [
+      if (!TripPurposes.all.contains(_purpose)) _purpose,
+      ...TripPurposes.all,
+    ];
     return DropdownButtonFormField<String>(
       initialValue: _purpose,
       isExpanded: true,
@@ -715,7 +762,7 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
         border: OutlineInputBorder(),
         prefixIcon: Icon(Icons.flag_outlined),
       ),
-      items: TripPurposes.all
+      items: purposes
           .map((p) => DropdownMenuItem(value: p, child: Text(p)))
           .toList(),
       onChanged: (v) => setState(() => _purpose = v ?? TripPurposes.economic),
@@ -813,29 +860,31 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
   ///
   /// Lista jest krótka i konkretna, więc rozwijana bije wpisywanie z ręki.
   /// Zostaje pozycja „Inna osoba", bo dysponować może ktoś spoza zastępu
-  /// (dyżurny, naczelnik) — wtedy odsłania się zwykłe pole tekstowe.
+  /// (dyżurny, naczelnik). Wtedy, i przy przejeździe bez zastępu, pole
+  /// podpowiada wszystkich ratowników jak pole kierowcy (Dawid, 18.11.2026:
+  /// kierowcę wybierało się z listy, dysponenta nie). Nazwisko spoza
+  /// kartoteki da się dalej wpisać z ręki.
   Widget _dispatcherField() {
     final crew = _crewOfLinkedReport;
     if (crew.isEmpty || _dispatcherManual) {
-      return TextFormField(
-        controller: _dispatcherCtrl,
-        textCapitalization: TextCapitalization.words,
-        decoration: InputDecoration(
-          labelText: 'Dysponent',
-          border: const OutlineInputBorder(),
-          prefixIcon: const Icon(Icons.record_voice_over),
-          helperText: 'Kto zadysponował pojazd',
-          suffixIcon: crew.isEmpty
-              ? null
-              : IconButton(
-                  icon: const Icon(Icons.undo, size: 20),
-                  tooltip: 'Wróć do listy zastępu',
-                  onPressed: () => setState(() {
-                    _dispatcherManual = false;
-                    _dispatcherCtrl.text = crew.first.lastNameFirst;
-                  }),
-                ),
-        ),
+      return PersonField(
+        label: 'Dysponent',
+        initialName: _dispatcherCtrl.text,
+        people: ref.watch(firefightersProvider),
+        icon: Icons.record_voice_over,
+        helperText: 'Kto zadysponował pojazd — z listy ratowników albo '
+            'wpisz nazwisko',
+        onChanged: (name, _) => _dispatcherCtrl.text = name,
+        suffixIcon: crew.isEmpty
+            ? null
+            : IconButton(
+                icon: const Icon(Icons.undo, size: 20),
+                tooltip: 'Wróć do listy zastępu',
+                onPressed: () => setState(() {
+                  _dispatcherManual = false;
+                  _dispatcherCtrl.text = crew.first.lastNameFirst;
+                }),
+              ),
       );
     }
 
@@ -1333,7 +1382,8 @@ class _TripFormScreenState extends ConsumerState<TripFormScreen> {
       returnTime: _returnDateTime,
       sceneArrivalTime: _sceneArrivalDateTime,
       sceneDepartureTime: _sceneDepartureDateTime,
-      sceneOdometer: int.tryParse(_sceneOdometerCtrl.text.trim()),
+      sceneOdometer: int.tryParse(_sceneOdometerCtrl.text.trim()) ??
+          VehicleTrip.halfwayOdometer(odometerStart, odometerEnd),
       odometerStart: odometerStart,
       odometerEnd: odometerEnd,
       odometerStartManual: manual,

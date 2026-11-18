@@ -14,6 +14,8 @@ class PersonField extends StatelessWidget {
   final void Function(String name, String? id) onChanged;
   final String? helperText;
   final bool dense;
+  final IconData icon;
+  final Widget? suffixIcon;
 
   const PersonField({
     super.key,
@@ -23,6 +25,8 @@ class PersonField extends StatelessWidget {
     required this.onChanged,
     this.helperText,
     this.dense = false,
+    this.icon = Icons.person_outline,
+    this.suffixIcon,
   });
 
   bool _matches(Firefighter f, String text) =>
@@ -57,7 +61,8 @@ class PersonField extends StatelessWidget {
           labelText: label,
           border: const OutlineInputBorder(),
           isDense: dense,
-          prefixIcon: const Icon(Icons.person_outline),
+          prefixIcon: Icon(icon),
+          suffixIcon: suffixIcon,
           helperText: helperText,
           helperMaxLines: 2,
         ),

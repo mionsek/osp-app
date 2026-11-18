@@ -6,7 +6,8 @@ import 'package:osp_app/services/trip_labels.dart';
 
 /// Karta drogowa tak, jak wypełnia się ją w Kielnie (zdjęcie z 7.08.2026,
 /// wyjaśnienia Dawida z 5.11.2026): dwa wiersze na wyjazd — „OSP – Kielno ·
-/// MZ" i „Kielno – OSP · Powrót" — skróty zdarzeń i „OSP" zamiast adresu.
+/// Miejscowe Zagrożenie" i „Kielno – OSP · Powrót" — „OSP" zamiast adresu,
+/// cel pełną nazwą (Dawid, 18.11.2026: „nie ma być skrótów").
 void main() {
   const station = 'Kielno, Oliwska 12';
 
@@ -55,15 +56,7 @@ void main() {
         updatedAt: DateTime(2026, 4, 3),
       );
 
-  group('skróty na karcie', () {
-    test('zdarzenia: MZ, P, AF — wielkość liter bez znaczenia', () {
-      expect(TripLabels.threatShort('Miejscowe Zagrożenie'), 'MZ');
-      expect(TripLabels.threatShort('miejscowe zagrożenie'), 'MZ');
-      expect(TripLabels.threatShort('Pożar'), 'P');
-      expect(TripLabels.threatShort('Fałszywy Alarm'), 'AF');
-      expect(TripLabels.threatShort('Ratownictwo wodne'), 'Ratownictwo wodne');
-    });
-
+  group('nazwy na karcie', () {
     test('miejsce: remiza to „OSP", reszta — sama miejscowość', () {
       String place(String a) => TripLabels.place(a, stationAddress: station);
       expect(place(station), 'OSP');
@@ -77,7 +70,8 @@ void main() {
     });
   });
 
-  test('cel jazdy: P, MZ, Ć, Tankowanie, Powrót (Dawid, 9.11.2026)', () {
+  test('cel jazdy pełną nazwą: rodzaj zdarzenia z raportu, Ćwiczenia, '
+      'Tankowanie, Powrót (Dawid, 18.11.2026)', () {
     final fire = Report(
       id: 'r2',
       reportNumber: '0008/2026',
@@ -90,12 +84,19 @@ void main() {
       createdAt: DateTime(2026, 4, 3),
       updatedAt: DateTime(2026, 4, 3),
     );
-    expect(TripLabels.purpose(trip(), fire), 'P');
-    expect(TripLabels.purpose(trip(), report), 'MZ');
+    expect(TripLabels.purpose(trip(), fire), 'Pożar');
+    expect(TripLabels.purpose(trip(), report), 'Miejscowe Zagrożenie');
     expect(
         TripLabels.purpose(
             trip(purpose: TripPurposes.training, reportId: null), null),
-        'Ć');
+        'Ćwiczenia');
+    expect(
+        TripLabels.purpose(
+            trip(purpose: TripPurposes.fire, reportId: null), null),
+        'Pożar',
+        reason: 'przejazd wpisany bez raportu');
+    expect(TripLabels.purpose(trip(), null), TripPurposes.alarm,
+        reason: 'raport niedostępny — zostaje zapis, nic nie zgadujemy');
     expect(
         TripLabels.purpose(
             trip(purpose: TripPurposes.refuelling, reportId: null), null),
@@ -120,7 +121,8 @@ void main() {
 
       expect(rows, hasLength(2));
       expect(rows[0], [
-        '03.04', 'Kwapisz O.', 'OSP – Kielno', 'MZ', 'Mielewczyk M.',
+        '03.04', 'Kwapisz O.', 'OSP – Kielno', 'Miejscowe Zagrożenie',
+        'Mielewczyk M.',
         '19:40', '3523', '19:43', '3525', '61', '', '25', '',
       ]);
       expect(rows[1], [
@@ -140,13 +142,13 @@ void main() {
       expect(rows[1].sublist(5, 9), ['', '', '21:00', '3529']);
     });
 
-    test('ćwiczenia w remizie: „OSP – OSP · Ć" i powrót (Dawid, 9.11.2026)', () {
+    test('ćwiczenia w remizie: „OSP – OSP · Ćwiczenia" i powrót', () {
       final rows = TripCard.tripRowTexts(
         trip(purpose: TripPurposes.training, routeTo: station, reportId: null),
         equipmentMinutes: 0,
         stationAddress: station,
       );
-      expect(rows[0].sublist(2, 4), ['OSP – OSP', 'Ć']);
+      expect(rows[0].sublist(2, 4), ['OSP – OSP', 'Ćwiczenia']);
       expect(rows[1].sublist(2, 4), ['OSP – OSP', 'Powrót']);
     });
 

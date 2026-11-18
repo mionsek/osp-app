@@ -10,21 +10,43 @@ part 'vehicle_trip.g.dart';
 /// [inny] zostawia miejsce na wszystko, czego nie przewidzieliśmy — opis
 /// trafia wtedy do [VehicleTrip.purpose].
 class TripPurposes {
+  /// Przejazd dopisany sam z wyjazdu alarmowego. Zostaje w zapisie jako
+  /// znacznik, bo znają go starsze wersje aplikacji u kolegów, ale się nie
+  /// pokazuje: na ekranie i karcie stoi rodzaj zdarzenia z raportu
+  /// („Pożar", „Miejscowe Zagrożenie") — [TripLabels.purpose].
   static const String alarm = 'Wyjazd alarmowy';
+
+  /// Rodzaje zdarzeń jak w raporcie ([ThreatTypes.categories]) — do wyboru
+  /// przy przejeździe wpisanym bez raportu (Dawid, 18.11.2026: „Wyjazd
+  /// alarmowy" tak nie może być, musi być Pożar albo Miejscowe Zagrożenie).
+  static const String localThreat = 'Miejscowe Zagrożenie';
+  static const String fire = 'Pożar';
+  static const String falseAlarm = 'Fałszywy Alarm';
+
   static const String economic = 'Wyjazd gospodarczy';
   static const String refuelling = 'Tankowanie';
   static const String training = 'Ćwiczenia';
   static const String service = 'Przegląd / naprawa';
   static const String other = 'Inny';
 
+  /// Cele do wyboru w formularzu — bez [alarm].
   static const List<String> all = [
-    alarm,
+    localThreat,
+    fire,
+    falseAlarm,
     economic,
     refuelling,
     training,
     service,
     other,
   ];
+
+  /// Wyjazdy do zdarzeń — znacznik z raportu i rodzaje zdarzeń.
+  static bool isAlarm(String purpose) =>
+      purpose == alarm ||
+      purpose == localThreat ||
+      purpose == fire ||
+      purpose == falseAlarm;
 }
 
 /// Grupy kolumn przejazdu, których źródłem jest raport z wyjazdu alarmowego.
@@ -78,7 +100,8 @@ class VehicleTrip extends HiveObject {
   @HiveField(5)
   String routeTo;
 
-  /// Cel jazdy — kolumna 4. Jedna z [TripPurposes.all].
+  /// Cel jazdy — kolumna 4. Jedna z [TripPurposes.all] albo
+  /// [TripPurposes.alarm] przy przejeździe z raportu.
   @HiveField(6)
   String purpose;
 
@@ -258,6 +281,14 @@ class VehicleTrip extends HiveObject {
   /// ostrzeżenie jak przy [hasOdometerConflict], bez blokady.
   bool get hasSceneOdometerConflict =>
       sceneOdometerOutOfRange(sceneOdometer, odometerStart, odometerEnd);
+
+  /// Licznik na miejscu, którego nikt nie wpisał: połowa drogi, a przy
+  /// nieparzystej liczbie kilometrów w dół (Dawid, 18.11.2026 — 1200 i 1221
+  /// dają 1210). `null`, gdy brakuje któregoś stanu albo są sprzeczne.
+  static int? halfwayOdometer(int? start, int? end) {
+    if (start == null || end == null || end < start) return null;
+    return start + (end - start) ~/ 2;
+  }
 
   /// To samo dla wartości jeszcze niezapisanych — formularz przejazdu.
   static bool sceneOdometerOutOfRange(int? scene, int? start, int? end) {

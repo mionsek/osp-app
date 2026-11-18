@@ -218,8 +218,16 @@ void main() {
       Finder avatar(IconData icon) => find.descendant(
           of: find.byType(CircleAvatar), matching: find.byIcon(icon));
 
-      expect(avatar(OspIcons.alarmLight), findsOneWidget,
-          reason: 'wyjazd alarmowy — kogut');
+      // Zdarzenia pełną nazwą zamiast „Wyjazd alarmowy" (Dawid,
+      // 18.11.2026) — ikony jak na liście wyjazdów alarmowych.
+      expect(avatar(Icons.local_fire_department), findsOneWidget,
+          reason: 'pożar — płomień');
+      expect(avatar(Icons.warning), findsOneWidget,
+          reason: 'miejscowe zagrożenie — trójkąt ostrzegawczy');
+      expect(avatar(Icons.block), findsOneWidget,
+          reason: 'fałszywy alarm — jak w wyjazdach');
+      expect(avatar(OspIcons.alarmLight), findsNothing,
+          reason: '„Wyjazd alarmowy" nie jest już do wyboru');
       expect(avatar(Icons.fire_truck), findsOneWidget,
           reason: 'wyjazd gospodarczy — wóz strażacki');
       expect(avatar(Icons.local_gas_station), findsOneWidget,

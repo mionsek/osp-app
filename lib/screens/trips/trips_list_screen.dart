@@ -8,6 +8,7 @@ import '../../core/utils/polish_text.dart';
 import '../../services/equipment_usage.dart';
 import '../../services/trip_odometer.dart';
 import '../../services/trip_card.dart';
+import '../../services/trip_labels.dart';
 import '../../widgets/card_output.dart';
 import '../../core/theme/osp_icons.dart';
 import '../../core/theme/osp_theme.dart';
@@ -75,14 +76,14 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
                       _printCard(vehicles, CardOutput.bluetoothOtherPrinter),
                 ),
                 StripAction(
-                  icon: Icons.share,
-                  label: 'Wyślij',
+                  icon: Icons.picture_as_pdf,
+                  label: 'Wyślij PDF',
                   tooltip: 'Wyślij karty (PDF)',
                   onPressed: () => _printCard(vehicles, CardOutput.share),
                 ),
                 StripAction(
                   icon: Icons.table_view,
-                  label: 'Excel',
+                  label: 'Wyślij Excel',
                   tooltip: 'Wyślij karty w Excelu — do poprawienia '
                       'na komputerze',
                   onPressed: () => _printCard(vehicles, CardOutput.excel),
@@ -231,6 +232,9 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
       month: _month,
     );
 
+    // Rodzaj zdarzenia z raportu — zmiana w raporcie od razu widać tutaj.
+    final reports = {for (final r in ref.watch(reportsProvider)) r.id: r};
+
     final vehicle = vehicles.where((v) => v.id == _vehicleId).firstOrNull;
     final normsNotice =
         vehicle == null ? null : _missingNormsNotice(context, vehicle);
@@ -254,7 +258,8 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
                     bottom: 88 + context.bottomInset(),
                   ),
                   itemCount: trips.length,
-                  itemBuilder: (context, i) => _tripTile(context, trips[i], i + 1),
+                  itemBuilder: (context, i) => _tripTile(
+                      context, trips[i], i + 1, _purposeOf(trips[i], reports)),
                 ),
         ),
       ],
@@ -448,7 +453,13 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
     );
   }
 
-  Widget _tripTile(BuildContext context, VehicleTrip trip, int rowNumber) {
+  /// Cel pełną nazwą, jak na karcie: „Pożar" zamiast „Wyjazd alarmowy".
+  static String _purposeOf(VehicleTrip trip, Map<String, Report> reports) =>
+      TripLabels.purpose(
+          trip, trip.reportId == null ? null : reports[trip.reportId]);
+
+  Widget _tripTile(
+      BuildContext context, VehicleTrip trip, int rowNumber, String purpose) {
     final time = trip.departureTime;
     final hh = time.hour.toString().padLeft(2, '0');
     final mm = time.minute.toString().padLeft(2, '0');
@@ -463,12 +474,12 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
         onTap: () => context.push('/trips/edit/${trip.id}'),
         leading: CircleAvatar(
           radius: 17,
-          backgroundColor: _purposeColor(trip.purpose).withValues(alpha: 0.15),
-          child: Icon(_purposeIcon(trip.purpose),
-              size: 18, color: _purposeColor(trip.purpose)),
+          backgroundColor: _purposeColor(purpose).withValues(alpha: 0.15),
+          child: Icon(_purposeIcon(purpose),
+              size: 18, color: _purposeColor(purpose)),
         ),
         title: Text(
-          trip.routeLabel.isEmpty ? trip.purpose : trip.routeLabel,
+          trip.routeLabel.isEmpty ? purpose : trip.routeLabel,
           style: const TextStyle(fontWeight: FontWeight.w600),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
@@ -477,7 +488,7 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 2),
-            Text('$day.$mon, $hh:$mm · ${trip.purpose}'),
+            Text('$day.$mon, $hh:$mm · $purpose'),
             if (trip.driverName.trim().isNotEmpty)
               Text('Kierowca: ${trip.driverName}',
                   maxLines: 1, overflow: TextOverflow.ellipsis),
@@ -525,8 +536,15 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
     return null;
   }
 
+  /// Zdarzenia — ikony jak na liście wyjazdów alarmowych.
   IconData _purposeIcon(String purpose) {
     switch (purpose) {
+      case TripPurposes.fire:
+        return Icons.local_fire_department;
+      case TripPurposes.localThreat:
+        return Icons.warning;
+      case TripPurposes.falseAlarm:
+        return Icons.block;
       case TripPurposes.alarm:
         return OspIcons.alarmLight;
       case TripPurposes.economic:
@@ -544,6 +562,10 @@ class _TripsListScreenState extends ConsumerState<TripsListScreen> {
 
   Color _purposeColor(String purpose) {
     switch (purpose) {
+      case TripPurposes.fire:
+        return OspTheme.danger;
+      case TripPurposes.localThreat:
+        return OspTheme.warning;
       case TripPurposes.alarm:
         return OspTheme.sectionReports;
       case TripPurposes.refuelling:

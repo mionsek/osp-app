@@ -95,14 +95,14 @@ class _EquipmentCardScreenState extends ConsumerState<EquipmentCardScreen> {
                 _output(device, rows, CardOutput.bluetoothOtherPrinter),
           ),
           StripAction(
-            icon: Icons.share,
-            label: 'Wyślij',
+            icon: Icons.picture_as_pdf,
+            label: 'Wyślij PDF',
             tooltip: 'Wyślij kartę pracy (PDF)',
             onPressed: () => _output(device, rows, CardOutput.share),
           ),
           StripAction(
             icon: Icons.table_view,
-            label: 'Excel',
+            label: 'Wyślij Excel',
             tooltip: 'Wyślij kartę pracy w Excelu — do poprawienia na '
                 'komputerze',
             onPressed: () => _output(device, rows, CardOutput.excel),

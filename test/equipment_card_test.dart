@@ -31,7 +31,7 @@ void main() {
     departureTime: DateTime(2026, 11, 3, 14),
     addressLocality: 'Kielno',
     addressStreet: '',
-    threatCategory: 'Miejscowe zagrożenie',
+    threatCategory: 'Miejscowe Zagrożenie',
     createdAt: DateTime(2026, 11, 3),
     updatedAt: DateTime(2026, 11, 3),
   );
@@ -110,11 +110,11 @@ void main() {
           ['w-rozruch', 't-akcja', 't-cwiczenia']);
     });
 
-    test('cel użycia: skrót zdarzenia z wyjazdu (jak na karcie drogowej), '
+    test('cel użycia: pełna nazwa zdarzenia z wyjazdu (jak na karcie drogowej), '
         'cel przejazdu, rozruch', () {
       expect(rows().map((r) => r.purpose), [
         'Rozruch kontrolny',
-        'MZ, Kielno',
+        'Miejscowe Zagrożenie, Kielno',
         'Ćwiczenia, Szemud',
       ]);
     });

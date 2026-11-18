@@ -198,19 +198,20 @@ void main() {
       seededDb(vehicles: [Vehicle(id: 'v1', name: 'GBA 2,5/16', seats: 6)]);
     });
 
-    testWidgets('pełny tytuł i cztery drogi wyjścia, w tym Excel',
+    testWidgets('pełny tytuł i cztery drogi wyjścia: Wyślij PDF i Wyślij Excel '
+        '(Dawid, 18.11.2026 — jednolicie)',
         (tester) async {
       await pump(tester, const TripsListScreen());
 
       expect(inBar('Ewidencja przejazdów'), findsOneWidget);
-      for (final label in ['Drukuj', 'Bluetooth', 'Wyślij', 'Excel']) {
+      for (final label in ['Drukuj', 'Bluetooth', 'Wyślij PDF', 'Wyślij Excel']) {
         expect(inBar(label), findsOneWidget, reason: label);
       }
       expect(barIconButtons(tester), 1);
       expect(find.byTooltip('Wyślij karty w Excelu — do poprawienia '
           'na komputerze'), findsOneWidget);
       expectBluetoothLongPressOnly(
-          tester, ['Drukuj', 'Bluetooth', 'Wyślij', 'Excel']);
+          tester, ['Drukuj', 'Bluetooth', 'Wyślij PDF', 'Wyślij Excel']);
     });
 
     testWidgets('druk pyta: wszystkie karty miesiąca (domyślnie) czy jedna',
@@ -241,7 +242,7 @@ void main() {
         'a nie o druk', (tester) async {
       await pump(tester, const TripsListScreen());
 
-      await tester.tap(inBar('Excel'));
+      await tester.tap(inBar('Wyślij Excel'));
       await tester.pumpAndSettle();
       await tester.tap(find.textContaining('Tylko karta drogowa'));
       await tester.pumpAndSettle();
