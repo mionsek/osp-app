@@ -63,6 +63,16 @@ void main() {
     }
   });
 
+  test('kontakt: adres aplikacji, nie prywatny adres autora (chore/063)', () {
+    expect(kContactEmail, 'raporty.osp@gmail.com');
+    for (final MapEntry(:key, :value) in pages.entries) {
+      expect(value, contains('mailto:$kContactEmail'), reason: key);
+      expect(value, isNot(contains('mionskowski')), reason: key);
+    }
+    expect(read('lib/screens/info/info_screen.dart'),
+        isNot(contains('mionskowski')));
+  });
+
   test('adres polityki w aplikacji wskazuje plik z folderu docs', () {
     expect(kPrivacyPolicyUrl, startsWith('https://'));
     expect(kPrivacyPolicyUrl, endsWith('/polityka-prywatnosci.html'));

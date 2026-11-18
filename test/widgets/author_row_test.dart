@@ -31,7 +31,7 @@ void main() {
   /// Telefon Dawida w jednostce — oglądane wpisy dodał kolega.
   const viewer = SyncState(
     status: SyncStatus.idle,
-    userEmail: 'mionskowski.dawid@gmail.com',
+    userEmail: 'dawid@gmail.com',
     unitFolderId: 'folder',
     founderEmail: 'ospkielno@gmail.com',
   );

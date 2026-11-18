@@ -70,9 +70,9 @@ void main() {
 
   const founder = SyncState(
     status: SyncStatus.idle,
-    userEmail: 'mionskowski.dawid@gmail.com',
+    userEmail: 'dawid@gmail.com',
     unitFolderId: 'folder',
-    founderEmail: 'mionskowski.dawid@gmail.com',
+    founderEmail: 'dawid@gmail.com',
   );
 
   const joinHint = 'Dołącz do jednostki w Ustawieniach';

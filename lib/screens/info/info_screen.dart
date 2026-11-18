@@ -13,7 +13,7 @@ class InfoScreen extends StatelessWidget {
   Future<void> _launchEmail(BuildContext context, String subject) async {
     final uri = Uri(
       scheme: 'mailto',
-      path: 'mionskowski.dawid@gmail.com',
+      path: kContactEmail,
       queryParameters: {'subject': subject},
     );
     if (!await launchUrl(uri)) {

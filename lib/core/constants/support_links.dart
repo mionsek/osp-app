@@ -9,6 +9,12 @@
 /// dla której uniknięcia zrezygnowaliśmy z reklam.
 const String kCoffeeUrl = 'https://buycoffee.to/mionsek';
 
+/// Publiczny adres kontaktowy aplikacji — „Zgłoś problem", „Zaproponuj
+/// usprawnienie", strona i polityka prywatności, a także e-mail dewelopera
+/// w sklepie Play. Osobne konto, żeby nie pokazywać prywatnego adresu
+/// autora (decyzja Dawida z 18.11.2026).
+const String kContactEmail = 'raporty.osp@gmail.com';
+
 /// Strona aplikacji i polityka prywatności (GitHub Pages z folderu `docs/`).
 ///
 /// Sklep Play wymaga linku do polityki prywatności także w samej aplikacji,

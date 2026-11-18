@@ -369,7 +369,7 @@ Obecnie druk startuje od razu po kliknięciu.
 **Plan z 11.11.2026, w tej kolejności.** Punkty 4 i 5 trwają najdłużej
 (14 dni i raczej tygodnie) — idą równolegle, więc najpierw strona i konto.
 
-1. [ ] **Strona główna i polityka prywatności pod jednym adresem** — wymagają ich i Play, i weryfikacja Google (polityka musi leżeć w tej samej domenie co strona główna, a domena musi być zweryfikowana w Google Search Console; link do sklepu Play nie liczy się jako strona główna). Np. darmowa strona na GitHubie albo własna domena. Treść polityki: aplikacja nie ma serwera, reklam ani statystyk; dane leżą w telefonie i w folderze jednostki na Dysku Google; wyłączona kopia zapasowa Androida i „Wyloguj i usuń dane" (fix/047); dane ratowników (nazwiska, telefony, daty badań) przetwarza jednostka. **W toku (docs/061, 16.11.2026):** decyzja Dawida — na start darmowe GitHub Pages z folderu `docs/` (`https://mionsek.github.io/osp-app/`), domena później, przed weryfikacją Google. Strona i polityka (PL + EN) gotowe, link w „O aplikacji"; zostaje: zatwierdzenie treści przez Dawida, scalenie i włączenie Pages w ustawieniach repozytorium
+1. [x] **Strona główna i polityka prywatności pod jednym adresem** — **działa od 18.11.2026** pod `https://mionsek.github.io/osp-app/` (docs/061, kontakt `raporty.osp@gmail.com` — chore/063) — wymagają ich i Play, i weryfikacja Google (polityka musi leżeć w tej samej domenie co strona główna, a domena musi być zweryfikowana w Google Search Console; link do sklepu Play nie liczy się jako strona główna). Np. darmowa strona na GitHubie albo własna domena. Treść polityki: aplikacja nie ma serwera, reklam ani statystyk; dane leżą w telefonie i w folderze jednostki na Dysku Google; wyłączona kopia zapasowa Androida i „Wyloguj i usuń dane" (fix/047); dane ratowników (nazwiska, telefony, daty badań) przetwarza jednostka. **W toku (docs/061, 16.11.2026):** decyzja Dawida — na start darmowe GitHub Pages z folderu `docs/` (`https://mionsek.github.io/osp-app/`), domena później, przed weryfikacją Google. Strona i polityka (PL + EN) gotowe, link w „O aplikacji"; zostaje: zatwierdzenie treści przez Dawida, scalenie i włączenie Pages w ustawieniach repozytorium
 2. [ ] **Konto w Play Console** — osobiste: 25 USD jednorazowo i weryfikacja tożsamości. Konto jednostki jako organizacji zwalnia z testu zamkniętego (pkt 4), ale wymaga numeru D-U-N-S (do ok. 30 dni)
 3. [ ] **Podpisywanie w Play: wgrać własny klucz, nie generować nowego** — przy zakładaniu aplikacji wybrać eksport klucza z naszego keystore'a (narzędzie PEPK z Play Console). Wtedy koledzy z APK zaktualizują się ze sklepu bez odinstalowania, odcisk SHA-1 w kliencie OAuth zostaje ten sam (bez błędu 10), a Google trzyma kopię klucza podpisu — klucz przepadł już dwa razy. Przy kluczu wygenerowanym przez Google: jednorazowe odinstalowanie u wszystkich i dopisanie nowego SHA-1 w Google Cloud. **Decyzji nie da się cofnąć**
 4. [ ] **Test zamknięty: co najmniej 12 testerów przez 14 dni z rzędu** — warunek dostępu do produkcji dla nowych kont osobistych. Testerami mogą być koledzy z jednostki: konto Google, zgoda z linku do testu, instalacja ze sklepu. Liczy się tylko test zamknięty (nie wewnętrzny); wstrzymanie ścieżki testu liczy dni od nowa, nowa wersja w trakcie testu — nie
@@ -859,7 +859,7 @@ odinstalować przed instalacją nowej.
 
 ### Do zrobienia przez Dawida
 - [x] **Podmienić SHA-1 w kliencie OAuth** na `AC:02:…:35:BB` — podmienione 15.10.2026; do tego czasu logowanie Google zwracało błąd 10
-- [ ] **Kopia klucza i `key.properties` w dwóch miejscach poza komputerem** (pendrive + prywatny Dysk), hasło w menedżerze haseł. Klucz przepadł już dwa razy, za każdym razem razem z komputerem. **Stan na 13.11.2026:** kopia obu plików w `Downloads\Dawid-files\.keys` (sprawdzona sumą kontrolną), ale na tym samym dysku, więc jeszcze nie chroni. Zostaje: hasło do menedżera haseł (`storePassword` = `keyPassword`, jedno hasło; na passwords.google.com nie było przycisku „Dodaj" — spróbować w Chrome: `chrome://password-manager/passwords`), sam `.jks` na prywatny Dysk, oba pliki na pendrive, potem usunąć kopię z Pobranych
+- [x] **Kopia klucza i `key.properties` w dwóch miejscach poza komputerem** — **zrobione 18.11.2026**: kopie na dysku D: (`D:\Dawid-do-not-delete\.keys`, sprawdzone sumą kontrolną), na pendrivie i hasło w OneDrive; do dorzucenia sam `.jks` w OneDrive (pełna kopia poza domem), kopię z Pobranych można usunąć. (pendrive + prywatny Dysk), hasło w menedżerze haseł. Klucz przepadł już dwa razy, za każdym razem razem z komputerem. **Stan na 13.11.2026:** kopia obu plików w `Downloads\Dawid-files\.keys` (sprawdzona sumą kontrolną), ale na tym samym dysku, więc jeszcze nie chroni. Zostaje: hasło do menedżera haseł (`storePassword` = `keyPassword`, jedno hasło; na passwords.google.com nie było przycisku „Dodaj" — spróbować w Chrome: `chrome://password-manager/passwords`), sam `.jks` na prywatny Dysk, oba pliki na pendrive, potem usunąć kopię z Pobranych
 - [ ] **Konta kolegów jako użytkownicy testowi** albo publikacja aplikacji na ekranie zgody — w trybie „Testowanie" loguje się tylko lista, a zgoda wygasa po 7 dniach
 - [ ] **Przejście kolegów na 1.7.1**: synchronizacja na starej wersji (żeby dane były na Dysku), odinstalowanie, instalacja, logowanie Google i dołączenie do jednostki kodem zaproszenia. Kto pracował w trybie offline, straci dane lokalne
 
@@ -1036,6 +1036,19 @@ Ekrany wyjazdu i przekazania miały domek zamiast strzałki, reszta ekranów —
 - [x] 10 nowych testów na prawdziwym drzewie tras: po zapisie przekazania wstecz do listy i do menu (aplikacja się nie zamyka), po „Lista wyjazdów" wstecz do menu, strzałka i domek na każdym z 19 ekranów, kreator cofa o krok i pyta na pierwszym, bez wpisanych danych bez pytania, „Zostań" zostawia, formularz pyta domkiem i wstecz, zapis zamyka bez pytania, Ustawienia pytają przed zapisem, a po nim nie. Łącznie **364**
 - [x] Wersja **1.7.8+21**
 
+## Zrobione (chore/063-adres-kontaktowy)
+Ustalenie z Dawidem z 18.11.2026: e-mail dewelopera w sklepie Play jest
+publiczny, więc kontakt aplikacji to osobne konto `raporty.osp@gmail.com`
+(Dawid je założył, przekazywanie poczty na prywatny adres), a nie prywatny
+adres autora.
+
+- [x] **`kContactEmail`** w `support_links.dart` — „Zgłoś problem" i „Zaproponuj usprawnienie" w „O aplikacji" piszą na adres aplikacji
+- [x] Strona główna i polityka prywatności (PL i EN) — kontakt `raporty.osp@gmail.com`
+- [x] Prywatny adres usunięty z kodu, strony i testów (w testach przykładowe konto). W historii publicznego repozytorium zostaje — przepisywanie historii nie jest warte zachodu
+- [x] W Play Console: konto osobiste (rada z 18.11.2026 — aplikacja jest Dawida, nie jednej jednostki; konto organizacji wymaga D-U-N-S, dokumentów i zgody zarządu OSP), publiczny e-mail dewelopera `raporty.osp@gmail.com`
+- [x] Test: strona i polityka mają tylko adres aplikacji, „O aplikacji" bez prywatnego adresu. Łącznie **524**
+- [x] Wersja **1.9.13+36**
+
 ## Zrobione (fix/062-usuwanie-danych-z-dysku)
 Decyzja Dawida z 16.11.2026 po znalezisku przy polityce prywatności: usunięty
 wpis ma naprawdę znikać z Dysku jednostki, nie tylko z telefonów.
@@ -1062,8 +1075,8 @@ darmowym GitHub Pages, domena później. Pierwszy punkt planu publikacji w Play.
 - [x] Wersja **1.9.11+34**
 
 ### Do zrobienia przez Dawida
-- [ ] Przeczytać stronę i politykę — to tekst, który podpisuje twórca aplikacji
-- [ ] Po scaleniu: GitHub → repozytorium `osp-app` → Settings → Pages → „Deploy from a branch", gałąź `master`, folder `/docs` → Save. Po minucie strona jest pod `https://mionsek.github.io/osp-app/`
+- [x] Przeczytać stronę i politykę — zaakceptowane, scalone 18.11.2026
+- [x] Po scaleniu: GitHub → repozytorium `osp-app` → Settings → Pages → „Deploy from a branch", gałąź `master`, folder `/docs` → Save. Po minucie strona jest pod `https://mionsek.github.io/osp-app/`
 
 ## Zrobione (feature/060-wybor-drukarki-bluetooth)
 Pytanie Dawida z 15.11.2026: jak wygląda druk Bluetooth z niesparowaną
