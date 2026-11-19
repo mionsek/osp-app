@@ -349,8 +349,8 @@ class _DuplicateNumberNotice extends ConsumerWidget {
         title: Text('Zmienić numer na $next?'),
         content: Text(
           'Wyjazd ${report.reportNumber} dostanie numer $next — także na '
-          'Dysku jednostki i u kolegów. Jeśli był już wydrukowany, popraw '
-          'numer na wydruku.',
+          'Dysku jednostki i u pozostałych członków. Jeśli był już '
+          'wydrukowany, popraw numer na wydruku.',
         ),
         actions: [
           TextButton(

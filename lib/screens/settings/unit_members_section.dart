@@ -92,8 +92,7 @@ class _UnitMembersSectionState extends ConsumerState<UnitMembersSection> {
         content: Text(
           'Google wyśle na $email powiadomienie o udostępnieniu folderu '
           'jednostki z kodem $code. Wygląda jak zwykłe udostępnienie z Dysku '
-          'i bywa w Spamie — wyślij koledze kod także SMS-em albo '
-          'komunikatorem.',
+          'i bywa w Spamie — przekaż kod także SMS-em albo komunikatorem.',
           style: const TextStyle(fontSize: 14),
         ),
         actions: [
@@ -103,8 +102,8 @@ class _UnitMembersSectionState extends ConsumerState<UnitMembersSection> {
           ),
           FilledButton.icon(
             onPressed: () => Navigator.pop(ctx, true),
-            icon: const Icon(Icons.send, size: 18),
-            label: const Text('Wyślij koledze'),
+            icon: const Icon(Icons.share, size: 18),
+            label: const Text('Udostępnij kod'),
           ),
         ],
       ),
@@ -224,9 +223,9 @@ class _UnitMembersSectionState extends ConsumerState<UnitMembersSection> {
             style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 4),
         Text(
-          'Kolega musi dostać zaproszenie na swój adres, zanim dołączy '
-          'kodem — samo podanie kodu nie wystarczy. Zaproszenie wysyła mu '
-          'też e-mail z kodem.',
+          'Zanim ktoś dołączy kodem, musi dostać zaproszenie na swój '
+          'adres — samo podanie kodu nie wystarczy. Razem z zaproszeniem '
+          'Google wysyła e-mail z kodem.',
           style: TextStyle(fontSize: 12, color: Colors.grey[600]),
         ),
         const SizedBox(height: 12),
@@ -246,7 +245,7 @@ class _UnitMembersSectionState extends ConsumerState<UnitMembersSection> {
         OutlinedButton.icon(
           onPressed: _loading ? null : _invite,
           icon: const Icon(Icons.person_add_alt),
-          label: const Text('Zaproś strażaka'),
+          label: const Text('Zaproś do jednostki'),
         ),
         if (syncState.founderEmail != null) ...[
           const SizedBox(height: 8),
@@ -477,13 +476,13 @@ class _InviteDialogState extends State<_InviteDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Zaproś strażaka'),
+      title: const Text('Zaproś do jednostki'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Podaj adres konta Google, którym kolega loguje się '
+            'Podaj adres konta Google, którym ta osoba loguje się '
             'w aplikacji. Dostanie dostęp do danych jednostki i e-mail '
             'od Google z kodem zaproszenia i instrukcją dołączenia.',
             style: TextStyle(fontSize: 13),

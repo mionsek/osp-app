@@ -1068,7 +1068,7 @@ zmian).
 - [x] Testy: dwie linie na karcie (także cel wybrany bez raportu), w Excelu zawijanie bez zmniejszania, reszta wiersza zmniejsza się jak dotąd. Łącznie **537**
 - [x] Wersja **1.9.16+39** — UAT Dawida 19.11.2026: wszystko w porządku, scalone
 
-## Zrobione (fix/067-weryfikacja-zmian) — czeka na UAT
+## Zrobione (fix/067-weryfikacja-zmian)
 Pytanie Dawida z 19.11.2026: czy ktoś może się włamać — wykraść albo
 podmienić dane, przejąć konto jednostki. Ocena: z zewnątrz aplikacja jest
 zamknięta (bez serwera, folder udostępniany tylko konkretnym adresom, sam kod
@@ -1098,18 +1098,24 @@ dostęp" od razu po odejściu z jednostki, co jakiś czas kopia folderu jednostk
 z Dysku. Odebranie dostępu nie kasuje kopii na telefonie tej osoby ani plików,
 które sama utworzyła (na Dysku Google to ona jest ich właścicielem).
 
-## Zrobione (feature/068-zaproszenie-sms) — czeka na UAT, razem z fix/067
+## Zrobione (feature/068-zaproszenie-sms)
 Zgłoszenie Dawida z 19.11.2026: kolega go zaprosił, Dawid dostał udostępnienie
 folderu z kodem, ale „nie dostał maila" — powiadomienie Google wygląda jak
 każde inne udostępnienie z Dysku i nie dało się w nim rozpoznać zaproszenia.
 Gałąź wychodzi z fix/067 (ta sama sekcja „Członkowie jednostki").
 
-- [x] Po „Zaproś strażaka" okno **„Zaproszenie wysłane"**: na jaki adres i z jakim kodem Google wyśle powiadomienie, że wygląda jak zwykłe udostępnienie i bywa w Spamie. Przycisk **„Wyślij koledze"** otwiera systemowe „Udostępnij" (SMS, WhatsApp, Messenger, poczta) z tą samą treścią co powiadomienie Google; „Gotowe" zamyka bez wysyłania. Własny e-mail z aplikacji odpadł: potrzebny byłby serwer albo uprawnienie Google do wysyłania poczty z konta zapraszającego (kolejna zgoda i trudniejsza weryfikacja)
+- [x] Po „Zaproś strażaka" (dziś „Zaproś do jednostki") okno **„Zaproszenie wysłane"**: na jaki adres i z jakim kodem Google wyśle powiadomienie, że wygląda jak zwykłe udostępnienie i bywa w Spamie. Przycisk **„Wyślij koledze"** otwiera systemowe „Udostępnij" (SMS, WhatsApp, Messenger, poczta) z tą samą treścią co powiadomienie Google; „Gotowe" zamyka bez wysyłania. Własny e-mail z aplikacji odpadł: potrzebny byłby serwer albo uprawnienie Google do wysyłania poczty z konta zapraszającego (kolejna zgoda i trudniejsza weryfikacja)
 - [x] Treść zaproszenia z adresem strony aplikacji (`https://mionsek.github.io/osp-app/`) — skąd ją pobrać; także w powiadomieniu Google
 - [x] Naprawione przy okazji: okno „Zaproś strażaka" zwalniało pole adresu, zanim samo zniknęło („TextEditingController used after being disposed" — w wersji sklepowej po cichu, w trybie debug błąd). Okno ma teraz własne pole
 - [x] Emulator: „Udostępnij" otwiera się z treścią zaproszenia (na emulatorze bez SMS-ów i komunikatorów)
 - [x] Testy: okno po zaproszeniu i wysłanie tej samej treści, „Gotowe" bez wysyłania, treść z adresem strony i ta sama w SMS-ie co w powiadomieniu. Łącznie **552**
-- [x] Wersja **1.9.18+41** (zawiera fix/067)
+- [x] Wersja **1.9.18+41** (zawiera fix/067) — UAT Dawida 19.11.2026: działa, do zmiany tylko napis „Wyślij koledze" (nie każdy zaproszony to kolega, a zaproszenie jest już wysłane)
+- [x] **„Udostępnij kod"** zamiast „Wyślij koledze" (wybór Dawida z trzech propozycji), w oknie „przekaż kod także SMS-em albo komunikatorem"
+- [x] **Napisy bez „kolegi" i „strażaka"**: „Zaproś do jednostki" (przycisk, okno i podpowiedź przy nieznalezionym kodzie), „Zanim ktoś dołączy kodem, musi dostać zaproszenie…", „…którym ta osoba loguje się", „Potem zaprosisz pozostałych", „Wpis innej osoby — poprawić go może autor…", „…i u pozostałych członków"
+- [x] Emulator: sekcja „Członkowie jednostki", okno zaproszenia z adresem, „Zaproszenie wysłane" z „Udostępnij kod" i listą członków (prawdziwa aplikacja, atrapa Dysku z testów)
+- [x] Testy: nowe napisy; w sekcji i obu oknach żadnego „kolegi" ani „strażaka". Łącznie **552**
+- [x] Wersja **1.9.19+42** — scalone razem z fix/067 na prośbę Dawida
+- [ ] **Niestabilne testy przy pełnym przebiegu** (19.11.2026, raz na kilka przebiegów, za każdym razem inny): `entered_by_test` — zapis wyjazdu z kreatora kończy się po zamknięciu bazy w teście („Box not found … after the test had completed"), wcześniej też `equipment_card_screens_test` (rozruch całego sprzętu). Osobno przechodzą. Do poprawy: czekać w teście na koniec zapisu (`runAsync`)
 
 ## W toku (chore/064-paczka-play)
 18.11.2026 konto osobiste w Play Console założone i zweryfikowane

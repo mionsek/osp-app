@@ -434,7 +434,7 @@ class _GoogleSyncSectionState extends ConsumerState<_GoogleSyncSection> {
         title: const Text('Utwórz jednostkę na Dysku'),
         content: Text(
           'Na Dysku konta $email powstanie folder jednostki „$name", '
-          'a dane z tego telefonu trafią do niego. Potem zaprosisz kolegów.',
+          'a dane z tego telefonu trafią do niego. Potem zaprosisz pozostałych.',
         ),
         actions: [
           TextButton(

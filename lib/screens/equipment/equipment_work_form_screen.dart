@@ -230,7 +230,7 @@ class _EquipmentWorkFormScreenState
                     const Padding(
                       padding: EdgeInsets.only(bottom: 12),
                       child: Text(
-                        'Wpis kolegi — poprawić go może autor albo '
+                        'Wpis innej osoby — poprawić go może autor albo '
                         'administrator.',
                         style: TextStyle(color: OspTheme.attention),
                       ),

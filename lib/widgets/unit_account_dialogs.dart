@@ -22,7 +22,7 @@ String joinNotFoundMessage(String? email) {
   final who = (email == null || email.isEmpty) ? 'tego konta' : email;
   return 'Nie znaleziono jednostki z tym kodem dla $who. Sprawdź kod '
       'i poproś administratora, żeby zaprosił ten adres '
-      '(Ustawienia → Członkowie jednostki → Zaproś strażaka).';
+      '(Ustawienia → Członkowie jednostki → Zaproś do jednostki).';
 }
 
 /// Po dołączeniu do jednostki: zamyka wprowadzenie i odświeża listy danymi

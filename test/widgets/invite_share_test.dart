@@ -22,6 +22,11 @@ void main() {
     await disposeTestHive(tempDir);
   });
 
+  /// Napisy bez „kolegi" i „strażaka" — nie każdy zaproszony to kolega,
+  /// a zaproszenie jest już wysłane (Dawid, 19.11.2026: „Udostępnij kod").
+  Finder neutral() =>
+      find.textContaining(RegExp('koleg|strażak', caseSensitive: false));
+
   const admin = SyncState(
     status: SyncStatus.idle,
     userEmail: 'dawid@gmail.com',
@@ -52,16 +57,18 @@ void main() {
       ],
     ));
     await tester.pumpAndSettle();
+    expect(neutral(), findsNothing, reason: 'sekcja „Członkowie jednostki"');
 
-    await tester.tap(find.text('Zaproś strażaka'));
+    await tester.tap(find.text('Zaproś do jednostki'));
     await tester.pumpAndSettle();
+    expect(neutral(), findsNothing, reason: 'okno „Zaproś do jednostki"');
     await tester.enterText(find.byType(TextField), 'jan@gmail.com');
     await tester.tap(find.text('Zaproś'));
     await tester.pumpAndSettle();
     return sync;
   }
 
-  testWidgets('po zaproszeniu okno z „Wyślij koledze" — wysyła tę samą treść '
+  testWidgets('po zaproszeniu okno z „Udostępnij kod" — wysyła tę samą treść '
       'co powiadomienie Google', (tester) async {
     final shared = <String>[];
     final sync = await pumpSection(tester, shared: shared);
@@ -72,8 +79,9 @@ void main() {
         find.textContaining('Google wyśle na jan@gmail.com powiadomienie'),
         findsOneWidget);
     expect(find.textContaining('z kodem ABC234'), findsOneWidget);
+    expect(neutral(), findsNothing, reason: 'okno „Zaproszenie wysłane"');
 
-    await tester.tap(find.text('Wyślij koledze'));
+    await tester.tap(find.text('Udostępnij kod'));
     await tester.pumpAndSettle();
     expect(shared, ['TREŚĆ ZAPROSZENIA Z KODEM ABC234']);
     expect(find.text('Zaproszenie wysłane'), findsNothing);
