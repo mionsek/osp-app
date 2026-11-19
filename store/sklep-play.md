@@ -81,14 +81,23 @@ danych (instrukcja w pliku). Zrzutów tabletu Play nie wymaga.
 ### Polityka prywatności
 `https://mionsek.github.io/osp-app/polityka-prywatnosci.html`
 
-### Dostęp do aplikacji
-„Wszystkie funkcje lub ich część są ograniczone” → dodaj instrukcję
-(bez loginu i hasła, recenzenci czytają po angielsku):
+### Dane logowania (dawniej „Dostęp do aplikacji”)
+„Czy jakakolwiek część aplikacji jest objęta ograniczeniami?” → **Tak**
+(logowanie Google jest na liście Google wprost). Recenzenci nie mogą
+tworzyć kont ani używać własnych, więc dostają **osobne konto Gmail tylko
+dla recenzji** (zrobione 19.11.2026; adres i hasło tylko w Play Console,
+nie w repozytorium). Tego konta nie zapraszać do prawdziwej jednostki;
+nie usuwać — Google sprawdza nim każdą aktualizację.
+
+- Nazwa: `Test Google account (optional sync)`
+- Nazwa użytkownika i hasło: konto recenzji
+- Inne informacje (limit 500 znaków, ten tekst ma 428):
 
 ```
-No credentials are needed. On the welcome screen tap "Utwórz nową jednostkę" (Create a new unit), then "Kontynuuj bez logowania (tryb offline)" (Continue without signing in). Enter any unit name and locality - every feature works offline, with data kept only on the phone.
-Signing in with Google is optional and only syncs the unit's data through a folder on the user's own Google Drive. Any Google account can be used; the app has no server and no accounts of its own. Google shows an "unverified app" notice during sign-in (Google has not verified the app's Google Drive permission yet) - tap "Advanced" and then "Go to Raporty OSP" to continue.
+All features work without signing in: on the welcome screen tap "Utwórz nową jednostkę" (Create a new unit), then "Kontynuuj bez logowania (tryb offline)" (Continue without signing in) and enter any unit name and locality. Google sign-in is optional and only syncs data through the user's own Google Drive - to test it, use the account above. Google shows an "unverified app" notice: tap "Advanced", then "Go to Raporty OSP".
 ```
+
+- Zaznaczone: „Dane logowania… zapewniają pełny dostęp do wszystkich funkcji”.
 
 **Przed wysłaniem do recenzji:** ekran zgody OAuth w Google Cloud musi być
 „W produkcji”. W trybie „Testowanie” logują się tylko konta z listy testerów,
