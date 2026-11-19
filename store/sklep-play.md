@@ -87,12 +87,18 @@ danych (instrukcja w pliku). Zrzutów tabletu Play nie wymaga.
 
 ```
 No credentials are needed. On the welcome screen tap "Utwórz nową jednostkę" (Create a new unit), then "Kontynuuj bez logowania (tryb offline)" (Continue without signing in). Enter any unit name and locality - every feature works offline, with data kept only on the phone.
-Signing in with Google is optional and only syncs the unit's data through a folder on the user's own Google Drive. Any Google account can be used; the app has no server and no accounts of its own.
+Signing in with Google is optional and only syncs the unit's data through a folder on the user's own Google Drive. Any Google account can be used; the app has no server and no accounts of its own. Google shows an "unverified app" notice during sign-in (Google has not verified the app's Google Drive permission yet) - tap "Advanced" and then "Go to Raporty OSP" to continue.
 ```
 
 **Przed wysłaniem do recenzji:** ekran zgody OAuth w Google Cloud musi być
 „W produkcji”. W trybie „Testowanie” logują się tylko konta z listy testerów,
 a recenzent z innym kontem dostałby błąd (plan publikacji, pkt 5).
+**Zrobione 19.11.2026** — „W wersji produkcyjnej”, bez weryfikacji: przy
+logowaniu ekran „aplikacja niezweryfikowana” i limit 100 kont. Marka
+(nazwa, strona, polityka, domena `mionsek.github.io`) wpisana, ale
+niezweryfikowana, więc Google nie pokazuje jej użytkownikom; logo celowo
+niewgrane (wymusza weryfikację). W „Dostępie do danych” zakresów nie
+wpisujemy — Dysk aplikacja prosi w kodzie.
 
 ### Reklamy
 „Nie, moja aplikacja nie zawiera reklam”.

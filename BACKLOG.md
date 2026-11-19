@@ -1133,7 +1133,7 @@ i odpowiedzi do formularzy. Kod aplikacji bez zmian — wersja zostaje **1.9.13+
 
 ### Do zrobienia przez Dawida (kolejność)
 - [x] Scalić (strona usuwania danych działa od 18.11.2026)
-- [ ] Google Cloud: ekran zgody OAuth „W produkcji" — inaczej recenzent nie zaloguje się swoim kontem (plan publikacji, pkt 5)
+- [x] Google Cloud: ekran zgody OAuth „W produkcji" — inaczej recenzent nie zaloguje się swoim kontem (plan publikacji, pkt 5). **Zrobione 19.11.2026** bez weryfikacji (ekran „niezweryfikowana", limit 100 kont); w instrukcji dla recenzenta dopisane, jak przejść ten ekran. Logo do weryfikacji marki: `store/grafiki/logo-oauth-120.png`
 - [ ] Play Console: utworzyć aplikację, wpis w sklepie, „Zawartość aplikacji" według `store/sklep-play.md`
 - [ ] Test zamknięty: lista 12+ testerów, pierwsza wersja — **podpisywanie: „Użyj innego klucza" → eksport z magazynu kluczy Java (PEPK)**; pobrać `pepk.jar` i klucz szyfrowania, eksport zrobimy razem
 - [ ] Wysłać do recenzji, potem link do testu dla kolegów
