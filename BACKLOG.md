@@ -1053,7 +1053,7 @@ obie poprawione.
 - [x] Testy: tył jak na zdjęciu (napisy, scalenia, „Razem" i ostatni wiersz licznika w kształcie L, pozycje 4 i 5 w jednym wierszu, bez czasu rozruchów, krój 9 pt, nagłówek bez linii, podpisy bez dopisków), szerokości w Excelu (każda krawędź najwyżej 0,2 mm od PDF, wzorem Excela). Łącznie **527**
 - [x] Wersja **1.9.14+37** (nowy AAB do testu zamkniętego zamiast 1.9.13+36)
 
-## Zrobione (fix/066-ewidencja-drobne) — czeka na UAT
+## Zrobione (fix/066-ewidencja-drobne)
 Uwagi Dawida z 18.11.2026 po sprawdzeniu kart z Deringiem (wygląd tabel bez
 zmian).
 
@@ -1066,7 +1066,7 @@ zmian).
 - [x] Wersja **1.9.15+38** — UAT Dawida 18.11.2026: w porządku poza drobnym „Miejscowe Zagrożenie" na karcie drogowej
 - [x] **„Miejscowe Zagrożenie" w dwóch liniach** w rubryce „Cel jazdy" karty drogowej (tabela bez zmian): „Miejscowe / Zagrożenie" 7,5 pt zamiast ok. 6,5 pt w jednej linii. W Excelu komórka z podziałem linii jest zawijana zamiast zmniejszana (inaczej Excel skleja linie), dlatego krój stały — dwie linie 7,5 pt mieszczą się w wierszu 7 mm także tam; 8 pt by się ucinało. Krótsze nazwy bez zmian. Na karcie pracy sprzętu („Miejscowe Zagrożenie, Kielno") wiersz ma 5,8 mm — dwie linie nie byłyby większe niż jedna, więc zostaje w jednej
 - [x] Testy: dwie linie na karcie (także cel wybrany bez raportu), w Excelu zawijanie bez zmniejszania, reszta wiersza zmniejsza się jak dotąd. Łącznie **537**
-- [x] Wersja **1.9.16+39**
+- [x] Wersja **1.9.16+39** — UAT Dawida 19.11.2026: wszystko w porządku, scalone
 
 ## W toku (chore/064-paczka-play)
 18.11.2026 konto osobiste w Play Console założone i zweryfikowane
@@ -1074,7 +1074,7 @@ zmian).
 e-mail `raporty.osp@gmail.com`). Paczka do sklepu: AAB, wpis, grafiki
 i odpowiedzi do formularzy. Kod aplikacji bez zmian — wersja zostaje **1.9.13+36**.
 
-- [x] **AAB 1.9.13+36** podpisany kluczem wydań (SHA-1 `AC:02:…:BB`, ten sam co w kliencie OAuth), kopia w `Pobrane\Raporty-OSP-1.9.13-36.aab` — **zastąpiony przez 1.9.14+37** (fix/065). Uprawnienia w paczce sprawdzone: bez `AD_ID`, zdjęć i filmów, usług na pierwszym planie — te deklaracje nie dotyczą
+- [x] **AAB 1.9.13+36** podpisany kluczem wydań (SHA-1 `AC:02:…:BB`, ten sam co w kliencie OAuth), kopia w `Pobrane\Raporty-OSP-1.9.13-36.aab` — **zastąpiony przez 1.9.14+37** (fix/065), a ten przez **1.9.16+39** (fix/066, `Pobrane\Raporty-OSP-1.9.16-39.aab`). Uprawnienia w paczce sprawdzone: bez `AD_ID`, zdjęć i filmów, usług na pierwszym planie — te deklaracje nie dotyczą
 - [x] **`store/sklep-play.md`** — nazwa, krótki opis (77/80 znaków), pełny opis (z zastrzeżeniem, że to nie aplikacja PSP ani ZOSP RP), kategoria, dostęp dla recenzenta (po angielsku — tryb offline bez logowania), ankieta IARC, grupa docelowa 18+, pozostałe deklaracje, test zamknięty, informacje o wersji
 - [x] **„Bezpieczeństwo danych"**: według pomocy Google wysłanie z telefonu to „zbieranie", a wyjątek dla Dysku obejmuje tylko kopię zapasową, której aplikacja nie czyta — my czytamy (synchronizacja), więc deklarujemy dane jako zbierane (imię i nazwisko, e-mail, adres, telefon, dokładna lokalizacja z „Wstaw adres z GPS", termin badań jako informacja o zdrowiu, treści użytkownika), opcjonalne, nieudostępniane, szyfrowane w przesyle. Na stronie „bez zbierania danych" → „autor nie zbiera danych", żeby nie przeczyć etykiecie w sklepie
 - [x] **Strona „Usuwanie konta i danych"** (`docs/usuwanie-danych.html`, PL + EN) — Play wymaga linku, gdy aplikacja ma logowanie (Google jako OAuth): wylogowanie z usunięciem danych, odebranie dostępu na koncie Google, odebranie dostępu członkowi, folder `OSP_App_…` na Dysku, co zostaje u jednostki. Link ze strony głównej i obu wersji polityki

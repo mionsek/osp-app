@@ -121,7 +121,7 @@ Tylko **18 lat i więcej**. Aplikacja nie jest atrakcyjna dla dzieci: „Nie”.
 | Aplikacje związane ze zdrowiem | Brak funkcji związanych ze zdrowiem |
 | Identyfikator wyświetlania reklam | Nie (brak uprawnienia `AD_ID` w paczce, sprawdzone w chore/064) |
 
-Paczka 1.9.14+37 ma uprawnienia: internet, stan sieci, Bluetooth (połączenie,
+Paczka 1.9.16+39 ma uprawnienia: internet, stan sieci, Bluetooth (połączenie,
 wyszukiwanie bez lokalizacji), lokalizacja dokładna i przybliżona (tylko
 przycisk „Wstaw adres z GPS”). Brak uprawnień do zdjęć i filmów, usług na
 pierwszym planie, SMS-ów i rejestru połączeń — formularze do nich nie dotyczą.
