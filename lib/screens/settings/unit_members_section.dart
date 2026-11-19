@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../providers/providers.dart';
 import '../../models/sync_state.dart' show RejectedChange;
@@ -16,6 +17,15 @@ import '../../widgets/shared_account_guide.dart';
 /// nic tu zmienić.
 class UnitMembersSection extends ConsumerStatefulWidget {
   const UnitMembersSection({super.key});
+
+  /// Systemowe okno „Udostępnij" z tekstem (SMS, WhatsApp, Messenger,
+  /// poczta). Podmieniane w testach.
+  @visibleForTesting
+  static Future<void> Function(String text) shareText = (text) =>
+      SharePlus.instance.share(ShareParams(
+        text: text,
+        subject: 'Zaproszenie do Raporty OSP',
+      ));
 
   @override
   ConsumerState<UnitMembersSection> createState() =>
@@ -43,46 +53,10 @@ class _UnitMembersSectionState extends ConsumerState<UnitMembersSection> {
   }
 
   Future<void> _invite() async {
-    final controller = TextEditingController();
     final email = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Zaproś strażaka'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Podaj adres konta Google, którym kolega loguje się '
-              'w aplikacji. Dostanie dostęp do danych jednostki i e-mail '
-              'od Google z kodem zaproszenia i instrukcją dołączenia.',
-              style: TextStyle(fontSize: 13),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: controller,
-              decoration: const InputDecoration(
-                labelText: 'Adres e-mail (Gmail)',
-                hintText: 'np. jan.kowalski@gmail.com',
-              ),
-              keyboardType: TextInputType.emailAddress,
-              autofocus: true,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Anuluj'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: const Text('Zaproś'),
-          ),
-        ],
-      ),
+      builder: (_) => const _InviteDialog(),
     );
-    controller.dispose();
     if (email == null || email.isEmpty || !mounted) return;
 
     if (!email.contains('@')) {
@@ -95,22 +69,47 @@ class _UnitMembersSectionState extends ConsumerState<UnitMembersSection> {
       _error = null;
     });
     try {
-      await ref.read(syncServiceProvider).inviteMember(email);
+      final message = await ref.read(syncServiceProvider).inviteMember(email);
       await _loadMembers();
-      if (mounted) {
-        final code = ref.read(syncStateProvider).unitInviteCode ?? '';
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Wysłano zaproszenie na $email z kodem $code. '
-              'Jeśli nie dotrze, sprawdź folder Spam albo podaj kod '
-              'osobiście.'),
-          duration: const Duration(seconds: 8),
-        ));
-      }
+      if (mounted) await _offerToSend(email, message);
     } catch (e) {
       if (mounted) setState(() => _error = 'Nie udało się zaprosić: $e');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  /// Powiadomienie Google o udostępnieniu wygląda jak każde inne z Dysku
+  /// i bywa w Spamie — zaproszony Dawid zobaczył folder, a e-maila
+  /// z zaproszeniem nie rozpoznał (19.11.2026). Dlatego od razu propozycja
+  /// wysłania tej samej treści SMS-em albo komunikatorem.
+  Future<void> _offerToSend(String email, String message) async {
+    final code = ref.read(syncStateProvider).unitInviteCode ?? '';
+    final send = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Zaproszenie wysłane'),
+        content: Text(
+          'Google wyśle na $email powiadomienie o udostępnieniu folderu '
+          'jednostki z kodem $code. Wygląda jak zwykłe udostępnienie z Dysku '
+          'i bywa w Spamie — wyślij koledze kod także SMS-em albo '
+          'komunikatorem.',
+          style: const TextStyle(fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Gotowe'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(ctx, true),
+            icon: const Icon(Icons.send, size: 18),
+            label: const Text('Wyślij koledze'),
+          ),
+        ],
+      ),
+    );
+    if (send == true) await UnitMembersSection.shareText(message);
   }
 
   Future<void> _toggleAdmin(UnitMemberAccess member, bool makeAdmin) async {
@@ -450,6 +449,67 @@ class RejectedChangesCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Okno „Zaproś strażaka" — z własnym polem adresu.
+///
+/// Pole zwalnia okno dopiero po zamknięciu. Wcześniej ekran zwalniał je
+/// zaraz po wybraniu przycisku, a okno w trakcie znikania jeszcze z niego
+/// korzystało (test z feature/068 wykrył błąd „used after being disposed").
+class _InviteDialog extends StatefulWidget {
+  const _InviteDialog();
+
+  @override
+  State<_InviteDialog> createState() => _InviteDialogState();
+}
+
+class _InviteDialogState extends State<_InviteDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Zaproś strażaka'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Podaj adres konta Google, którym kolega loguje się '
+            'w aplikacji. Dostanie dostęp do danych jednostki i e-mail '
+            'od Google z kodem zaproszenia i instrukcją dołączenia.',
+            style: TextStyle(fontSize: 13),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _controller,
+            decoration: const InputDecoration(
+              labelText: 'Adres e-mail (Gmail)',
+              hintText: 'np. jan.kowalski@gmail.com',
+            ),
+            keyboardType: TextInputType.emailAddress,
+            autofocus: true,
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Anuluj'),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(context, _controller.text.trim()),
+          child: const Text('Zaproś'),
+        ),
+      ],
     );
   }
 }

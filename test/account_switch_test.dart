@@ -51,6 +51,8 @@ void main() {
       expect(message, contains('Ochotnicza Straż Pożarna w Kielnie'));
       expect(message, contains('ABC234'));
       expect(message, contains('jan.kowalski@gmail.com'));
+      expect(message, contains('https://mionsek.github.io/osp-app/'),
+          reason: 'skąd pobrać aplikację — także w SMS-ie');
     });
 
     test('zaproszenie kolegi wysyła e-mail z kodem tej jednostki', () async {
@@ -58,13 +60,15 @@ void main() {
           db.getConfig().copyWith(unitFullName: 'OSP w Kielnie'));
       final code = await sync.createUnit('OSP w Kielnie');
 
-      await sync.inviteMember('  jan@gmail.com ');
+      final message = await sync.inviteMember('  jan@gmail.com ');
 
       final share = drive.shares.single;
       expect(share.folderId, sync.state.unitFolderId);
       expect(share.email, 'jan@gmail.com');
       expect(share.message, contains(code));
       expect(share.message, contains('OSP w Kielnie'));
+      expect(message, share.message,
+          reason: 'do SMS-a ta sama treść co w powiadomieniu Google');
     });
   });
 

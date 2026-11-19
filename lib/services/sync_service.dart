@@ -366,25 +366,31 @@ class SyncService {
   /// Google wysyła mu przy tym e-mail z kodem zaproszenia i instrukcją.
   /// Wcześniej udostępnienie szło po cichu, a kod trzeba było przekazać
   /// osobno, więc kolega nie wiedział, że w ogóle został zaproszony.
-  Future<void> inviteMember(String email) async {
+  ///
+  /// Zwraca treść zaproszenia — ekran proponuje wysłać ją jeszcze SMS-em
+  /// albo komunikatorem, bo powiadomienie Google wygląda jak zwykłe
+  /// udostępnienie folderu i łatwo je przeoczyć (Dawid, 19.11.2026).
+  Future<String> inviteMember(String email) async {
     final folderId = _state.unitFolderId;
     if (folderId == null) {
       throw StateError('Brak połączenia z jednostką.');
     }
     final address = email.trim();
-    await _driveService.shareFolderWithUser(
-      folderId,
-      address,
-      message: inviteMessage(
-        unitName: _db.getConfig().fullName,
-        code: _state.unitInviteCode ?? '',
-        email: address,
-      ),
+    final message = inviteMessage(
+      unitName: _db.getConfig().fullName,
+      code: _state.unitInviteCode ?? '',
+      email: address,
     );
+    await _driveService.shareFolderWithUser(folderId, address,
+        message: message);
+    return message;
   }
 
-  /// Treść e-maila z zaproszeniem — Google dokleja ją do powiadomienia
-  /// o udostępnieniu folderu jednostki.
+  /// Strona aplikacji — skąd ją pobrać; po publikacji prowadzi do Sklepu Play.
+  static const String appPage = 'https://mionsek.github.io/osp-app/';
+
+  /// Treść zaproszenia — Google dokleja ją do powiadomienia o udostępnieniu
+  /// folderu jednostki, a zapraszający może ją wysłać także sam.
   @visibleForTesting
   static String inviteMessage({
     required String unitName,
@@ -395,7 +401,8 @@ class SyncService {
       'Kod zaproszenia: $code\n\n'
       'Jak dołączyć: zainstaluj aplikację Raporty OSP, wybierz „Dołącz do '
       'jednostki", zaloguj się kontem $email i wpisz kod. Jeśli aplikację '
-      'już masz: Ustawienia → Dołącz do jednostki kodem.';
+      'już masz: Ustawienia → Dołącz do jednostki kodem.\n\n'
+      'O aplikacji: $appPage';
 
   // ── Konto Google ───────────────────────────────────────────────────
 

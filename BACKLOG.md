@@ -1098,6 +1098,19 @@ dostęp" od razu po odejściu z jednostki, co jakiś czas kopia folderu jednostk
 z Dysku. Odebranie dostępu nie kasuje kopii na telefonie tej osoby ani plików,
 które sama utworzyła (na Dysku Google to ona jest ich właścicielem).
 
+## Zrobione (feature/068-zaproszenie-sms) — czeka na UAT, razem z fix/067
+Zgłoszenie Dawida z 19.11.2026: kolega go zaprosił, Dawid dostał udostępnienie
+folderu z kodem, ale „nie dostał maila" — powiadomienie Google wygląda jak
+każde inne udostępnienie z Dysku i nie dało się w nim rozpoznać zaproszenia.
+Gałąź wychodzi z fix/067 (ta sama sekcja „Członkowie jednostki").
+
+- [x] Po „Zaproś strażaka" okno **„Zaproszenie wysłane"**: na jaki adres i z jakim kodem Google wyśle powiadomienie, że wygląda jak zwykłe udostępnienie i bywa w Spamie. Przycisk **„Wyślij koledze"** otwiera systemowe „Udostępnij" (SMS, WhatsApp, Messenger, poczta) z tą samą treścią co powiadomienie Google; „Gotowe" zamyka bez wysyłania. Własny e-mail z aplikacji odpadł: potrzebny byłby serwer albo uprawnienie Google do wysyłania poczty z konta zapraszającego (kolejna zgoda i trudniejsza weryfikacja)
+- [x] Treść zaproszenia z adresem strony aplikacji (`https://mionsek.github.io/osp-app/`) — skąd ją pobrać; także w powiadomieniu Google
+- [x] Naprawione przy okazji: okno „Zaproś strażaka" zwalniało pole adresu, zanim samo zniknęło („TextEditingController used after being disposed" — w wersji sklepowej po cichu, w trybie debug błąd). Okno ma teraz własne pole
+- [x] Emulator: „Udostępnij" otwiera się z treścią zaproszenia (na emulatorze bez SMS-ów i komunikatorów)
+- [x] Testy: okno po zaproszeniu i wysłanie tej samej treści, „Gotowe" bez wysyłania, treść z adresem strony i ta sama w SMS-ie co w powiadomieniu. Łącznie **552**
+- [x] Wersja **1.9.18+41** (zawiera fix/067)
+
 ## W toku (chore/064-paczka-play)
 18.11.2026 konto osobiste w Play Console założone i zweryfikowane
 (osoba niebędąca przedsiębiorcą — Dawid nie prowadzi działalności; publiczny
