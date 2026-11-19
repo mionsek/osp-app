@@ -26,7 +26,8 @@ class SyncState {
   /// Numery wyjazdów, dla których wykryto duplikaty po ostatnim sync.
   final List<String> duplicateReportNumbers;
 
-  /// Adres założyciela jednostki (`createdBy` z `unit_config.json`).
+  /// Adres założyciela jednostki — właściciela folderu jednostki według
+  /// Dysku (fix/067), a gdy Dysk go nie poda, `createdBy` z `unit_config.json`.
   /// Zawsze ma uprawnienia administratora i nie da się mu ich odebrać —
   /// inaczej jednostka mogłaby zostać bez żadnego administratora.
   final String? founderEmail;
@@ -50,6 +51,11 @@ class SyncState {
   /// synchronizacja bez zmian numerów ich nie kasuje.
   final List<String> renumberNotes;
 
+  /// Zmiany na Dysku, których ten telefon nie przyjął: zrobione z pominięciem
+  /// aplikacji przez kogoś, komu aplikacja by na nie nie pozwoliła (fix/067).
+  /// Najnowsze pierwsze — do pokazania administratorowi.
+  final List<RejectedChange> rejectedChanges;
+
   const SyncState({
     this.status = SyncStatus.disconnected,
     this.lastSyncTime,
@@ -66,6 +72,7 @@ class SyncState {
     this.sharedFounder = false,
     this.skippedFiles = 0,
     this.renumberNotes = const [],
+    this.rejectedChanges = const [],
   });
 
   SyncState copyWith({
@@ -84,6 +91,7 @@ class SyncState {
     bool? sharedFounder,
     int? skippedFiles,
     List<String>? renumberNotes,
+    List<RejectedChange>? rejectedChanges,
     bool clearError = false,
   }) {
     return SyncState(
@@ -103,6 +111,7 @@ class SyncState {
       sharedFounder: sharedFounder ?? this.sharedFounder,
       skippedFiles: skippedFiles ?? this.skippedFiles,
       renumberNotes: renumberNotes ?? this.renumberNotes,
+      rejectedChanges: rejectedChanges ?? this.rejectedChanges,
     );
   }
 
@@ -170,10 +179,62 @@ class SyncState {
     return isAuthor(author);
   }
 
+  /// Czy [editor] mógłby w aplikacji zmienić albo usunąć dokument
+  /// utworzony przez [createdBy] — ta sama zasada co [canEditDocument],
+  /// tylko dla dowolnego konta. Synchronizacja sprawdza nią, kto zmienił
+  /// plik na Dysku (fix/067).
+  bool mayEditDocument(String editor, String? createdBy) {
+    if (isAdmin(editor)) return true;
+    final author = createdBy?.trim() ?? '';
+    return author.isEmpty || _normalize(author) == _normalize(editor);
+  }
+
   /// Czy [createdBy] to zalogowane konto.
   bool isAuthor(String createdBy) {
     final me = userEmail;
     if (me == null || me.trim().isEmpty) return false;
     return _normalize(createdBy) == _normalize(me);
+  }
+}
+
+/// Zmiana na Dysku jednostki, której telefon nie przyjął (fix/067).
+///
+/// Każdy członek jednostki może na Dysku zmienić każdy plik w folderze —
+/// uprawnienia z aplikacji (autor, administrator) Dysk nie zna. Telefon
+/// sprawdza więc, kto według Google zmienił plik ostatni, i zmianę od kogoś
+/// bez uprawnień pomija. Administrator dostaje o tym wiadomość, a jego
+/// telefon przywraca poprzednią wersję ([restored]).
+class RejectedChange {
+  /// Co zmieniono, np. „Lista administratorów", „Wyjazd 0007/2026".
+  final String what;
+
+  /// Kto według Dysku.
+  final String by;
+  final DateTime at;
+
+  /// Telefon administratora przywrócił poprzednią wersję na Dysku.
+  final bool restored;
+
+  const RejectedChange({
+    required this.what,
+    required this.by,
+    required this.at,
+    this.restored = false,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'what': what,
+        'by': by,
+        'at': at.toIso8601String(),
+        if (restored) 'restored': true,
+      };
+
+  static RejectedChange? fromJson(Object? json) {
+    if (json is! Map) return null;
+    final what = json['what'], by = json['by'];
+    final at = DateTime.tryParse('${json['at']}');
+    if (what is! String || by is! String || at == null) return null;
+    return RejectedChange(
+        what: what, by: by, at: at, restored: json['restored'] == true);
   }
 }

@@ -60,7 +60,8 @@ class FakeDrive implements GoogleDriveService {
     final id = _newId('file');
     files[id] = FakeFile(id, name, folderId)
       ..content = content
-      ..modified = _tick();
+      ..modified = _tick()
+      ..modifiedBy = account;
     return id;
   }
 
@@ -177,7 +178,8 @@ class FakeDrive implements GoogleDriveService {
     final modified = _tick();
     files[id] = FakeFile(id, fileName, folderId)
       ..content = jsonEncode(data)
-      ..modified = modified;
+      ..modified = modified
+      ..modifiedBy = account;
     return (id: id, modifiedTime: modified);
   }
 
@@ -193,7 +195,8 @@ class FakeDrive implements GoogleDriveService {
     if (fileName != null) f.name = fileName;
     f
       ..content = jsonEncode(data)
-      ..modified = _tick();
+      ..modified = _tick()
+      ..modifiedBy = account;
     return (id: fileId, modifiedTime: f.modified);
   }
 
@@ -225,8 +228,54 @@ class FakeDrive implements GoogleDriveService {
             drive.File()
               ..id = f.id
               ..name = f.name
-              ..modifiedTime = f.modified,
+              ..modifiedTime = f.modified
+              ..lastModifyingUser = f.modifiedBy == null
+                  ? null
+                  : (drive.User()..emailAddress = f.modifiedBy),
       ];
+
+  @override
+  Future<({bool exists, Map<String, dynamic>? data, String? modifiedBy})>
+      readJsonFileWithAuthor(String folderId, String fileName) async {
+    final f = _children(folderId)
+        .where((f) => !f.isFolder && f.name == fileName)
+        .firstOrNull;
+    if (f == null) return (exists: false, data: null, modifiedBy: null);
+    return (
+      exists: true,
+      data: await readJsonFile(f.id),
+      modifiedBy: f.modifiedBy,
+    );
+  }
+
+  @override
+  Future<String?> folderOwner(String folderId) async => files[folderId]?.owner;
+
+  /// Zmiana pliku z pominięciem aplikacji — jak przez drive.google.com:
+  /// nowa treść, nowa chwila zmiany i [by] jako autor zmiany według Dysku.
+  void editByHand(String fileId, Map<String, dynamic> data, {required String by}) {
+    files[fileId]!
+      ..content = jsonEncode(data)
+      ..modified = _tick()
+      ..modifiedBy = by;
+  }
+
+  /// Plik o nazwie [name] w folderze o nazwie [folderName].
+  String fileIdOf(String folderName, String name) => files.values
+      .firstWhere((f) =>
+          !f.isFolder && f.name == name && files[f.parent]?.name == folderName)
+      .id;
+
+  /// Plik dokumentu o identyfikatorze [docId] (w treści pliku).
+  String fileOfDoc(String docId) => files.values
+      .firstWhere((f) =>
+          !f.isFolder &&
+          f.content != null &&
+          f.content!.contains('"id":"$docId"'))
+      .id;
+
+  Map<String, dynamic> jsonOf(String fileId) =>
+      jsonDecode(files[fileId]!.content!) as Map<String, dynamic>;
 
   @override
   void resetClient() {}
@@ -264,6 +313,10 @@ class FakeFile {
 
   /// Właściciel według Dysku — do testów obrony przed podsuniętym folderem.
   String? owner;
+
+  /// Kto zmienił plik ostatni według Dysku (`lastModifyingUser`) — konto
+  /// [FakeDrive.account] w chwili zapisu albo podane w `editByHand`.
+  String? modifiedBy;
 
   FakeFile(this.id, this.name, this.parent,
       {this.isFolder = false, this.owner});

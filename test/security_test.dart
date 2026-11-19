@@ -85,6 +85,7 @@ void main() {
 
   Future<SyncService> phone(String name) async {
     await openPhoneDb(root, name);
+    drive.account = '$name@gmail.com';
     final sync = SyncService(db, FakeAuth('$name@gmail.com'), drive);
     await sync.restoreState();
     return sync;

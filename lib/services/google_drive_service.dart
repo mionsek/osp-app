@@ -463,11 +463,49 @@ class GoogleDriveService {
   }
 
   /// List all JSON files in a folder.
+  ///
+  /// Z autorem ostatniej zmiany (`lastModifyingUser`) — ustawia go Google,
+  /// więc członek jednostki nie podszyje się pod autora wpisu (fix/067).
   Future<List<drive.File>> listJsonFiles(String folderId) => _listAll(
         "'$folderId' in parents and mimeType = 'application/json' and trashed = false",
-        fields: 'id, name, modifiedTime',
+        fields: 'id, name, modifiedTime, lastModifyingUser(emailAddress)',
         orderBy: 'modifiedTime desc',
       );
+
+  /// Plik o stałej nazwie (np. `admins.json`) razem z adresem osoby, która
+  /// zmieniła go ostatnia według Dysku — `null` w [modifiedBy], gdy Dysk
+  /// go nie podał. `null` w [data], gdy pliku nie ma ([exists]) albo jest
+  /// uszkodzony.
+  Future<({bool exists, Map<String, dynamic>? data, String? modifiedBy})>
+      readJsonFileWithAuthor(
+    String folderId,
+    String fileName,
+  ) async {
+    final escapedName = fileName.replaceAll("'", "\\'");
+    final result = await _retry(() => _api.files.list(
+          q: "'$folderId' in parents and name = '$escapedName' and trashed = false",
+          spaces: 'drive',
+          $fields: 'files(id, lastModifyingUser(emailAddress))',
+        ));
+    final file = result.files?.firstOrNull;
+    if (file?.id == null) return (exists: false, data: null, modifiedBy: null);
+    return (
+      exists: true,
+      data: await readJsonFile(file!.id!),
+      modifiedBy: file.lastModifyingUser?.emailAddress,
+    );
+  }
+
+  /// Właściciel folderu jednostki według Dysku — założyciel jednostki.
+  /// W przeciwieństwie do `createdBy` w `unit_config.json` nie da się go
+  /// zmienić zwykłym zapisem pliku.
+  Future<String?> folderOwner(String folderId) async {
+    final folder = await _retry(
+        () => _api.files.get(folderId, $fields: 'owners(emailAddress)'));
+    return folder is drive.File
+        ? folder.owners?.firstOrNull?.emailAddress
+        : null;
+  }
 
   // ── Helpers ────────────────────────────────────────────────────
 

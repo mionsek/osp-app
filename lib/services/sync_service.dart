@@ -563,6 +563,7 @@ class SyncService {
     });
     await _db.cacheAdminEmails(admins);
     await _db.cacheSharedFounder(shared);
+    await _db.setAdminsTrusted(true);
     _updateState(_state.copyWith(adminEmails: admins, sharedFounder: shared));
   }
 
@@ -596,6 +597,10 @@ class SyncService {
   /// zapis w nowej trafiałby do plików starej.
   Future<void> _resetUnitState() async {
     _remoteDocs.clear();
+    // Lista administratorów poprzedniej jednostki nie może decydować,
+    // czyje zmiany przyjmujemy w nowej (fix/067).
+    await _db.cacheAdminEmails(const []);
+    await _db.setAdminsTrusted(false);
     _remoteConfigHashes.clear();
     _remoteListIds.clear();
     _remoteUnitConfig = null;
@@ -897,28 +902,45 @@ class SyncService {
     final format = configData?['syncFormat'];
     _remoteSyncFormat = format is num ? format.toInt() : 1;
     if (_remoteSyncFormat > syncFormat) throw SyncFormatTooNewException();
-    if (configData != null) await _mergeUnitConfig(configData);
 
-    final ffData = await _driveService.readJsonFileByName(
-      dataFolderId,
-      'firefighters.json',
-    );
-    _remoteConfigHashes['firefighters.json'] =
-        await _mergeList(SyncKind.firefighter, ffData?['data']);
+    // Założyciel to właściciel folderu jednostki według Dysku — `createdBy`
+    // z pliku może zmienić każdy członek (fix/067). Bez odpowiedzi Dysku
+    // zostaje znany telefonowi, a dopiero bez niego — ten z pliku.
+    final owner = await _driveService.folderOwner(folderId);
+    final cachedFounder = _db.getConfig().ownerEmail;
+    final founder = owner ??
+        (cachedFounder.isEmpty ? null : cachedFounder) ??
+        _text(configData?['createdBy']);
+    if (configData != null) await _mergeUnitConfig(configData, founder);
+    if (founder != null) {
+      _updateState(_state.copyWith(founderEmail: founder));
+    }
 
-    final vData = await _driveService.readJsonFileByName(
-      dataFolderId,
-      'vehicles.json',
-    );
-    _remoteConfigHashes['vehicles.json'] =
-        await _mergeList(SyncKind.vehicle, vData?['data']);
+    // Najpierw administratorzy — od nich zależy, czyje zmiany list
+    // i wpisów przyjmujemy.
+    await _pullAdmins(dataFolderId);
 
-    final eData = await _driveService.readJsonFileByName(
-      dataFolderId,
-      'equipment.json',
-    );
-    _remoteConfigHashes['equipment.json'] =
-        await _mergeList(SyncKind.equipment, eData?['data']);
+    for (final (kind, fileName, what) in const [
+      (SyncKind.firefighter, 'firefighters.json', 'Lista ratowników'),
+      (SyncKind.vehicle, 'vehicles.json', 'Lista pojazdów'),
+      (SyncKind.equipment, 'equipment.json', 'Lista sprzętu'),
+    ]) {
+      final file =
+          await _driveService.readJsonFileWithAuthor(dataFolderId, fileName);
+      // Listy prowadzi administrator ([_pushConfig]) — zmiana od kogoś
+      // innego to zmiana z pominięciem aplikacji.
+      if (file.exists && !_trustedForUnit(file.modifiedBy)) {
+        _remoteListIds.remove(kind);
+        // Skrót, którego nie ma żadna lista — telefon administratora wyśle
+        // wtedy swoją i przywróci ją na Dysku.
+        _remoteConfigHashes[fileName] = 'odrzucona';
+        await _rejected(what, file.modifiedBy!,
+            restored: _state.isCurrentUserAdmin);
+        continue;
+      }
+      _remoteConfigHashes[fileName] =
+          await _mergeList(kind, file.data?['data']);
+    }
 
     // Pull threat types (new name: threat_types.json, fallback: threats.json)
     var tData = await _driveService.readJsonFileByName(
@@ -931,15 +953,35 @@ class SyncService {
     );
     _remoteConfigHashes['threat_types.json'] =
         await _mergeThreats(tData?['data']);
+  }
 
-    // Lista administratorów jednostki. Plik może zmienić każdy członek
-    // (albo ktoś przez pomyłkę na Dysku) — zły typ zatrzymywał dawniej
-    // synchronizację całej jednostki, więc bierzemy tylko poprawne adresy.
-    final adminsData = await _driveService.readJsonFileByName(
-      dataFolderId,
-      'admins.json',
-    );
-    final rawAdmins = adminsData?['admins'];
+  /// Lista administratorów jednostki z `config/admins.json`.
+  ///
+  /// Plik może zmienić każdy członek — Dysk nie zna ról z aplikacji.
+  /// Przyjmujemy więc zmianę tylko od właściciela folderu albo od kogoś,
+  /// kto już jest administratorem według listy znanej temu telefonowi
+  /// (fix/067). Inaczej członek dopisałby się sam przez drive.google.com.
+  /// Telefon świeżo w jednostce nie zna żadnej listy i bierze zastaną.
+  Future<void> _pullAdmins(String dataFolderId) async {
+    final file =
+        await _driveService.readJsonFileWithAuthor(dataFolderId, 'admins.json');
+    final known = _db.cachedAdminEmails;
+    final knownShared = _db.cachedSharedFounder;
+
+    if (!file.exists) {
+      // Pliku nie ma, póki nikt nie dostał uprawnień. Gdy zniknął, a telefon
+      // zna listę — zostaje znana (i administrator zapisze ją od nowa).
+      if (known.isNotEmpty && _state.isCurrentUserAdmin) {
+        await _writeAdmins(known, sharedFounder: knownShared);
+      } else {
+        await _db.setAdminsTrusted(true);
+      }
+      return;
+    }
+
+    // Zły typ zatrzymywał dawniej synchronizację całej jednostki, więc
+    // bierzemy tylko poprawne adresy.
+    final rawAdmins = file.data?['admins'];
     if (rawAdmins != null && rawAdmins is! List) _skippedFiles++;
     final admins = rawAdmins is List
         ? [
@@ -949,21 +991,69 @@ class SyncService {
         : const <String>[];
     // Brak pola albo cokolwiek innego niż `true` — konto założyciela
     // zostaje administratorem, jak przed wprowadzeniem wspólnego konta.
-    final sharedFounder = adminsData?['sharedFounder'] == true;
+    final sharedFounder = file.data?['sharedFounder'] == true;
+
+    final by = file.modifiedBy;
+    final unchanged = _sameEmails(admins, known) && sharedFounder == knownShared;
+    final trusted = unchanged ||
+        !_db.adminsTrusted ||
+        by == null ||
+        (_state.isFounder(by)) ||
+        known.any((e) => _normalizeEmail(e) == _normalizeEmail(by));
+    if (!trusted) {
+      // Zostaje lista znana telefonowi. Telefon administratora od razu
+      // zapisuje ją z powrotem — zmianę od niego przyjmą wszyscy.
+      final restore = _state.isCurrentUserAdmin;
+      await _rejected('Lista administratorów', by, restored: restore);
+      if (restore) await _writeAdmins(known, sharedFounder: knownShared);
+      return;
+    }
+
     await _db.cacheAdminEmails(admins);
     await _db.cacheSharedFounder(sharedFounder);
+    await _db.setAdminsTrusted(true);
     _updateState(_state.copyWith(
-      founderEmail: _text(configData?['createdBy']),
       adminEmails: admins,
       sharedFounder: sharedFounder,
     ));
+  }
+
+  static bool _sameEmails(List<String> a, List<String> b) {
+    final x = a.map(_normalizeEmail).toSet();
+    final y = b.map(_normalizeEmail).toSet();
+    return x.length == y.length && x.containsAll(y);
+  }
+
+  /// Czy zmianę list jednostki od [by] przyjmujemy: właściciel folderu,
+  /// administrator albo autor nieznany Dyskowi (nie ma czego sprawdzić).
+  bool _trustedForUnit(String? by) =>
+      by == null || _state.isFounder(by) || _state.isAdmin(by);
+
+  /// Administrator przeczytał ostrzeżenia o odrzuconych zmianach.
+  Future<void> clearRejectedChanges() async {
+    await _db.clearRejectedChanges();
+    _updateState(_state.copyWith(rejectedChanges: const []));
+  }
+
+  /// Zapamiętuje zmianę z Dysku, której telefon nie przyjął — do pokazania
+  /// administratorowi w „Członkowie jednostki".
+  Future<void> _rejected(String what, String by, {bool restored = false}) async {
+    debugPrint('Pominięta zmiana na Dysku: $what ($by)');
+    await _db.addRejectedChange(RejectedChange(
+      what: what,
+      by: by,
+      at: DateTime.now(),
+      restored: restored,
+    ));
+    _updateState(_state.copyWith(rejectedChanges: _db.rejectedChanges));
   }
 
   /// Tekst z pliku na Dysku albo `null`, gdy jest tam coś innego.
   static String? _text(Object? value) => value is String ? value : null;
 
   /// Dane jednostki z Dysku — chyba że na tym telefonie zmieniono je później.
-  Future<void> _mergeUnitConfig(Map<String, dynamic> configData) async {
+  Future<void> _mergeUnitConfig(
+      Map<String, dynamic> configData, String? founderEmail) async {
     final config = _db.getConfig();
     final editedHere = _db.unitConfigEditedAt;
     final remoteAt = SyncJson.stampOf(configData);
@@ -977,9 +1067,9 @@ class SyncService {
     // jeszcze zapisanego, a nadpisanie skasowałoby to, co ktoś wpisał lokalnie.
     final remoteLocality = (_text(configData['locality']) ?? '').trim();
     final remoteStreet = (_text(configData['unitStreet']) ?? '').trim();
-    // Bez poprawnego adresu założyciela zostaje lokalny — inaczej zepsuty
-    // plik odbierałby założycielowi stałe uprawnienia administratora.
-    final founder = _text(configData['createdBy']) ?? config.ownerEmail;
+    // Założyciel ustalony z Dysku ([_pullConfig]); bez niego zostaje lokalny —
+    // inaczej zepsuty plik odbierałby założycielowi uprawnienia.
+    final founder = founderEmail ?? config.ownerEmail;
 
     await _db.saveConfig(localIsNewer
         ? config.copyWith(ownerEmail: founder)
@@ -1307,13 +1397,15 @@ class SyncService {
           continue;
         }
         try {
-          final hash = await _applyRemoteDoc(kind, data);
+          final applied = await _applyRemoteDoc(kind, data,
+              by: file.lastModifyingUser?.emailAddress);
           entry = {
             'm': modified,
             'k': kind,
             'id': data['id'] as String,
-            'h': hash,
+            'h': applied.hash,
             'u': data['updatedAt'],
+            if (applied.keptLocal != null) 'x': applied.keptLocal,
           };
           cache[fileId] = entry;
         } catch (e) {
@@ -1330,6 +1422,7 @@ class SyncService {
         fileId: fileId,
         hash: entry['h'] as String,
         updatedAt: DateTime.tryParse(entry['u'] as String? ?? ''),
+        keptLocalHash: entry['x'] as String?,
       );
       // Ten sam rekord w kilku plikach (duplikaty po zmianach nazw) —
       // pracujemy na najnowszym.
@@ -1339,31 +1432,47 @@ class SyncService {
   }
 
   /// Nakłada dokument z Dysku na bazę, jeśli jest nowszy. Zwraca skrót
-  /// treści pliku (po sprowadzeniu do postaci, jaką zapisałby ten telefon).
-  Future<String> _applyRemoteDoc(String kind, Map<String, dynamic> data) async {
+  /// treści pliku (po sprowadzeniu do postaci, jaką zapisałby ten telefon)
+  /// i — gdy zmianę odrzucono ([_mayChange]) — skrót wersji z telefonu,
+  /// której telefon nie wysyła z powrotem ([_RemoteDoc.keptLocalHash]).
+  ///
+  /// [by] — kto według Dysku zmienił plik ostatni.
+  Future<({String hash, String? keptLocal})> _applyRemoteDoc(
+    String kind,
+    Map<String, dynamic> data, {
+    String? by,
+  }) async {
     final id = data['id'] as String;
     final remoteAt = SyncJson.stampOf(data) ?? DateTime(2000);
 
     if (SyncJson.isTombstone(data)) {
+      final hash = SyncJson.contentHash(data);
       final localAt = _localStamp(kind, id);
       final tombAt = _tombstoneStamp(kind, id);
       final newerHere = localAt != null && localAt.isAfter(remoteAt);
       if (!newerHere &&
           (localAt != null || tombAt == null || tombAt.isBefore(remoteAt))) {
+        if (localAt != null && !_mayChange(kind, id, by, null)) {
+          return (hash: hash, keptLocal: await _keepLocal(kind, id, by!));
+        }
         await _db.applyRemoteDeletion(kind, id, data);
         if (localAt != null) _receivedChanges++;
       }
-      return SyncJson.contentHash(data);
+      return (hash: hash, keptLocal: null);
     }
 
     final canonical = _canonical(kind, data);
+    final hash = SyncJson.contentHash(canonical);
     final tombAt = _tombstoneStamp(kind, id);
     if (tombAt != null && !remoteAt.isAfter(tombAt)) {
-      return SyncJson.contentHash(canonical); // usunięcie tutaj jest nowsze
+      return (hash: hash, keptLocal: null); // usunięcie tutaj jest nowsze
     }
 
     final localAt = _localStamp(kind, id);
     if (localAt == null || remoteAt.isAfter(localAt)) {
+      if (localAt != null && !_mayChange(kind, id, by, canonical)) {
+        return (hash: hash, keptLocal: await _keepLocal(kind, id, by!));
+      }
       _receivedChanges++;
       switch (kind) {
         case SyncKind.report:
@@ -1382,7 +1491,127 @@ class SyncService {
       }
       if (tombAt != null) await _db.removeTombstone(kind, id);
     }
-    return SyncJson.contentHash(canonical);
+    return (hash: hash, keptLocal: null);
+  }
+
+  // ── Kto zmienił plik na Dysku (fix/067) ────────────────────────────
+  //
+  // Każdy członek jednostki może na Dysku zmienić każdy plik w folderze.
+  // Uprawnień z aplikacji (autor, administrator) Dysk nie zna, ale podaje,
+  // kto zmienił plik ostatni — tego nie da się podrobić zapisem pliku.
+
+  /// Czy zmianę wpisu [id], który jest na tym telefonie, przyjmujemy od [by]:
+  /// gdy aplikacja pozwoliłaby mu ją zrobić. [remote] — nowa treść (`null`
+  /// przy usunięciu).
+  ///
+  /// Wyjątek: przejazd z raportu. Uzgadnianie z raportem biegnie na każdym
+  /// telefonie i wysyła godziny, cel, kierowcę — więc te pola może zmienić
+  /// każdy, a reszta przejazdu tylko autor i administrator.
+  bool _mayChange(
+      String kind, String id, String? by, Map<String, dynamic>? remote) {
+    if (by == null) return true; // Dysk nie podał autora — nie ma czego sprawdzić
+    final local = _localJson(kind, id);
+    if (local == null) return true;
+    if (_state.mayEditDocument(by, local['createdBy'] as String?)) return true;
+    return kind == SyncKind.trip &&
+        remote != null &&
+        local['reportId'] != null &&
+        _onlyReportFieldsDiffer(local, remote);
+  }
+
+  /// Pola przejazdu, które uzgadnianie z raportem zmienia na każdym telefonie
+  /// ([TripFromReport.applyReportFields]).
+  static const _reportLinkedTripFields = {
+    'date',
+    'departureTime',
+    'returnTime',
+    'routeTo',
+    'driverName',
+    'driverId',
+    'overriddenFields',
+    'updatedAt',
+  };
+
+  static bool _onlyReportFieldsDiffer(
+      Map<String, dynamic> a, Map<String, dynamic> b) {
+    final keys = {...a.keys, ...b.keys}.difference(_reportLinkedTripFields);
+    return keys.every((k) => jsonEncode(a[k]) == jsonEncode(b[k]));
+  }
+
+  Map<String, dynamic>? _localJson(String kind, String id) {
+    switch (kind) {
+      case SyncKind.report:
+        final r = _db.getReport(id);
+        return r == null ? null : SyncJson.reportToJson(r);
+      case SyncKind.handover:
+        final h = _db.getHandover(id);
+        return h == null ? null : SyncJson.handoverToJson(h);
+      case SyncKind.trip:
+        final t = _db.getTrip(id);
+        return t == null ? null : SyncJson.tripToJson(t);
+      case SyncKind.equipmentWork:
+        final w = _db.getEquipmentWork(id);
+        return w == null ? null : SyncJson.equipmentWorkToJson(w);
+    }
+    return null;
+  }
+
+  /// Odrzucona zmiana wpisu: telefon zostaje przy swojej wersji.
+  ///
+  /// Telefon administratora daje jej nowy stempel, więc wraca na Dysk i na
+  /// wszystkie telefony — zmianę od administratora przyjmuje każdy. Inny
+  /// telefon swojej wersji nie wysyła: telefon, który przyjął zmianę (np.
+  /// świeżo w jednostce), odsyłałby swoją i oba nadpisywałyby się w kółko.
+  /// Zwraca skrót wersji, której telefon ma nie wysyłać.
+  Future<String?> _keepLocal(String kind, String id, String by) async {
+    final what = _describe(kind, id);
+    if (_state.isCurrentUserAdmin) {
+      await _touchLocal(kind, id);
+      await _rejected(what, by, restored: true);
+      return null;
+    }
+    await _rejected(what, by);
+    final local = _localJson(kind, id);
+    return local == null ? null : SyncJson.contentHash(local);
+  }
+
+  Future<void> _touchLocal(String kind, String id) async {
+    final now = DateTime.now();
+    switch (kind) {
+      case SyncKind.report:
+        final r = _db.getReport(id);
+        if (r != null) await _db.updateReport(r..updatedAt = now);
+      case SyncKind.handover:
+        final h = _db.getHandover(id);
+        if (h != null) await _db.addHandover(h..updatedAt = now);
+      case SyncKind.trip:
+        final t = _db.getTrip(id);
+        if (t != null) await _db.addTrip(t..updatedAt = now);
+      case SyncKind.equipmentWork:
+        final w = _db.getEquipmentWork(id);
+        if (w != null) await _db.addEquipmentWork(w..updatedAt = now);
+    }
+  }
+
+  String _describe(String kind, String id) {
+    switch (kind) {
+      case SyncKind.report:
+        return 'Wyjazd ${_db.getReport(id)?.reportNumber ?? ''}'.trim();
+      case SyncKind.handover:
+        final h = _db.getHandover(id);
+        return h == null
+            ? 'Przekazanie mienia'
+            : 'Przekazanie mienia z ${TimeFormat.date(h.signDate)}';
+      case SyncKind.trip:
+        final t = _db.getTrip(id);
+        return t == null ? 'Przejazd' : 'Przejazd z ${TimeFormat.date(t.date)}';
+      case SyncKind.equipmentWork:
+        final w = _db.getEquipmentWork(id);
+        return w == null
+            ? 'Praca sprzętu'
+            : '${w.equipmentName}: praca z ${TimeFormat.date(w.date)}';
+    }
+    return kind;
   }
 
   // ── Dokumenty: wysyłka ─────────────────────────────────────────────
@@ -1466,6 +1695,9 @@ class SyncService {
     final hash = SyncJson.contentHash(json);
     final remote = _remoteDocs[key];
     if (remote != null && remote.hash == hash) return;
+    // Odrzucona zmiana na Dysku (fix/067): wersji z telefonu nie odsyłamy,
+    // dopóki ktoś jej tu nie zmieni — przywraca administrator.
+    if (remote != null && remote.keptLocalHash == hash) return;
 
     final ({String id, DateTime? modifiedTime}) written;
     if (remote != null) {
@@ -1632,6 +1864,7 @@ class SyncService {
             : _db.getConfig().ownerEmail,
         adminEmails: _db.cachedAdminEmails,
         sharedFounder: _db.cachedSharedFounder,
+        rejectedChanges: _db.rejectedChanges,
       ),
     );
   }
@@ -1787,10 +2020,15 @@ class _RemoteDoc {
   final String hash;
   final DateTime? updatedAt;
 
+  /// Skrót treści z telefonu, przy której odrzucono ten plik (fix/067) —
+  /// dopóki się nie zmieni, telefon nie nadpisuje pliku swoją wersją.
+  final String? keptLocalHash;
+
   const _RemoteDoc({
     required this.fileId,
     required this.hash,
     required this.updatedAt,
+    this.keptLocalHash,
   });
 
   bool isNewerThan(_RemoteDoc other) {

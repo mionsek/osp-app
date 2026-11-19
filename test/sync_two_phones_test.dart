@@ -42,6 +42,9 @@ void main() {
   /// Przełącza „telefon" i zwraca jego usługę synchronizacji.
   Future<SyncService> phone(String name) async {
     await openPhoneDb(root, name);
+    // Zapisy na Dysku od konta tego telefonu — sprawdzanie autora zmian
+    // (fix/067) nie może odrzucać zwykłej pracy kilku telefonów.
+    drive.account = '$name@osp.pl';
     final sync = SyncService(db, FakeAuth('$name@osp.pl'), drive);
     await sync.restoreState();
     return sync;

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../providers/providers.dart';
+import '../../models/sync_state.dart' show RejectedChange;
+import '../../core/utils/time_format.dart';
 import '../../services/google_drive_service.dart';
 import '../../services/sync_service.dart' show LastPersonalAdminException;
 import '../../core/theme/osp_theme.dart';
@@ -229,6 +231,14 @@ class _UnitMembersSectionState extends ConsumerState<UnitMembersSection> {
           style: TextStyle(fontSize: 12, color: Colors.grey[600]),
         ),
         const SizedBox(height: 12),
+        if (syncState.rejectedChanges.isNotEmpty) ...[
+          RejectedChangesCard(
+            changes: syncState.rejectedChanges,
+            onClear: () =>
+                ref.read(syncServiceProvider).clearRejectedChanges(),
+          ),
+          const SizedBox(height: 12),
+        ],
         if (_error != null) ...[
           Text(_error!,
               style: const TextStyle(color: Colors.red, fontSize: 12)),
@@ -368,6 +378,77 @@ class _MemberTile extends StatelessWidget {
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Zmiany na Dysku, których telefon nie przyjął (fix/067): ktoś zmienił
+/// pliki jednostki na drive.google.com, choć w aplikacji nie mógłby.
+class RejectedChangesCard extends StatelessWidget {
+  final List<RejectedChange> changes;
+  final VoidCallback onClear;
+
+  const RejectedChangesCard({
+    super.key,
+    required this.changes,
+    required this.onClear,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: OspTheme.attention.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: OspTheme.attention.withValues(alpha: 0.5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.gpp_maybe, color: OspTheme.attention, size: 20),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text('Zmiany z pominięciem aplikacji',
+                    style: TextStyle(fontWeight: FontWeight.w600)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Ktoś zmienił pliki jednostki bezpośrednio na Dysku Google, '
+            'choć w aplikacji nie ma do tego uprawnień. Telefony tych zmian '
+            'nie przyjęły.',
+            style: TextStyle(fontSize: 13),
+          ),
+          const SizedBox(height: 8),
+          for (final c in changes)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                '• ${c.what} — ${c.by}, ${TimeFormat.date(c.at)} '
+                '${TimeFormat.hhmm(c.at)}'
+                '${c.restored ? ' · przywrócone' : ''}',
+                style: const TextStyle(fontSize: 13),
+              ),
+            ),
+          const SizedBox(height: 4),
+          Text(
+            'Jeśli to nie pomyłka, odbierz tej osobie dostęp na liście '
+            'poniżej.',
+            style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+          ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: onClear,
+              child: const Text('Rozumiem, wyczyść'),
+            ),
+          ),
+        ],
       ),
     );
   }

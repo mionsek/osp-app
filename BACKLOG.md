@@ -1068,6 +1068,36 @@ zmian).
 - [x] Testy: dwie linie na karcie (także cel wybrany bez raportu), w Excelu zawijanie bez zmniejszania, reszta wiersza zmniejsza się jak dotąd. Łącznie **537**
 - [x] Wersja **1.9.16+39** — UAT Dawida 19.11.2026: wszystko w porządku, scalone
 
+## Zrobione (fix/067-weryfikacja-zmian) — czeka na UAT
+Pytanie Dawida z 19.11.2026: czy ktoś może się włamać — wykraść albo
+podmienić dane, przejąć konto jednostki. Ocena: z zewnątrz aplikacja jest
+zamknięta (bez serwera, folder udostępniany tylko konkretnym adresom, sam kod
+zaproszenia nic nie daje). Słaby punkt był w środku: każdy członek ma na Dysku
+prawo edycji całego folderu, a role z aplikacji (autor, administrator)
+sprawdzał tylko telefon. Członek mógł przez drive.google.com zmienić cudzy
+wpis, oznaczyć go jako usunięty albo dopisać się do administratorów.
+
+Teraz telefon sprawdza, kto według Google zmienił plik ostatni
+(`lastModifyingUser` — ustawia go Dysk, nie da się go podrobić zapisem pliku):
+- [x] **Założyciel = właściciel folderu jednostki** według Dysku, a nie `createdBy` z `unit_config.json`. Zmieniony ręcznie plik każdy telefon zapisuje z powrotem
+- [x] **`admins.json`**: zmianę przyjmuje się tylko od właściciela folderu albo od administratora z listy znanej telefonowi. Telefon świeżo w jednostce bierze zastaną listę (nie ma z czym porównać). Telefon administratora od razu zapisuje znaną listę z powrotem. Gdy plik zniknie, zostaje znana lista
+- [x] **Listy ratowników, pojazdów i sprzętu** — tylko od administratora (tylko on je wysyła); zmiana od innych nie trafia na telefony, administrator wysyła swoją
+- [x] **Wpisy** (wyjazdy, przekazania, przejazdy, praca sprzętu, także znaczniki usunięcia): zmianę wpisu, który telefon już ma, przyjmuje się tylko wtedy, gdy aplikacja pozwoliłaby na nią temu kontu — autor, administrator, a wpis bez autora każdy (`SyncState.mayEditDocument`). Wyjątek: przejazd z raportu — godziny, trasę, kierowcę i datę uzgadnia każdy telefon. Nowe wpisy przyjmowane od każdego (dodawać może każdy członek)
+- [x] Odrzucona zmiana: telefon zostaje przy swojej wersji. **Telefon administratora** daje jej nowy stempel, więc wraca na Dysk i na wszystkie telefony. **Zwykły telefon swojej nie odsyła** — telefon, który zmianę przyjął (np. świeżo w jednostce), odsyłałby swoją i oba nadpisywałyby się w kółko
+- [x] **Ostrzeżenie dla administratora** w Ustawieniach → „Członkowie jednostki": co, kto, kiedy i czy przywrócone; „Rozumiem, wyczyść". Ostatnie 20, zostają po ponownym uruchomieniu
+- [x] Gdy Dysk nie poda autora zmiany — zmiana przyjęta jak dawniej (nie ma czego sprawdzić)
+- [x] Testy (`test/drive_tamper_test.dart`, 11): założyciel z właściciela folderu; dopisanie się do administratorów odrzucone, przywrócone przez założyciela; zmiana listy przez administratora przyjęta; lista ratowników z Dysku odrzucona i przywrócona; cudzy wyjazd zmieniony i „usunięty" przez Dysk odrzucony, zwykły członek nie odsyła swojej wersji (zero zapisów przy kolejnej synchronizacji), administrator przywraca; autor i wpis bez autora przyjmowani; przejazd z raportu — godziny przyjęte, licznik odrzucony; nowy wpis od członka przyjęty; Dysk bez autora. Ostrzeżenie na ekranie. Testy kilku telefonów zapisują teraz na Dysk od konta danego telefonu. Próba: każde odrzucenie wywracało test — odrzucenia wystąpiły **tylko** w testach ataków, w pozostałych 543 żadne. Łącznie **550**
+- [x] Emulator: ostrzeżenie w Ustawieniach (stan podstawiony w teście integracyjnym)
+- [ ] **UAT na prawdziwym Dysku** — dwa konta w jednej jednostce: czy Google podaje adres autora zmiany (jeśli nie, zmiany są przyjmowane jak dawniej i ochrona nie działa); zmiana pliku wyjazdu przez drive.google.com z konta zwykłego członka → po synchronizacji wpis bez zmian, ostrzeżenie u administratora, plik przywrócony
+- [x] Wersja **1.9.17+40**
+
+Do zrobienia po stronie jednostki (bez programowania): weryfikacja dwuetapowa
+na kontach administratorów i wspólnym koncie jednostki (aplikacja lub klucz,
+nie SMS), blokada ekranu na tablecie i bez prywatnych kont na nim, „Odbierz
+dostęp" od razu po odejściu z jednostki, co jakiś czas kopia folderu jednostki
+z Dysku. Odebranie dostępu nie kasuje kopii na telefonie tej osoby ani plików,
+które sama utworzyła (na Dysku Google to ona jest ich właścicielem).
+
 ## W toku (chore/064-paczka-play)
 18.11.2026 konto osobiste w Play Console założone i zweryfikowane
 (osoba niebędąca przedsiębiorcą — Dawid nie prowadzi działalności; publiczny

@@ -4,6 +4,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import '../core/constants/threat_types.dart';
 import '../core/utils/time_format.dart';
 import '../models/models.dart';
+import '../models/sync_state.dart' show RejectedChange;
 import 'sync_json.dart';
 import 'trip_from_report.dart';
 import 'trip_odometer.dart';
@@ -119,6 +120,50 @@ class DatabaseService {
 
   Future<void> cacheSharedFounder(bool shared) =>
       settingsBox.put(_sharedFounderKey, shared);
+
+  // --- Lista administratorów sprawdzona na tym telefonie (fix/067) ---
+  //
+  // Zmianę `admins.json` telefon przyjmuje tylko od właściciela folderu albo
+  // od administratora z listy, którą już zna. Telefon świeżo w jednostce nie
+  // zna żadnej — bierze pierwszą, jaką zastanie. Telefon po aktualizacji
+  // ma już listę z poprzednich synchronizacji, więc ją uznaje.
+  static const String _adminsTrustedKey = 'adminsTrusted';
+
+  bool get adminsTrusted =>
+      settingsBox.get(_adminsTrustedKey) == true ||
+      cachedAdminEmails.isNotEmpty;
+
+  Future<void> setAdminsTrusted(bool trusted) =>
+      settingsBox.put(_adminsTrustedKey, trusted);
+
+  // --- Zmiany z Dysku pominięte przez ten telefon (fix/067) ---
+  static const String _rejectedChangesKey = 'rejectedChanges';
+  static const int _rejectedChangesKept = 20;
+
+  /// Najnowsze pierwsze.
+  List<RejectedChange> get rejectedChanges {
+    final raw = settingsBox.get(_rejectedChangesKey);
+    if (raw is! String) return const [];
+    try {
+      return (jsonDecode(raw) as List)
+          .map(RejectedChange.fromJson)
+          .whereType<RejectedChange>()
+          .toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  Future<void> addRejectedChange(RejectedChange change) => settingsBox.put(
+        _rejectedChangesKey,
+        jsonEncode([
+          change.toJson(),
+          ...rejectedChanges.take(_rejectedChangesKept - 1).map((c) => c.toJson()),
+        ]),
+      );
+
+  Future<void> clearRejectedChanges() =>
+      settingsBox.delete(_rejectedChangesKey);
 
   // --- Dane jednostki: kiedy ostatnio zmienione na tym telefonie ---
   //
