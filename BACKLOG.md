@@ -1123,6 +1123,14 @@ Gałąź wychodzi z fix/067 (ta sama sekcja „Członkowie jednostki").
 e-mail `raporty.osp@gmail.com`). Paczka do sklepu: AAB, wpis, grafiki
 i odpowiedzi do formularzy. Kod aplikacji bez zmian — wersja zostaje **1.9.13+36**.
 
+**Stan 20.11.2026:** aplikacja `pl.osp.osp_app` utworzona w Play Console;
+wszystkie deklaracje (11/11), wpis w sklepie, ustawienia sklepu, zrzuty
+telefonu i tabletów wgrane; klucz podpisywania zamieniony na nasz (PEPK);
+**test wewnętrzny 1.9.19 (42) opublikowany i sprawdzony przez Dawida** —
+instalacja ze Sklepu, logowanie Google i synchronizacja działają. Dalej:
+test zamknięty (Polska, 12+ testerów, ta sama wersja z biblioteki, recenzja
+Google), potem 14 dni i wniosek o produkcję.
+
 - [x] **AAB 1.9.13+36** podpisany kluczem wydań (SHA-1 `AC:02:…:BB`, ten sam co w kliencie OAuth), kopia w `Pobrane\Raporty-OSP-1.9.13-36.aab` — **zastąpiony przez 1.9.14+37** (fix/065), potem **1.9.16+39** (fix/066), a ostatecznie **1.9.19+42** (fix/067 i feature/068, `Pobrane\Raporty-OSP-1.9.19-42.aab`, 62,7 MB — tę wgrać do testu zamkniętego; uprawnienia bez zmian). Uprawnienia w paczce sprawdzone: bez `AD_ID`, zdjęć i filmów, usług na pierwszym planie — te deklaracje nie dotyczą
 - [x] **`store/sklep-play.md`** — nazwa, krótki opis (77/80 znaków), pełny opis (z zastrzeżeniem, że to nie aplikacja PSP ani ZOSP RP), kategoria, dostęp dla recenzenta (po angielsku — tryb offline bez logowania), ankieta IARC, grupa docelowa 18+, pozostałe deklaracje, test zamknięty, informacje o wersji
 - [x] **„Bezpieczeństwo danych"**: według pomocy Google wysłanie z telefonu to „zbieranie", a wyjątek dla Dysku obejmuje tylko kopię zapasową, której aplikacja nie czyta — my czytamy (synchronizacja), więc deklarujemy dane jako zbierane (imię i nazwisko, e-mail, adres, telefon, dokładna lokalizacja z „Wstaw adres z GPS", termin badań jako informacja o zdrowiu, treści użytkownika), opcjonalne, nieudostępniane, szyfrowane w przesyle. Na stronie „bez zbierania danych" → „autor nie zbiera danych", żeby nie przeczyć etykiecie w sklepie
