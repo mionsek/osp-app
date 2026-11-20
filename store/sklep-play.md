@@ -62,10 +62,19 @@ Pytania, błędy i pomysły: raporty.osp@gmail.com
 |---|---|
 | Ikona aplikacji (512 × 512) | `store/grafiki/ikona-512.png` |
 | Grafika (1024 × 500) | `store/grafiki/grafika-1024x500.png` (źródło: `store/grafika-1024x500.html`) |
-| Zrzuty ekranu telefonu (2–8) | `store/zrzuty/*.png`, 1080 × 1920, w kolejności nazw |
+| Zrzuty ekranu telefonu (2–8) | `store/zrzuty/*.png`, 1044 × 1856 (9:16), w kolejności nazw |
+| Zrzuty z 7-calowego tabletu | `store/zrzuty-tablet-7/*.png`, 1044 × 1856 (9:16) |
+| Zrzuty z 10-calowego tabletu | `store/zrzuty-tablet-10/*.png`, 1413 × 2512 (9:16) |
 
 Zrzuty robi `integration_test/store_screenshots_test.dart` na zmyślonych
-danych (instrukcja w pliku). Zrzutów tabletu Play nie wymaga.
+danych (instrukcja w pliku). Play wymaga proporcji dokładnie 16:9 albo 9:16
+(20.11.2026: pola tabletów z gwiazdką), więc zrzuty są przycięte do 9:16
+(po kilkanaście pikseli z boków). Ekrany: telefon `wm size 1080x1920`,
+tablet 7" `1080x1920` przy `wm density 270` (ok. 640 dp szerokości),
+tablet 10" `1440x2560` przy `wm density 240` (ok. 960 dp).
+
+Deklaracja zasobów z AI: „Nie oznaczaj zasobów etykietami” — zrzuty to zwykłe
+zrzuty aplikacji, ikona i grafika są wektorowe/HTML, nie z generatora obrazów.
 
 **Kategoria i kontakt** (Rozwój → Ustawienia sklepu):
 

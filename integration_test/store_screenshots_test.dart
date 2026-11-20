@@ -14,8 +14,8 @@ import 'package:osp_app/services/database_service.dart';
 /// robi sterownik `test_driver/store_screenshots.dart` i zapisuje je
 /// w `build/store_screenshots/`.
 ///
-/// Uruchamianie (emulator, czyste dane, ekran 9:16 — Play przyjmuje
-/// proporcje najwyżej 2:1, a emulator ma 20:9):
+/// Uruchamianie (emulator, czyste dane, ekran 9:16 — Play wymaga proporcji
+/// 16:9 albo 9:16, a emulator ma 20:9):
 ///
 /// ```
 /// adb shell pm clear pl.osp.osp_app
@@ -24,6 +24,12 @@ import 'package:osp_app/services/database_service.dart';
 ///   --target=integration_test/store_screenshots_test.dart -d emulator-5554
 /// adb shell wm size reset
 /// ```
+///
+/// Tablety (chore/071): to samo przy `wm size 1080x1920` + `wm density 270`
+/// (7") i `wm size 1440x2560` + `wm density 240` (10"); potem
+/// `adb shell wm density reset`. Zrzut nie obejmuje paska gestów, więc
+/// wychodzi trochę niższy niż ekran — przycięty do dokładnie 9:16 (po
+/// kilkanaście pikseli z boków) leży w `store/zrzuty*`.
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
