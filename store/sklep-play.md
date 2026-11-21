@@ -191,6 +191,15 @@ zarzut ukrycia, bo skutkiem jest tylko dodatkowa pozycja w etykiecie.
   Adres opinii: raporty.osp@gmail.com.
 - Warunek produkcji: 12 osób przez **14 dni z rzędu** po przyjęciu zaproszenia.
 
+**Linki** (21.11.2026 — 15 testerów na liście, 14 zmian wysłanych do recenzji):
+- zaproszenie do testu zamkniętego (wysłać testerom po zatwierdzeniu):
+  `https://play.google.com/apps/testing/pl.osp.osp_app`
+- strona aplikacji w Sklepie (dziś tylko dla testerów, po publikacji — dla
+  wszystkich; wtedy podmienić „Jak zdobyć aplikację” na stronie):
+  `https://play.google.com/store/apps/details?id=pl.osp.osp_app`
+- test wewnętrzny (tylko konta z listy testu wewnętrznego):
+  `https://play.google.com/apps/internaltest/4701360502948472937`
+
 **Pierwsza wersja — podpisywanie (decyzja nieodwracalna):**
 „Wybierz klucz podpisywania” → **„Użyj innego klucza” → „Eksportuj i prześlij
 klucz z magazynu kluczy Java”**, a nie klucz wygenerowany przez Google
