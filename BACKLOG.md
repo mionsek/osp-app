@@ -1131,6 +1131,19 @@ instalacja ze Sklepu, logowanie Google i synchronizacja działają. Dalej:
 test zamknięty (Polska, 12+ testerów, ta sama wersja z biblioteki, recenzja
 Google), potem 14 dni i wniosek o produkcję.
 
+**Stan 25.11.2026:** 21.11 wysłane 14 zmian do recenzji (test zamknięty
+Alpha z 1.9.19 (42), Polska, lista 15 testerów, wpis, deklaracje). **Google
+zatwierdził — test zamknięty działa, testerzy instalują** (Dawid, 25.11).
+14 dni liczy się od dnia, w którym co najmniej 12 testerów ma przyjęte
+zaproszenie — najwcześniej ok. **9.12.2026** wniosek o produkcję. Testerów
+można dopisywać na bieżąco (lista e-mailowa ścieżki); kto przyjmie
+zaproszenie, zostaje testerem do końca testu.
+- [ ] Wniosek o produkcję po 14 dniach (Panel → Produkcyjna → „Poproś
+  o opublikowanie wersji produkcyjnej”; pytania o przebieg testu)
+- [ ] Po publikacji: na stronie `docs/index.html` „Jak zdobyć aplikację” →
+  link do Sklepu Play; wybór krajów produkcji (komunikat o blokowaniu
+  geograficznym w UE)
+
 - [x] **AAB 1.9.13+36** podpisany kluczem wydań (SHA-1 `AC:02:…:BB`, ten sam co w kliencie OAuth), kopia w `Pobrane\Raporty-OSP-1.9.13-36.aab` — **zastąpiony przez 1.9.14+37** (fix/065), potem **1.9.16+39** (fix/066), a ostatecznie **1.9.19+42** (fix/067 i feature/068, `Pobrane\Raporty-OSP-1.9.19-42.aab`, 62,7 MB — tę wgrać do testu zamkniętego; uprawnienia bez zmian). Uprawnienia w paczce sprawdzone: bez `AD_ID`, zdjęć i filmów, usług na pierwszym planie — te deklaracje nie dotyczą
 - [x] **`store/sklep-play.md`** — nazwa, krótki opis (77/80 znaków), pełny opis (z zastrzeżeniem, że to nie aplikacja PSP ani ZOSP RP), kategoria, dostęp dla recenzenta (po angielsku — tryb offline bez logowania), ankieta IARC, grupa docelowa 18+, pozostałe deklaracje, test zamknięty, informacje o wersji
 - [x] **„Bezpieczeństwo danych"**: według pomocy Google wysłanie z telefonu to „zbieranie", a wyjątek dla Dysku obejmuje tylko kopię zapasową, której aplikacja nie czyta — my czytamy (synchronizacja), więc deklarujemy dane jako zbierane (imię i nazwisko, e-mail, adres, telefon, dokładna lokalizacja z „Wstaw adres z GPS", termin badań jako informacja o zdrowiu, treści użytkownika), opcjonalne, nieudostępniane, szyfrowane w przesyle. Na stronie „bez zbierania danych" → „autor nie zbiera danych", żeby nie przeczyć etykiecie w sklepie
