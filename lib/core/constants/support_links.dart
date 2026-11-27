@@ -9,6 +9,11 @@
 /// dla której uniknięcia zrezygnowaliśmy z reklam.
 const String kCoffeeUrl = 'https://buycoffee.to/mionsek';
 
+/// Podpis autora — ekran główny, „O aplikacji", strona i polityka prywatności.
+/// Wszędzie to samo (Dawid, 27.11.2026: imię i nazwisko zamiast „mionsek";
+/// „mionsek" zostaje tylko w adresach GitHub i zbiórki, bo to nazwy kont).
+const String kAuthorName = 'Dawid Mionskowski';
+
 /// Publiczny adres kontaktowy aplikacji — „Zgłoś problem", „Zaproponuj
 /// usprawnienie", strona i polityka prywatności, a także e-mail dewelopera
 /// w sklepie Play. Osobne konto, żeby nie pokazywać prywatnego adresu

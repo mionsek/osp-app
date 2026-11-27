@@ -12,6 +12,7 @@ import 'google_auth_service.dart';
 import 'google_drive_service.dart';
 import 'report_numbers.dart';
 import 'sync_json.dart';
+import '../core/constants/support_links.dart';
 import '../core/utils/file_names.dart';
 import '../core/utils/time_format.dart';
 
@@ -387,7 +388,7 @@ class SyncService {
   }
 
   /// Strona aplikacji — skąd ją pobrać; po publikacji prowadzi do Sklepu Play.
-  static const String appPage = 'https://mionsek.github.io/osp-app/';
+  static const String appPage = kWebsiteUrl;
 
   /// Treść zaproszenia — Google dokleja ją do powiadomienia o udostępnieniu
   /// folderu jednostki, a zapraszający może ją wysłać także sam.

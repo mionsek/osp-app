@@ -239,7 +239,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               // Podpis autora zostaje ostatni — najdrobniejszy element strony,
               // pod wszystkim innym.
               Text(
-                'Aplikację stworzył Dawid Mionskowski',
+                'Aplikację stworzył $kAuthorName',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 12, color: Colors.grey[600]),
               ),

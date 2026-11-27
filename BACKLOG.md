@@ -1123,6 +1123,20 @@ Gałąź wychodzi z fix/067 (ta sama sekcja „Członkowie jednostki").
 - [x] Wersja **1.9.19+42** — scalone razem z fix/067 na prośbę Dawida
 - [ ] **Niestabilne testy przy pełnym przebiegu** (19.11.2026, raz na kilka przebiegów, za każdym razem inny): `entered_by_test` — zapis wyjazdu z kreatora kończy się po zamknięciu bazy w teście („Box not found … after the test had completed"), wcześniej też `equipment_card_screens_test` (rozruch całego sprzętu). Osobno przechodzą. Do poprawy: czekać w teście na koniec zapisu (`runAsync`)
 
+## Zrobione (fix/079-podpis-autora) — czeka na UAT
+Prośba Dawida z 27.11.2026: „czasem jest dawid.mionskowski, a czasem
+raporty.osp@gmail.com — ujednolicić". W kodzie i na stronie adres kontaktowy
+był już wszędzie `raporty.osp@gmail.com`; niespójny był **podpis autora**
+(ekran główny „Dawid Mionskowski", „O aplikacji", strona i polityka „mionsek").
+
+- [x] Podpis wszędzie **„Dawid Mionskowski"** (decyzja Dawida): stała `kAuthorName`, ekran główny, „O aplikacji", stopki strony, polityka PL i EN, strona usuwania danych. „mionsek" zostaje tylko w adresach kont (GitHub, buycoffee.to)
+- [x] Adres strony w treści zaproszenia ze wspólnej stałej `kWebsiteUrl` (był wpisany drugi raz w `SyncService`)
+- [x] Test: na stronie i w kodzie żadnego adresu e-mail z nazwiskiem; podpis na wszystkich stronach i w obu ekranach z jednej stałej; „O aplikacji" pokazuje nazwisko
+- [ ] **Do sprawdzenia przez Dawida poza kodem** (tam prywatny adres mógł się pojawić):
+  - Google Cloud → Google Auth Platform → **Elementy marki → „Adres e-mail pomocy dla użytkowników"** — widać go na ekranie logowania Google; ma być `raporty.osp@gmail.com` (wymaga dodania tego konta jako Właściciela w IAM i wybrania go po zalogowaniu na nie)
+  - Play Console → **Ustawienia sklepu → Dane kontaktowe** (`raporty.osp@gmail.com`) i **Strona dewelopera / dane konta dewelopera** (nazwa publiczna, e-mail kontaktowy)
+  - **Mail z zaproszeniem z Dysku** przychodzi z konta osoby zapraszającej (np. prywatnego konta administratora) — to szablon Google, kod tego nie zmieni; zniknie po przejściu na bazę (PLAN_BAZA_DANYCH.md)
+
 ## W toku (chore/064-paczka-play)
 18.11.2026 konto osobiste w Play Console założone i zweryfikowane
 (osoba niebędąca przedsiębiorcą — Dawid nie prowadzi działalności; publiczny

@@ -431,7 +431,7 @@ class InfoScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     const Text(
-                      'mionsek',
+                      kAuthorName,
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 16,

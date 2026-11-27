@@ -66,12 +66,43 @@ void main() {
 
   test('kontakt: adres aplikacji, nie prywatny adres autora (chore/063)', () {
     expect(kContactEmail, 'raporty.osp@gmail.com');
+    // Prywatny adres to e-mail z nazwiskiem — samo imię i nazwisko w podpisie
+    // jest w porządku (fix/079).
+    final privateEmail =
+        RegExp(r'[\w.]*mionskowski[\w.]*@', caseSensitive: false);
     for (final MapEntry(:key, :value) in pages.entries) {
       expect(value, contains('mailto:$kContactEmail'), reason: key);
-      expect(value, isNot(contains('mionskowski')), reason: key);
+      expect(privateEmail.hasMatch(value), isFalse, reason: key);
     }
-    expect(read('lib/screens/info/info_screen.dart'),
-        isNot(contains('mionskowski')));
+    final lib = Directory('lib')
+        .listSync(recursive: true)
+        .whereType<File>()
+        .where((f) => f.path.endsWith('.dart'))
+        .map((f) => f.readAsStringSync());
+    expect(lib.where(privateEmail.hasMatch), isEmpty);
+  });
+
+  test('podpis autora wszędzie ten sam — imię i nazwisko (fix/079)', () {
+    expect(kAuthorName, 'Dawid Mionskowski');
+    expect(pages['index'], contains('autor: $kAuthorName'));
+    expect(pages['pl'], contains('($kAuthorName)'));
+    expect(pages['en'], contains('($kAuthorName)'));
+    expect(pages['usuwanie'], contains('autor: $kAuthorName'));
+    for (final MapEntry(:key, :value) in pages.entries) {
+      // „mionsek" tylko w adresach (GitHub), nie jako podpis.
+      expect(value.replaceAll('github.com/mionsek', '')
+          .replaceAll('mionsek.github.io', ''),
+          isNot(contains('mionsek')),
+          reason: key);
+    }
+    for (final path in [
+      'lib/screens/home/home_screen.dart',
+      'lib/screens/info/info_screen.dart',
+    ]) {
+      final code = read(path);
+      expect(code, contains('kAuthorName'), reason: path);
+      expect(code, isNot(contains("'mionsek'")), reason: path);
+    }
   });
 
   test('usuwanie konta i danych: link dla Play, kroki zgodne z aplikacją '
@@ -119,5 +150,7 @@ void main() {
     await tester.ensureVisible(find.text('Polityka prywatności'));
     expect(find.text('Polityka prywatności'), findsOneWidget);
     expect(find.text('Jakie dane są w aplikacji i gdzie'), findsOneWidget);
+    expect(find.text('Dawid Mionskowski'), findsOneWidget,
+        reason: 'podpis autora jak na ekranie głównym i stronie (fix/079)');
   });
 }
