@@ -6,6 +6,7 @@ import 'package:mocktail/mocktail.dart';
 import 'package:osp_app/models/sync_state.dart';
 import 'package:osp_app/providers/providers.dart';
 import 'package:osp_app/screens/settings/settings_screen.dart';
+import 'package:osp_app/services/database_service.dart';
 import 'package:osp_app/services/google_auth_service.dart';
 import 'package:osp_app/services/google_drive_service.dart';
 import 'package:osp_app/services/sync_service.dart';
@@ -94,14 +95,22 @@ void main() {
     expect(find.text('Zaloguj się kontem Google'), findsNothing);
   });
 
-  testWidgets('założyciel w jednostce dostaje propozycję przejścia na '
-      'własne konto', (tester) async {
+  testWidgets('założyciel na koncie jednostki dostaje propozycję przejścia '
+      'na własne konto', (tester) async {
+    await tester.runAsync(() => DatabaseService().setFounderOnUnitAccount(true));
     await pumpSettings(tester, founderInUnit);
 
     expect(find.text('ospkielno@gmail.com'), findsOneWidget);
     expect(find.text('ABC234'), findsOneWidget);
     expect(find.text('Przełącz na swoje konto'), findsOneWidget);
     expect(find.text('Dołącz do jednostki kodem'), findsNothing);
+  });
+
+  testWidgets('założyciel na prywatnym koncie — bez propozycji przejścia '
+      '(Dawid, 27.11.2026)', (tester) async {
+    await pumpSettings(tester, founderInUnit);
+    expect(find.text('Przełącz na swoje konto'), findsNothing);
+    expect(find.textContaining('Jednostka jest założona'), findsNothing);
   });
 
   testWidgets('członek jednostki nie dostaje propozycji przejścia',
@@ -219,6 +228,7 @@ void main() {
 
   testWidgets('przełączenie na swoje konto może od razu zrobić z konta '
       'jednostki wspólne', (tester) async {
+    await tester.runAsync(() => DatabaseService().setFounderOnUnitAccount(true));
     await pumpSettings(tester, founderInUnit);
     when(() => sync.switchToPersonalAccount(any(),
             sharedAccount: any(named: 'sharedAccount')))
@@ -245,6 +255,7 @@ void main() {
 
   testWidgets('bez zaznaczenia przełączenie nie zmienia konta jednostki',
       (tester) async {
+    await tester.runAsync(() => DatabaseService().setFounderOnUnitAccount(true));
     await pumpSettings(tester, founderInUnit);
     when(() => sync.switchToPersonalAccount(any(),
             sharedAccount: any(named: 'sharedAccount')))

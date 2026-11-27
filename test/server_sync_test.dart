@@ -148,6 +148,8 @@ void main() {
       final owner = (await serverDoc('units/$unitId/members/a'))!;
       expect(owner['role'], 'owner');
       expect(owner['email'], 'a@gmail.com');
+      expect(owner['lastSyncAt'], isA<Timestamp>(),
+          reason: '„ostatnio” od razu, nie po 6 godzinach');
 
       final r1 = (await serverDoc('units/$unitId/reports/r1'))!;
       expect(r1['author'], 'a@gmail.com');
@@ -202,6 +204,8 @@ void main() {
       final code = await unitWithMember();
       final unitId = await unitIdOf(code);
       expect((await serverDoc('units/$unitId/members/b'))!['role'], 'member');
+      expect((await serverDoc('units/$unitId/members/b'))!['lastSyncAt'],
+          isA<Timestamp>());
       expect(await serverDoc('units/$unitId/invites/b@gmail.com'), isNull);
 
       final b = await phone('b');

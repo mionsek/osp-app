@@ -280,6 +280,9 @@ class ServerSyncService extends SyncService {
           if ((authService.displayName ?? '').isNotEmpty)
             'displayName': authService.displayName,
           'joinedAt': FieldValue.serverTimestamp(),
+          // Od razu — inaczej „ostatnio" na liście członków pojawiało się
+          // dopiero po [SyncService.memberNoteInterval].
+          'lastSyncAt': FieldValue.serverTimestamp(),
           'appVersion': SyncService.appVersion,
         })
         ..set(_fs.collection('inviteCodes').doc(code), {'unitId': unit.id});
@@ -371,6 +374,9 @@ class ServerSyncService extends SyncService {
           if ((authService.displayName ?? '').isNotEmpty)
             'displayName': authService.displayName,
           'joinedAt': FieldValue.serverTimestamp(),
+          // Od razu — inaczej „ostatnio" na liście członków pojawiało się
+          // dopiero po [SyncService.memberNoteInterval].
+          'lastSyncAt': FieldValue.serverTimestamp(),
           'appVersion': SyncService.appVersion,
         })
         // Zaproszenie zużyte — na liście członków jest już sam członek.

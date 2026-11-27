@@ -49,8 +49,15 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
   }
 
-  Future<void> _handleGoogleSignIn() async {
-    setState(() => _isSigningIn = true);
+  /// Wybrana karta „Użyj konta jednostki" — tylko wtedy po założeniu
+  /// jednostki ma sens przejście na własne konto.
+  bool _unitAccount = false;
+
+  Future<void> _handleGoogleSignIn({bool unitAccount = false}) async {
+    setState(() {
+      _isSigningIn = true;
+      _unitAccount = unitAccount;
+    });
     try {
       final success = await ref.read(syncStateProvider.notifier).signIn();
       if (success && mounted) {
@@ -96,9 +103,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       if (syncState.userEmail != null) {
         final code =
             await ref.read(syncStateProvider.notifier).createUnit(fullName);
+        await db.setFounderOnUnitAccount(_unitAccount);
         if (!mounted) return;
         final wantsSwitch = await showInviteCodeDialog(context, code,
-            offerPersonalSwitch: true);
+            offerPersonalSwitch: _unitAccount);
         if (wantsSwitch && mounted) {
           await runSwitchToPersonalAccount(context, ref);
         }
@@ -377,7 +385,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             subtitle: 'Zalecane — np. ospkielno@gmail.com\n'
                 'Jednostka zostaje przy koncie jednostki, także gdy '
                 'zmieni się zarząd.',
-            onTap: _isSigningIn ? () {} : _handleGoogleSignIn,
+            onTap: _isSigningIn
+                ? () {}
+                : () => _handleGoogleSignIn(unitAccount: true),
             badge: 'zalecane',
           ),
           const SizedBox(height: 16),

@@ -180,6 +180,18 @@ class DatabaseService {
   Future<void> markUnitConfigEdited([DateTime? at]) => settingsBox.put(
       _unitConfigEditedAtKey, (at ?? DateTime.now()).toIso8601String());
 
+  // Jednostkę założono na wspólnym koncie jednostki (wybór karty „Użyj
+  // konta jednostki" na wprowadzeniu) — tylko wtedy aplikacja proponuje
+  // przejście na własne konto (Dawid, 27.11.2026: przy prywatnym koncie ta
+  // podpowiedź nie ma sensu).
+  static const String _founderOnUnitAccountKey = 'founderOnUnitAccount';
+
+  bool get founderOnUnitAccount =>
+      settingsBox.get(_founderOnUnitAccountKey) == true;
+
+  Future<void> setFounderOnUnitAccount(bool value) =>
+      settingsBox.put(_founderOnUnitAccountKey, value);
+
   // --- Znaczniki usunięcia (synchronizacja) ---
   //
   // Usunięty rekord znika z bazy, ale ślad po nim musi zostać: inaczej przy

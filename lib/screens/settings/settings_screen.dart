@@ -644,8 +644,10 @@ class _GoogleSyncSectionState extends ConsumerState<_GoogleSyncSection> {
               ),
             ]
             // Jednostkę często zakłada się na wspólnym koncie jednostki,
-            // a wyjazdy podpisują się kontem, na którym się jest.
-            else if (syncState.isFounder(email)) ...[
+            // a wyjazdy podpisują się kontem, na którym się jest. Przy
+            // jednostce założonej na prywatnym koncie — bez tej podpowiedzi.
+            else if (syncState.isFounder(email) &&
+                ref.read(databaseServiceProvider).founderOnUnitAccount) ...[
               const SizedBox(height: 16),
               _Notice(
                 icon: Icons.person_outline,
