@@ -19,13 +19,24 @@ val hasReleaseKey = keystorePropertiesFile.exists()
 
 plugins {
     id("com.android.application")
-    // Konfiguracja Firebase z google-services.json (feature/081).
-    id("com.google.gms.google-services")
     // Wtyczki Kotlina celowo tu nie ma: od AGP 9 dostarcza ją sam AGP
     // (Built-in Kotlin). Jawne `id("kotlin-android")` sprawiało, że Flutter
     // ostrzegał o nadchodzącym błędzie budowania.
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+// Konfiguracja Firebase (feature/081) z `android/app/google-services.json`.
+// Pliku **nie ma w repozytorium** (`.gitignore`) — pobiera się go z konsoli
+// Firebase (projekt osp-app-2026). Bez niego build idzie dalej, ale aplikacja
+// nie połączy się z serwerem jednostek.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+} else {
+    logger.warn(
+        "UWAGA: brak android/app/google-services.json — aplikacja bez " +
+            "połączenia z serwerem Firebase. Nie rozdawaj takiego APK."
+    )
 }
 
 android {
