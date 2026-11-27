@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -14,6 +16,17 @@ import 'providers/providers.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await DatabaseService.initialize();
+  // Serwer jednostek (feature/081). Konfiguracja z google-services.json;
+  // bez niej aplikacja działa dalej (Dysk, tryb offline).
+  try {
+    await Firebase.initializeApp();
+    // Kolejkę zmian bez sieci prowadzi już lokalna baza (Hive) — druga
+    // kolejka w Firestore wysyłałaby te same zmiany dwa razy.
+    FirebaseFirestore.instance.settings =
+        const Settings(persistenceEnabled: false);
+  } catch (e) {
+    debugPrint('Firebase niedostępny: $e');
+  }
   // Wersja do notatki członka jednostki (feature/080) — widać ją na liście
   // „Członkowie jednostki", np. kto jeszcze nie zaktualizował aplikacji.
   try {

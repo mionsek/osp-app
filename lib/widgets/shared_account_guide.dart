@@ -87,7 +87,7 @@ class SharedAccountGuide extends StatelessWidget {
         const _Bullet(
           'Zgubiony tablet: zmień hasło do konta jednostki i wyloguj tablet '
           'na myaccount.google.com (Bezpieczeństwo → Twoje urządzenia). '
-          'Dane jednostki zostają na Dysku.',
+          'Dane jednostki zostają w jednostce.',
         ),
       ],
     );

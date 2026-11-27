@@ -1,3 +1,4 @@
+import '../../core/utils/unit_storage.dart';
 import '../../core/utils/bottom_inset.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -292,7 +293,8 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(inUnit
-            ? 'Przekazanie mienia zapisane. Wysyłanie na Dysk jednostki…'
+            ? 'Przekazanie mienia zapisane. Wysyłanie '
+                '${UnitStorage.to(ref.read(syncServiceProvider).onServer)}…'
             : 'Przekazanie mienia zapisane lokalnie.'),
         backgroundColor: OspTheme.success,
         duration: const Duration(seconds: 3),

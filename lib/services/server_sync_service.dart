@@ -19,15 +19,19 @@ part of 'sync_service.dart';
 ///
 /// `unitFolderId` w [SyncState] to tutaj identyfikator jednostki w bazie.
 class ServerSyncService extends SyncService {
-  final FirebaseFirestore _fs;
+  /// Baza w testach; w aplikacji [FirebaseFirestore.instance], pobierana
+  /// dopiero przy pierwszym użyciu — bez uruchomionego Firebase (testy
+  /// ekranów) sama usługa da się utworzyć.
+  FirebaseFirestore? _firestore;
+  FirebaseFirestore get _fs => _firestore ??= FirebaseFirestore.instance;
 
   ServerSyncService(
     super._db,
     ServerAuthService super.authService,
-    super._driveService,
-    this._fs, {
+    super._driveService, {
+    FirebaseFirestore? firestore,
     super.localChangeDelay,
-  });
+  }) : _firestore = firestore;
 
   ServerAuthService get _server => authService as ServerAuthService;
 

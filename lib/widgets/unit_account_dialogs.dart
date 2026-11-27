@@ -309,6 +309,7 @@ class _OwnUnitsDialogState extends State<_OwnUnitsDialog> {
   @override
   Widget build(BuildContext context) {
     final many = widget.units.length > 1;
+    final onServer = widget.units.first.onServer;
     return AlertDialog(
       title: Text(many
           ? 'Na tym koncie są już jednostki'
@@ -319,11 +320,16 @@ class _OwnUnitsDialogState extends State<_OwnUnitsDialog> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'Na Dysku konta ${widget.email} '
-              '${many ? 'są już jednostki' : 'jest już jednostka'}. '
-              'Dołącz do niej zamiast zakładać kolejną — inaczej przybędzie '
-              'folder o tej samej nazwie i łatwo o pomyłkę, w którym są '
-              'dane.',
+              onServer
+                  ? 'Konto ${widget.email} należy już do '
+                      '${many ? 'jednostek' : 'jednostki'}. Dołącz zamiast '
+                      'zakładać kolejną — inaczej będą dwie jednostki o tej '
+                      'samej nazwie i łatwo o pomyłkę, w której są dane.'
+                  : 'Na Dysku konta ${widget.email} '
+                      '${many ? 'są już jednostki' : 'jest już jednostka'}. '
+                      'Dołącz do niej zamiast zakładać kolejną — inaczej '
+                      'przybędzie folder o tej samej nazwie i łatwo '
+                      'o pomyłkę, w którym są dane.',
               style: const TextStyle(fontSize: 13),
             ),
             const SizedBox(height: 12),

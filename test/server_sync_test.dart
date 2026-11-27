@@ -78,7 +78,7 @@ void main() {
     await openPhoneDb(root, name);
     final email = account ?? '$name@gmail.com';
     final auth = FakeServerAuth(uid ?? email.split('@').first, email);
-    final sync = ServerSyncService(db, auth, FakeDrive(), fs);
+    final sync = ServerSyncService(db, auth, FakeDrive(), firestore: fs);
     await sync.restoreState();
     return sync;
   }

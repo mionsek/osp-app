@@ -61,6 +61,7 @@ FakeSyncService fakeSync() {
   when(() => sync.authService).thenReturn(auth);
   when(() => sync.pullReportsOnly()).thenAnswer((_) async => true);
   when(() => sync.state).thenReturn(const SyncState());
+  when(() => sync.onServer).thenReturn(false);
   // Każdy zapis przez provider zgłasza zmianę do wysłania.
   when(() => sync.notifyLocalChange()).thenReturn(null);
   when(() => sync.reportsAwaitingUpload(any())).thenReturn(const {});

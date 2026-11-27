@@ -9,6 +9,7 @@ import '../../services/trip_from_report.dart';
 import 'steps/step_basic_info.dart';
 import 'steps/step_crew.dart';
 import 'steps/step_summary.dart';
+import '../../core/utils/unit_storage.dart';
 import '../../core/utils/time_format.dart';
 import '../../core/theme/osp_theme.dart';
 import '../../widgets/navigation.dart';
@@ -434,7 +435,8 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
         SnackBar(
           content: Text(numberNote ??
               (inUnit
-                  ? 'Raport zapisany. Wysyłanie na Dysk jednostki…'
+                  ? 'Raport zapisany. Wysyłanie '
+                      '${UnitStorage.to(ref.read(syncServiceProvider).onServer)}…'
                   : 'Raport zapisany lokalnie.')),
           backgroundColor:
               numberNote != null ? OspTheme.attention : OspTheme.success,

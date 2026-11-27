@@ -48,6 +48,22 @@ String describeSyncError(Object e) {
   return '$e';
 }
 
+/// Gdzie jednostka trzyma dane wspólne (feature/081).
+enum SyncBackend {
+  /// Folder na Dysku Google — jednostki sprzed serwera, do przeniesienia.
+  drive,
+
+  /// Serwer jednostek (Firebase) — nowe instalacje i jednostki po migracji.
+  server,
+}
+
+/// Telefon połączony z jednostką na Dysku zostaje przy Dysku, dopóki
+/// administrator jej nie przeniesie. Każda inna instalacja — serwer.
+SyncBackend detectSyncBackend(DatabaseService db) =>
+    db.configBox.get(SyncService.driveConfigKey) != null
+        ? SyncBackend.drive
+        : SyncBackend.server;
+
 /// Ratownicy i pojazdy z telefonu, których nie ma w jednostce — przy
 /// dołączaniu zostaną zastąpione jej listą.
 class LocalListEntries {
@@ -106,6 +122,9 @@ class SyncService {
 
   /// Jednostka na serwerze ([ServerSyncService]), a nie na Dysku.
   bool get onServer => false;
+
+  /// Klucz w `configBox` z folderem jednostki na Dysku.
+  static const String driveConfigKey = 'driveSync';
 
   // ── Initialization ─────────────────────────────────────────────
 

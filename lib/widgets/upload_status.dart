@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/theme/osp_theme.dart';
+import '../core/utils/unit_storage.dart';
 import '../models/sync_state.dart';
 import '../providers/providers.dart';
 import 'sync_feedback.dart';
@@ -31,6 +32,7 @@ class UploadStatusBanner extends ConsumerWidget {
     if (!sync.isConnected || sync.unitFolderId == null) {
       return const SizedBox.shrink();
     }
+    final onServer = ref.watch(syncServiceProvider).onServer;
 
     final (Color color, Color surface, IconData icon, String text) =
         switch ((pending, sync.isSyncing, sync.status == SyncStatus.error)) {
@@ -38,26 +40,27 @@ class UploadStatusBanner extends ConsumerWidget {
           OspTheme.success,
           OspTheme.successSurface,
           Icons.cloud_done,
-          'Zapisano na Dysku jednostki',
+          'Zapisano ${UnitStorage.at(onServer)}',
         ),
       (true, true, _) => (
           OspTheme.info,
           OspTheme.infoSurface,
           Icons.sync,
-          'Wysyłanie na Dysk jednostki…',
+          'Wysyłanie ${UnitStorage.to(onServer)}…',
         ),
       (true, false, true) => (
           OspTheme.danger,
           OspTheme.dangerSurface,
           Icons.cloud_off,
-          '$subject jest na telefonie, ale jeszcze nie na Dysku jednostki. '
+          '$subject jest na telefonie, ale jeszcze nie '
+              '${UnitStorage.at(onServer)}. '
               '${syncErrorText(sync)}',
         ),
       (true, false, false) => (
           OspTheme.attention,
           OspTheme.attentionSurface,
           Icons.cloud_upload,
-          'Czeka na wysłanie na Dysk jednostki',
+          'Czeka na wysłanie ${UnitStorage.to(onServer)}',
         ),
     };
 
@@ -86,13 +89,14 @@ class UploadStatusBanner extends ConsumerWidget {
   }
 }
 
-/// Ikona przy wpisie listy, który czeka na wysłanie na Dysk jednostki.
-class AwaitingUploadIcon extends StatelessWidget {
+/// Ikona przy wpisie listy, który czeka na wysłanie do jednostki.
+class AwaitingUploadIcon extends ConsumerWidget {
   const AwaitingUploadIcon({super.key});
 
   @override
-  Widget build(BuildContext context) => const Tooltip(
-        message: 'Czeka na wysłanie na Dysk jednostki',
-        child: Icon(Icons.cloud_upload, color: OspTheme.attention),
+  Widget build(BuildContext context, WidgetRef ref) => Tooltip(
+        message: 'Czeka na wysłanie '
+            '${UnitStorage.to(ref.watch(syncServiceProvider).onServer)}',
+        child: const Icon(Icons.cloud_upload, color: OspTheme.attention),
       );
 }

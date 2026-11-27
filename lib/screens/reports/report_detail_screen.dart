@@ -1,3 +1,4 @@
+import '../../core/utils/unit_storage.dart';
 import '../../core/utils/bottom_inset.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -348,8 +349,9 @@ class _DuplicateNumberNotice extends ConsumerWidget {
       builder: (ctx) => AlertDialog(
         title: Text('Zmienić numer na $next?'),
         content: Text(
-          'Wyjazd ${report.reportNumber} dostanie numer $next — także na '
-          'Dysku jednostki i u pozostałych członków. Jeśli był już '
+          'Wyjazd ${report.reportNumber} dostanie numer $next — także '
+          '${UnitStorage.at(ref.read(syncServiceProvider).onServer)} '
+          'i u pozostałych członków. Jeśli był już '
           'wydrukowany, popraw numer na wydruku.',
         ),
         actions: [

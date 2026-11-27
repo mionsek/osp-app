@@ -4,6 +4,7 @@ import '../models/sync_state.dart';
 import '../services/database_service.dart';
 import '../services/google_auth_service.dart';
 import '../services/google_drive_service.dart';
+import '../services/server_auth_service.dart';
 import '../services/sync_service.dart';
 
 final databaseServiceProvider = Provider<DatabaseService>((ref) {
@@ -12,8 +13,17 @@ final databaseServiceProvider = Provider<DatabaseService>((ref) {
 
 // --- Google / Sync ---
 
+/// Dysk albo serwer jednostek (feature/081) — wykrywane przy starcie,
+/// zmieniane przez przeniesienie jednostki z Dysku.
+final syncBackendProvider = StateProvider<SyncBackend>(
+    (ref) => detectSyncBackend(ref.watch(databaseServiceProvider)));
+
+/// Logowanie: przy Dysku konto Google z dostępem do Dysku, przy serwerze
+/// tylko e-mail i imię ([ServerAuthService]).
 final googleAuthServiceProvider = Provider<GoogleAuthService>((ref) {
-  return GoogleAuthService();
+  return ref.watch(syncBackendProvider) == SyncBackend.server
+      ? ServerAuthService()
+      : GoogleAuthService();
 });
 
 final googleDriveServiceProvider = Provider<GoogleDriveService>((ref) {
@@ -21,11 +31,13 @@ final googleDriveServiceProvider = Provider<GoogleDriveService>((ref) {
 });
 
 final syncServiceProvider = Provider<SyncService>((ref) {
-  final service = SyncService(
-    ref.watch(databaseServiceProvider),
-    ref.watch(googleAuthServiceProvider),
-    ref.watch(googleDriveServiceProvider),
-  );
+  final db = ref.watch(databaseServiceProvider);
+  final auth = ref.watch(googleAuthServiceProvider);
+  final drive = ref.watch(googleDriveServiceProvider);
+  final service = auth is ServerAuthService
+      ? ServerSyncService(db, auth, drive)
+      : SyncService(db, auth, drive);
+  ref.onDispose(service.dispose);
   service.onDataPulled = () {
     ref.read(reportsProvider.notifier).refresh();
     ref.read(handoversProvider.notifier).refresh();

@@ -15,6 +15,7 @@ import '../../widgets/sync_feedback.dart';
 import '../../widgets/unit_account_dialogs.dart';
 import 'unit_members_section.dart';
 import '../../core/utils/polish_text.dart';
+import '../../core/utils/unit_storage.dart';
 import '../../core/theme/osp_theme.dart';
 import '../../widgets/navigation.dart';
 
@@ -326,6 +327,7 @@ class _GoogleSyncSectionState extends ConsumerState<_GoogleSyncSection> {
   Future<void> _signOut(SyncState s) async {
     final code = s.unitInviteCode;
     final hasUnit = s.unitFolderId != null;
+    final onServer = ref.read(syncServiceProvider).onServer;
     final choice = await showDialog<_SignOutChoice>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -333,7 +335,8 @@ class _GoogleSyncSectionState extends ConsumerState<_GoogleSyncSection> {
         content: Text(hasUnit
             ? 'Wylogujesz się i odłączysz telefon od jednostki.\n\n'
                 'Dane jednostki możesz zostawić na telefonie albo z niego '
-                'usunąć — na Dysku jednostki zostaną w obu przypadkach. '
+                'usunąć — ${UnitStorage.at(onServer)} zostaną w obu '
+                'przypadkach. '
                 'Usuń je, jeśli odchodzisz z jednostki albo oddajesz telefon.'
                 '${code != null ? '\n\nŻeby wrócić, zaloguj się i dołącz kodem $code.' : ''}'
             : 'Wylogujesz się z konta Google. Dane na telefonie zostaną.'),
@@ -384,7 +387,9 @@ class _GoogleSyncSectionState extends ConsumerState<_GoogleSyncSection> {
             content: Text(
               'Nie udało się zsynchronizować tego telefonu'
               '${after.errorMessage != null ? ' (${after.errorMessage})' : ''}. '
-              'Zmiany, które nie trafiły jeszcze na Dysk, usunięcie skasuje '
+              'Zmiany, które nie trafiły jeszcze '
+              '${UnitStorage.to(ref.read(syncServiceProvider).onServer)}, '
+              'usunięcie skasuje '
               'bezpowrotnie.',
             ),
             actions: [
@@ -428,14 +433,18 @@ class _GoogleSyncSectionState extends ConsumerState<_GoogleSyncSection> {
       _snack('Najpierw wpisz nazwę jednostki powyżej i zapisz ustawienia.');
       return;
     }
+    final onServer = ref.read(syncServiceProvider).onServer;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Utwórz jednostkę na Dysku'),
-        content: Text(
-          'Na Dysku konta $email powstanie folder jednostki „$name", '
-          'a dane z tego telefonu trafią do niego. Potem zaprosisz pozostałych.',
-        ),
+        title: Text(onServer ? 'Utwórz jednostkę' : 'Utwórz jednostkę na Dysku'),
+        content: Text(onServer
+            ? 'Powstanie jednostka „$name" z Tobą ($email) jako '
+                'administratorem, a dane z tego telefonu trafią na serwer '
+                'jednostki. Potem zaprosisz pozostałych.'
+            : 'Na Dysku konta $email powstanie folder jednostki „$name", '
+                'a dane z tego telefonu trafią do niego. Potem zaprosisz '
+                'pozostałych.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -478,6 +487,7 @@ class _GoogleSyncSectionState extends ConsumerState<_GoogleSyncSection> {
     final email = syncState.userEmail ?? '';
     final signedIn = email.isNotEmpty;
     final hasUnit = syncState.unitFolderId != null;
+    final onServer = ref.watch(syncServiceProvider).onServer;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -531,8 +541,8 @@ class _GoogleSyncSectionState extends ConsumerState<_GoogleSyncSection> {
               color: OspTheme.info,
               background: OspTheme.infoSurface,
               text: 'Telefon nie jest połączony z jednostką — dane są tylko '
-                  'tutaj. Dołącz kodem z zaproszenia albo załóż jednostkę na '
-                  'Dysku tego konta.',
+                  'tutaj. Dołącz kodem z zaproszenia albo załóż jednostkę'
+                  '${onServer ? '.' : ' na Dysku tego konta.'}',
             ),
             const SizedBox(height: 12),
             ElevatedButton.icon(
@@ -544,7 +554,8 @@ class _GoogleSyncSectionState extends ConsumerState<_GoogleSyncSection> {
             OutlinedButton.icon(
               onPressed: _busy ? null : () => _createUnit(email),
               icon: const Icon(Icons.create_new_folder_outlined),
-              label: const Text('Utwórz jednostkę na Dysku'),
+              label: Text(
+                  onServer ? 'Utwórz jednostkę' : 'Utwórz jednostkę na Dysku'),
             ),
           ] else ...[
             if (syncState.unitInviteCode != null)
@@ -601,7 +612,8 @@ class _GoogleSyncSectionState extends ConsumerState<_GoogleSyncSection> {
               Text(
                 'Pominięto ${syncState.skippedFiles} '
                 '${PolishText.plural(syncState.skippedFiles, one: 'uszkodzony plik', few: 'uszkodzone pliki', many: 'uszkodzonych plików')} '
-                'na Dysku — reszta danych zsynchronizowana.',
+                '${onServer ? 'na serwerze' : 'na Dysku'} — reszta danych '
+                'zsynchronizowana.',
                 style: TextStyle(fontSize: 12, color: Colors.orange[900]),
               ),
             ],
@@ -625,11 +637,13 @@ class _GoogleSyncSectionState extends ConsumerState<_GoogleSyncSection> {
             const SizedBox(height: 4),
             // Na Dysku konta jednostki może leżeć kilka folderów o tej samej
             // nazwie — stąd prosto do właściwego.
-            TextButton.icon(
-              onPressed: () => _openUnitFolder(syncState.unitFolderId!),
-              icon: const Icon(Icons.folder_open, size: 18),
-              label: const Text('Otwórz folder jednostki na Dysku'),
-            ),
+            // Na serwerze nie ma folderu do otwarcia (feature/081).
+            if (!onServer)
+              TextButton.icon(
+                onPressed: () => _openUnitFolder(syncState.unitFolderId!),
+                icon: const Icon(Icons.folder_open, size: 18),
+                label: const Text('Otwórz folder jednostki na Dysku'),
+              ),
             // Wspólne konto (np. tablet w samochodzie) nie przełącza się na
             // „swoje" — przełączenie nadaje podanemu adresowi uprawnienia
             // administratora, a tablet ma ich nie mieć.

@@ -359,11 +359,16 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               color: Colors.blue[50],
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Text(
-              'Dane jednostki będą przechowywane na Dysku Google '
-              'wybranego konta. Wszyscy strażacy z jednostki będą '
-              'korzystać z tego samego folderu.',
-              style: TextStyle(fontSize: 13),
+            child: Text(
+              ref.watch(syncServiceProvider).onServer
+                  ? 'Konto Google służy tylko do logowania — aplikacja '
+                      'dostaje adres e-mail i imię, bez dostępu do Dysku '
+                      'i poczty. Dane jednostki są na serwerze aplikacji '
+                      'i widzą je tylko jej członkowie.'
+                  : 'Dane jednostki będą przechowywane na Dysku Google '
+                      'wybranego konta. Wszyscy strażacy z jednostki będą '
+                      'korzystać z tego samego folderu.',
+              style: const TextStyle(fontSize: 13),
               textAlign: TextAlign.center,
             ),
           ),
@@ -484,7 +489,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             ),
             const SizedBox(height: 24),
             if (isSignedIn) ...[
-              _accountRow('Jednostka powstanie na Dysku konta'),
+              _accountRow(ref.watch(syncServiceProvider).onServer
+                  ? 'Administrator jednostki'
+                  : 'Jednostka powstanie na Dysku konta'),
               const SizedBox(height: 24),
             ],
             TextFormField(

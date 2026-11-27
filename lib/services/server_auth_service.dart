@@ -37,7 +37,14 @@ class ServerAuthService extends GoogleAuthService {
   /// jednostki ([requestDriveAccess]).
   GoogleAuthService get _drive => _driveAuth ??= GoogleAuthService();
 
-  User? get _user => _auth.currentUser;
+  /// Bez uruchomionego Firebase (brak konfiguracji, testy) — niezalogowany.
+  User? get _user {
+    try {
+      return _auth.currentUser;
+    } catch (_) {
+      return null;
+    }
+  }
 
   /// Identyfikator konta na serwerze — klucz rekordu członka jednostki.
   String? get uid => _user?.uid;
