@@ -19,7 +19,8 @@ val hasReleaseKey = keystorePropertiesFile.exists()
 
 // Wersja testowa obok wersji ze Sklepu Play (Dawid, 27.11.2026): tester nie
 // musi odinstalowywać aplikacji ze Sklepu. Inny identyfikator, nazwa
-// „Raporty OSP TEST" i granatowa ikona z napisem TEST:
+// „OSP TEST" pod ikoną (pełna nazwa ucinała się w spisie aplikacji jak
+// zwykła wersja) i granatowa ikona z napisem TEST:
 //
 //   flutter build apk --release --target-platform android-arm64 \
 //     --android-project-arg=testowa=true --dart-define=OSP_TEST=true
@@ -71,7 +72,7 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         manifestPlaceholders["appLabel"] =
-            if (testBuild) "Raporty OSP TEST" else "Raporty OSP"
+            if (testBuild) "OSP TEST" else "Raporty OSP"
         manifestPlaceholders["appIcon"] =
             if (testBuild) "@mipmap/ic_launcher_test" else "@mipmap/ic_launcher"
     }

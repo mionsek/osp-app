@@ -372,8 +372,11 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           _ChoiceCard(
             icon: Icons.apartment,
             title: 'Użyj konta jednostki',
+            // Dane są na serwerze (feature/081) — konto mówi tylko, kto
+            // zarządza jednostką.
             subtitle: 'Zalecane — np. ospkielno@gmail.com\n'
-                'Dane będą na wspólnym koncie jednostki.',
+                'Jednostka zostaje przy koncie jednostki, także gdy '
+                'zmieni się zarząd.',
             onTap: _isSigningIn ? () {} : _handleGoogleSignIn,
             badge: 'zalecane',
           ),
@@ -382,7 +385,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             icon: Icons.person,
             title: 'Użyj prywatnego konta',
             subtitle: 'np. jan.kowalski@gmail.com\n'
-                'Dane będą na Twoim prywatnym koncie.',
+                'Zarządzasz jednostką ze swojego konta.',
             onTap: _isSigningIn ? () {} : _handleGoogleSignIn,
           ),
           if (_isSigningIn) ...[
