@@ -2,12 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/theme/osp_theme.dart';
-import '../core/utils/unit_storage.dart';
 import '../models/sync_state.dart';
 import '../providers/providers.dart';
 import 'sync_feedback.dart';
 
-/// Czy ten wyjazd albo przekazanie jest już na Dysku jednostki.
+/// Czy ten wyjazd albo przekazanie jest już na serwerze jednostki.
 ///
 /// Wcześniej ekran wyjazdu pisał „Zapisano na Google Drive" po każdej udanej
 /// synchronizacji — także przy wyjeździe, który dopiero czekał na wysłanie —
@@ -17,7 +16,7 @@ class UploadStatusBanner extends ConsumerWidget {
   /// „Wyjazd", „Przekazanie" — do komunikatu po błędzie.
   final String subject;
 
-  /// Czy na Dysku nie ma jeszcze obecnej wersji.
+  /// Czy na serwerze nie ma jeszcze obecnej wersji.
   final bool pending;
 
   const UploadStatusBanner({
@@ -32,7 +31,6 @@ class UploadStatusBanner extends ConsumerWidget {
     if (!sync.isConnected || sync.unitFolderId == null) {
       return const SizedBox.shrink();
     }
-    final onServer = ref.watch(syncServiceProvider).onServer;
 
     final (Color color, Color surface, IconData icon, String text) =
         switch ((pending, sync.isSyncing, sync.status == SyncStatus.error)) {
@@ -40,27 +38,27 @@ class UploadStatusBanner extends ConsumerWidget {
           OspTheme.success,
           OspTheme.successSurface,
           Icons.cloud_done,
-          'Zapisano ${UnitStorage.at(onServer)}',
+          'Zapisano na serwerze jednostki',
         ),
       (true, true, _) => (
           OspTheme.info,
           OspTheme.infoSurface,
           Icons.sync,
-          'Wysyłanie ${UnitStorage.to(onServer)}…',
+          'Wysyłanie na serwer jednostki…',
         ),
       (true, false, true) => (
           OspTheme.danger,
           OspTheme.dangerSurface,
           Icons.cloud_off,
-          '$subject jest na telefonie, ale jeszcze nie '
-              '${UnitStorage.at(onServer)}. '
+          '$subject jest na telefonie, ale jeszcze nie na serwerze '
+              'jednostki. '
               '${syncErrorText(sync)}',
         ),
       (true, false, false) => (
           OspTheme.attention,
           OspTheme.attentionSurface,
           Icons.cloud_upload,
-          'Czeka na wysłanie ${UnitStorage.to(onServer)}',
+          'Czeka na wysłanie na serwer jednostki',
         ),
     };
 
@@ -90,13 +88,12 @@ class UploadStatusBanner extends ConsumerWidget {
 }
 
 /// Ikona przy wpisie listy, który czeka na wysłanie do jednostki.
-class AwaitingUploadIcon extends ConsumerWidget {
+class AwaitingUploadIcon extends StatelessWidget {
   const AwaitingUploadIcon({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) => Tooltip(
-        message: 'Czeka na wysłanie '
-            '${UnitStorage.to(ref.watch(syncServiceProvider).onServer)}',
-        child: const Icon(Icons.cloud_upload, color: OspTheme.attention),
+  Widget build(BuildContext context) => const Tooltip(
+        message: 'Czeka na wysłanie na serwer jednostki',
+        child: Icon(Icons.cloud_upload, color: OspTheme.attention),
       );
 }

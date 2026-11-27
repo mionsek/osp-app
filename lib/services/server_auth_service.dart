@@ -1,7 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:http/http.dart' as http;
 
 import 'google_auth_service.dart';
 
@@ -11,31 +10,26 @@ import 'google_auth_service.dart';
 /// e-mail i imię** — bez dostępu do Dysku, więc bez ekranu „aplikacja chce
 /// wyświetlać, edytować, tworzyć i usuwać wszystkie pliki na Dysku” i bez
 /// limitu 100 kont dla niezweryfikowanej aplikacji (PLAN_BAZA_DANYCH.md).
+/// Dziedziczy po [GoogleAuthService] tylko po to, żeby reszta aplikacji
+/// widziała jedno konto; żadna metoda z dostępem do Dysku nie jest używana.
 ///
-/// Dostęp do Dysku jest potrzebny już tylko przy przeniesieniu jednostki
-/// z Dysku na serwer — prosi o niego [requestDriveAccess], dopiero wtedy.
+/// Aplikacja nie prosi o Dysk wcale — jednostki są tylko na serwerze
+/// (Dawid, 27.11.2026: bez migracji z Dysku).
 class ServerAuthService extends GoogleAuthService {
   ServerAuthService({
     FirebaseAuth? auth,
     GoogleSignIn? google,
-    GoogleAuthService? driveAuth,
   })  : _authOverride = auth,
-        _googleOverride = google,
-        _driveAuth = driveAuth;
+        _googleOverride = google;
 
   final FirebaseAuth? _authOverride;
   GoogleSignIn? _googleOverride;
-  GoogleAuthService? _driveAuth;
 
   FirebaseAuth get _auth => _authOverride ?? FirebaseAuth.instance;
 
   /// Same podstawowe dane konta (e-mail, imię) — `GoogleSignIn()` bez
   /// dodatkowych zakresów.
   GoogleSignIn get _google => _googleOverride ??= GoogleSignIn();
-
-  /// Konto Google z dostępem do Dysku — tylko na czas przeniesienia
-  /// jednostki ([requestDriveAccess]).
-  GoogleAuthService get _drive => _driveAuth ??= GoogleAuthService();
 
   /// Bez uruchomionego Firebase (brak konfiguracji, testy) — niezalogowany.
   User? get _user {
@@ -86,7 +80,6 @@ class ServerAuthService extends GoogleAuthService {
     try {
       await _google.signOut();
     } catch (_) {}
-    if (_driveAuth != null) await _drive.signOut();
   }
 
   @override
@@ -100,25 +93,6 @@ class ServerAuthService extends GoogleAuthService {
   @override
   Future<void> refreshAuth({bool force = false}) async {
     await _user?.getIdToken(force);
-    if (_driveAuth != null && _drive.isSignedIn) {
-      await _drive.refreshAuth(force: force);
-    }
-  }
-
-  /// Klient Dysku — działa dopiero po [requestDriveAccess].
-  @override
-  http.Client getAuthenticatedClient() => _drive.getAuthenticatedClient();
-
-  /// Pyta o dostęp do Dysku — tylko przy przeniesieniu jednostki z Dysku.
-  /// Konto musi być tym samym, którym zalogowano się na serwer.
-  Future<bool> requestDriveAccess() async {
-    final ok = _drive.isSignedIn || await _drive.trySilentSignIn() ||
-        await _drive.signIn();
-    if (!ok) return false;
-    final same = (_drive.userEmail ?? '').trim().toLowerCase() ==
-        (userEmail ?? '').trim().toLowerCase();
-    if (!same) await _drive.signOut();
-    return same;
   }
 
   /// Usuwa konto z serwera. Firebase może zażądać świeżego logowania —

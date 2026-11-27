@@ -413,6 +413,29 @@ void main() {
     });
   });
 
+  test('telefon z jednostką na Dysku: po aktualizacji bez folderu, dane '
+      'zostają i idą do nowej jednostki na serwerze (Dawid, 27.11.2026)',
+      () async {
+    await openPhoneDb(root, 'stary');
+    await db.configBox.put(
+        SyncService.driveConfigKey, UnitConfig(namePrefix: 'folder-na-dysku'));
+    await db.cacheAdminEmails(const ['kolega@gmail.com']);
+    await db.addReport(report('r-stary', createdBy: 'kolega@gmail.com'));
+
+    final a = await phone('stary', account: 'a@gmail.com', uid: 'a');
+    expect(a.state.status, SyncStatus.disconnected);
+    expect(a.state.unitFolderId, isNull);
+    expect(db.configBox.get(SyncService.driveConfigKey), isNull);
+    expect(db.cachedAdminEmails, isEmpty);
+    expect(db.getReport('r-stary'), isNotNull);
+
+    final code = await create(a);
+    final r = (await serverDoc(
+        'units/${await unitIdOf(code)}/reports/r-stary'))!;
+    expect(r['author'], 'kolega@gmail.com',
+        reason: 'administrator przenosi cudze wpisy z autorem');
+  });
+
   test('jednostki konta — do propozycji „dołącz zamiast zakładać”', () async {
     final a = await phone('a');
     final code = await create(a);

@@ -13,6 +13,10 @@ import 'services/database_service.dart';
 import 'services/sync_service.dart';
 import 'providers/providers.dart';
 
+/// Wersja testowa obok wersji ze Sklepu (`--dart-define=OSP_TEST=true`,
+/// razem z `--android-project-arg=testowa=true`, android/app/build.gradle.kts).
+const bool isTestBuild = bool.fromEnvironment('OSP_TEST');
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await DatabaseService.initialize();
@@ -30,7 +34,8 @@ void main() async {
   // Wersja do notatki członka jednostki (feature/080) — widać ją na liście
   // „Członkowie jednostki", np. kto jeszcze nie zaktualizował aplikacji.
   try {
-    SyncService.appVersion = (await PackageInfo.fromPlatform()).version;
+    SyncService.appVersion = (await PackageInfo.fromPlatform()).version +
+        (isTestBuild ? ' (test)' : '');
   } catch (_) {}
   // Czcionka wydruków (Open Sans) jest w paczce aplikacji — jej licencja
   // wymaga dołączenia tekstu licencji.
@@ -157,7 +162,17 @@ class _OspAppState extends ConsumerState<OspApp> with WidgetsBindingObserver {
 
     return MaterialApp.router(
       scaffoldMessengerKey: _messenger,
-      title: 'Raporty OSP',
+      title: isTestBuild ? 'Raporty OSP TEST' : 'Raporty OSP',
+      // Wersja testowa rozpoznawalna na każdym ekranie — rozmawia z tym samym
+      // serwerem co wersja ze Sklepu.
+      builder: isTestBuild
+          ? (context, child) => Banner(
+                message: 'TEST',
+                location: BannerLocation.topEnd,
+                color: OspTheme.testBuild,
+                child: child ?? const SizedBox.shrink(),
+              )
+          : null,
       theme: OspTheme.lightTheme,
       debugShowCheckedModeBanner: false,
       routerConfig: router,

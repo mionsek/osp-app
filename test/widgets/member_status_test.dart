@@ -60,7 +60,7 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Pokaż, kto ma dostęp'));
+    await tester.tap(find.text('Pokaż członków'));
     await tester.pumpAndSettle();
 
     expect(
@@ -104,7 +104,7 @@ void main() {
       ],
     ));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Pokaż, kto ma dostęp'));
+    await tester.tap(find.text('Pokaż członków'));
     await tester.pumpAndSettle();
 
     expect(find.text('jan@gmail.com'), findsOneWidget);

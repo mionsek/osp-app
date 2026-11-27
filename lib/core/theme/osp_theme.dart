@@ -23,6 +23,10 @@ class OspTheme {
   /// Kolor uzupełniający motywu (`ColorScheme.secondary`).
   static const Color accentOrange = Color(0xFFFF6F00);
 
+  /// Wersja testowa obok wersji ze Sklepu — granat jak tło jej ikony
+  /// (tool/osp_icons/build_test_icon.py).
+  static const Color testBuild = Color(0xFF1A237E);
+
   static const Color background = Color(0xFFFAFAFA);
   static const Color surface = Colors.white;
 

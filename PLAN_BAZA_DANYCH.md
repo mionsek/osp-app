@@ -124,7 +124,14 @@ Reguły (sprawdzane przez serwer, z testami na emulatorze Firebase):
   nie widzą; prosi o nie dopiero przycisk migracji (Google pozwala dołożyć
   uprawnienie później), a po migracji aplikacja go nie używa.
 
-## Migracja — przycisk w aplikacji
+## Migracja — przycisk w aplikacji (odrzucone 27.11.2026)
+
+**Decyzja Dawida:** żadna jednostka nie pracuje jeszcze naprawdę na Dysku,
+więc aplikacja przechodzi wyłącznie na Firebase — bez trybu Dysku i bez
+przycisku migracji („najwyżej przerzucę wszystko ręcznie"). Telefon
+z wersji na Dysku po aktualizacji zapomina folder, a dane z telefonu idą na
+serwer przy założeniu jednostki albo dołączeniu do niej. Opis niżej zostaje
+jako archiwum.
 
 Warunek wstępny: wszyscy członkowie jednostki mają nową wersję. Pomoże tu
 „kto dołączył” wdrożone **jeszcze w wersji z Dyskiem** — administrator zobaczy,

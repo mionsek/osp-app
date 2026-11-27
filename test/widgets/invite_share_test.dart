@@ -68,17 +68,18 @@ void main() {
     return sync;
   }
 
-  testWidgets('po zaproszeniu okno z „Udostępnij kod" — wysyła tę samą treść '
-      'co powiadomienie Google', (tester) async {
+  testWidgets('po zaproszeniu okno z „Udostępnij kod" — kod wysyła się '
+      'samemu, bez powiadomienia Google (feature/081)', (tester) async {
     final shared = <String>[];
     final sync = await pumpSection(tester, shared: shared);
 
     verify(() => sync.inviteMember('jan@gmail.com')).called(1);
     expect(find.text('Zaproszenie wysłane'), findsOneWidget);
     expect(
-        find.textContaining('Google wyśle na jan@gmail.com powiadomienie'),
+        find.textContaining('jan@gmail.com jest na liście zaproszonych'),
         findsOneWidget);
-    expect(find.textContaining('z kodem ABC234'), findsOneWidget);
+    expect(find.textContaining('kod ABC234'), findsOneWidget);
+    expect(find.textContaining('Google'), findsNothing);
     expect(neutral(), findsNothing, reason: 'okno „Zaproszenie wysłane"');
 
     await tester.tap(find.text('Udostępnij kod'));

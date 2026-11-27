@@ -17,6 +17,17 @@ val keystoreProperties = Properties().apply {
 }
 val hasReleaseKey = keystorePropertiesFile.exists()
 
+// Wersja testowa obok wersji ze Sklepu Play (Dawid, 27.11.2026): tester nie
+// musi odinstalowywać aplikacji ze Sklepu. Inny identyfikator, nazwa
+// „Raporty OSP TEST" i granatowa ikona z napisem TEST:
+//
+//   flutter build apk --release --target-platform android-arm64 \
+//     --android-project-arg=testowa=true --dart-define=OSP_TEST=true
+//
+// Firebase wymaga, żeby `pl.osp.osp_app.test` był zarejestrowany w projekcie
+// i obecny w google-services.json.
+val testBuild = project.hasProperty("testowa")
+
 plugins {
     id("com.android.application")
     // Wtyczki Kotlina celowo tu nie ma: od AGP 9 dostarcza ją sam AGP
@@ -50,14 +61,25 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "pl.osp.osp_app"
+        // Wersja testowa ma własny identyfikator — instaluje się obok wersji
+        // ze Sklepu Play zamiast ją zastępować.
+        applicationId = if (testBuild) "pl.osp.osp_app.test" else "pl.osp.osp_app"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders["appLabel"] =
+            if (testBuild) "Raporty OSP TEST" else "Raporty OSP"
+        manifestPlaceholders["appIcon"] =
+            if (testBuild) "@mipmap/ic_launcher_test" else "@mipmap/ic_launcher"
+    }
+
+    // Ikona wersji testowej (tool/osp_icons/build_test_icon.py) — tylko
+    // w wersji testowej, zwykły build jej nie zawiera.
+    if (testBuild) {
+        sourceSets.getByName("main").res.srcDir("src/testowa/res")
     }
 
     signingConfigs {

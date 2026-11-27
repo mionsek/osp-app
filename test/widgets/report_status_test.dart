@@ -12,7 +12,7 @@ import 'package:osp_app/services/database_service.dart';
 
 import '../helpers/test_app.dart';
 
-/// Ekran wyjazdu i lista wyjazdów: czy wyjazd jest na Dysku jednostki i czy
+/// Ekran wyjazdu i lista wyjazdów: czy wyjazd jest na serwerze jednostki i czy
 /// jego numer się nie powtarza.
 ///
 /// Test 1.7.4 na dwóch telefonach: wyjazd kolegi czekał na telefonie, a jego
@@ -99,9 +99,9 @@ void main() {
     return sync;
   }
 
-  group('ekran wyjazdu — czy jest na Dysku', () {
+  group('ekran wyjazdu — czy jest na serwerze', () {
     testWidgets('wyjazd, który nie wyszedł z telefonu, nie udaje, że jest '
-        'na Dysku', (tester) async {
+        'na serwerze', (tester) async {
       seed(report('r-w', '0002/$year'));
       await pump(
         tester,
@@ -110,19 +110,19 @@ void main() {
         awaiting: {'r-w'},
       );
 
-      expect(find.text('Czeka na wysłanie na Dysk jednostki'), findsOneWidget);
+      expect(find.text('Czeka na wysłanie na serwer jednostki'), findsOneWidget);
       expect(find.text('Wyślij teraz'), findsOneWidget);
-      expect(find.text('Zapisano na Dysku jednostki'), findsNothing);
+      expect(find.text('Zapisano na serwerze jednostki'), findsNothing);
       expect(find.text('Zapisano na Google Drive'), findsNothing);
     });
 
-    testWidgets('wysłany wyjazd — „Zapisano na Dysku jednostki"',
+    testWidgets('wysłany wyjazd — „Zapisano na serwerze jednostki"',
         (tester) async {
       seed(report('r-w', '0002/$year'));
       await pump(tester, const ReportDetailScreen(reportId: 'r-w'),
           wojtekInUnit);
 
-      expect(find.text('Zapisano na Dysku jednostki'), findsOneWidget);
+      expect(find.text('Zapisano na serwerze jednostki'), findsOneWidget);
       expect(find.text('Wyślij teraz'), findsNothing);
     });
 
@@ -142,18 +142,18 @@ void main() {
       );
 
       expect(
-        find.textContaining('jest na telefonie, ale jeszcze nie na Dysku'),
+        find.textContaining('jest na telefonie, ale jeszcze nie na serwerze'),
         findsOneWidget,
       );
       expect(find.textContaining('o 17:41'), findsOneWidget);
     });
 
-    testWidgets('bez jednostki — bez paska o Dysku', (tester) async {
+    testWidgets('bez jednostki — bez paska o serwerze', (tester) async {
       seed(report('r-w', '0002/$year'));
       await pump(tester, const ReportDetailScreen(reportId: 'r-w'),
           const SyncState());
 
-      expect(find.textContaining('Dysku jednostki'), findsNothing);
+      expect(find.textContaining('serwerze jednostki'), findsNothing);
       expect(find.text('Wyślij teraz'), findsNothing);
     });
   });

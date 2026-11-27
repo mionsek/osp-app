@@ -70,7 +70,7 @@ class _UnitMembersSectionState extends ConsumerState<UnitMembersSection> {
     final email = await showDialog<String>(
       context: context,
       builder: (_) =>
-          _InviteDialog(onServer: ref.read(syncServiceProvider).onServer),
+          const _InviteDialog(),
     );
     if (email == null || email.isEmpty || !mounted) return;
 
@@ -100,21 +100,14 @@ class _UnitMembersSectionState extends ConsumerState<UnitMembersSection> {
   /// wysłania tej samej treści SMS-em albo komunikatorem.
   Future<void> _offerToSend(String email, String message) async {
     final code = ref.read(syncStateProvider).unitInviteCode ?? '';
-    final onServer = ref.read(syncServiceProvider).onServer;
     final send = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Zaproszenie wysłane'),
         content: Text(
-          onServer
-              ? '$email jest na liście zaproszonych. Wyślij tej osobie kod '
-                  '$code SMS-em, komunikatorem albo e-mailem — po '
-                  'zalogowaniu tym adresem i wpisaniu kodu dołączy do '
-                  'jednostki.'
-              : 'Google wyśle na $email powiadomienie o udostępnieniu '
-                  'folderu jednostki z kodem $code. Wygląda jak zwykłe '
-                  'udostępnienie z Dysku i bywa w Spamie — przekaż kod także '
-                  'SMS-em albo komunikatorem.',
+          '$email jest na liście zaproszonych. Wyślij tej osobie kod $code '
+          'SMS-em, komunikatorem albo e-mailem — po zalogowaniu tym adresem '
+          'i wpisaniu kodu dołączy do jednostki.',
           style: const TextStyle(fontSize: 14),
         ),
         actions: [
@@ -237,7 +230,6 @@ class _UnitMembersSectionState extends ConsumerState<UnitMembersSection> {
   @override
   Widget build(BuildContext context) {
     final syncState = ref.watch(syncStateProvider);
-    final onServer = ref.watch(syncServiceProvider).onServer;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -246,13 +238,9 @@ class _UnitMembersSectionState extends ConsumerState<UnitMembersSection> {
             style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 4),
         Text(
-          onServer
-              ? 'Zanim ktoś dołączy kodem, musi być na liście zaproszonych '
-                  'ze swoim adresem — samo podanie kodu nie wystarczy. Kod '
-                  'wysyłasz sam: SMS-em, komunikatorem albo e-mailem.'
-              : 'Zanim ktoś dołączy kodem, musi dostać zaproszenie na swój '
-                  'adres — samo podanie kodu nie wystarczy. Razem '
-                  'z zaproszeniem Google wysyła e-mail z kodem.',
+          'Zanim ktoś dołączy kodem, musi być na liście zaproszonych ze '
+          'swoim adresem — samo podanie kodu nie wystarczy. Kod wysyłasz '
+          'sam: SMS-em, komunikatorem albo e-mailem.',
           style: TextStyle(fontSize: 12, color: Colors.grey[600]),
         ),
         const SizedBox(height: 12),
@@ -303,7 +291,7 @@ class _UnitMembersSectionState extends ConsumerState<UnitMembersSection> {
                     height: 16,
                     child: CircularProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.group, size: 18),
-            label: Text(onServer ? 'Pokaż członków' : 'Pokaż, kto ma dostęp'),
+            label: const Text('Pokaż członków'),
           )
         else ...[
           for (final m in _members!)
@@ -316,7 +304,6 @@ class _UnitMembersSectionState extends ConsumerState<UnitMembersSection> {
               isMe: (syncState.userEmail ?? '').trim().toLowerCase() ==
                   m.email.trim().toLowerCase(),
               note: _notes[m.email.trim().toLowerCase()],
-              onServer: onServer,
               onToggleAdmin: (v) => _toggleAdmin(m, v),
               onRevoke: () => _revoke(m),
             ),
@@ -346,12 +333,7 @@ class _MemberTile extends StatelessWidget {
   final ValueChanged<bool> onToggleAdmin;
   final VoidCallback onRevoke;
 
-  /// Serwer jednostek: kto nie ma rekordu członka, ten jeszcze nie
-  /// dołączył — bez zgadywania o starszej wersji (feature/081).
-  final bool onServer;
-
   const _MemberTile({
-    this.onServer = false,
     required this.member,
     required this.isFounder,
     this.sharedAccount = false,
@@ -397,7 +379,7 @@ class _MemberTile extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    onServer && member.invited
+                    member.invited
                         ? 'Zaproszony — jeszcze nie dołączył'
                         : memberStatus(note, DateTime.now()),
                     style: TextStyle(
@@ -509,8 +491,7 @@ class RejectedChangesCard extends StatelessWidget {
 /// zaraz po wybraniu przycisku, a okno w trakcie znikania jeszcze z niego
 /// korzystało (test z feature/068 wykrył błąd „used after being disposed").
 class _InviteDialog extends StatefulWidget {
-  final bool onServer;
-  const _InviteDialog({this.onServer = false});
+  const _InviteDialog();
 
   @override
   State<_InviteDialog> createState() => _InviteDialogState();
@@ -533,22 +514,17 @@ class _InviteDialogState extends State<_InviteDialog> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            widget.onServer
-                ? 'Podaj adres e-mail, którym ta osoba loguje się '
-                    'w aplikacji. Trafi na listę zaproszonych, a kod '
-                    'zaproszenia wyślesz jej w następnym kroku.'
-                : 'Podaj adres konta Google, którym ta osoba loguje się '
-                    'w aplikacji. Dostanie dostęp do danych jednostki '
-                    'i e-mail od Google z kodem zaproszenia i instrukcją '
-                    'dołączenia.',
-            style: const TextStyle(fontSize: 13),
+          const Text(
+            'Podaj adres e-mail, którym ta osoba loguje się w aplikacji. '
+            'Trafi na listę zaproszonych, a kod zaproszenia wyślesz jej '
+            'w następnym kroku.',
+            style: TextStyle(fontSize: 13),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: _controller,
-            decoration: InputDecoration(
-              labelText: widget.onServer ? 'Adres e-mail' : 'Adres e-mail (Gmail)',
+            decoration: const InputDecoration(
+              labelText: 'Adres e-mail',
               hintText: 'np. jan.kowalski@gmail.com',
             ),
             keyboardType: TextInputType.emailAddress,

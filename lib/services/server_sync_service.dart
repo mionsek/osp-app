@@ -167,6 +167,7 @@ class ServerSyncService extends SyncService {
   @override
   Future<void> restoreState() async {
     await _db.slimStoredTombstones();
+    await _forgetDriveUnit();
     if (!authService.isSignedIn) {
       _updateState(const SyncState());
       return;
@@ -190,6 +191,19 @@ class ServerSyncService extends SyncService {
       adminEmails: _db.cachedAdminEmails,
       sharedFounder: _db.cachedSharedFounder,
     ));
+  }
+
+  /// Telefon z wersji na Dysku: połączenie z folderem jednostki nie ma już
+  /// znaczenia. Dane na telefonie zostają — pójdą do jednostki na serwerze,
+  /// gdy telefon ją założy albo do niej dołączy (Dawid, 27.11.2026:
+  /// „najwyżej przerzucę wszystko ręcznie").
+  Future<void> _forgetDriveUnit() async {
+    if (_db.configBox.get(SyncService.driveConfigKey) == null) return;
+    await _db.configBox.delete(SyncService.driveConfigKey);
+    await _db.settingsBox.delete(SyncService._fileCacheKey);
+    await _db.cacheAdminEmails(const []);
+    await _db.cacheSharedFounder(false);
+    await _db.clearRejectedChanges();
   }
 
   Future<void> _saveServerConfig(String unitId, String code) =>

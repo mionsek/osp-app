@@ -13,17 +13,10 @@ final databaseServiceProvider = Provider<DatabaseService>((ref) {
 
 // --- Google / Sync ---
 
-/// Dysk albo serwer jednostek (feature/081) — wykrywane przy starcie,
-/// zmieniane przez przeniesienie jednostki z Dysku.
-final syncBackendProvider = StateProvider<SyncBackend>(
-    (ref) => detectSyncBackend(ref.watch(databaseServiceProvider)));
-
-/// Logowanie: przy Dysku konto Google z dostępem do Dysku, przy serwerze
-/// tylko e-mail i imię ([ServerAuthService]).
+/// Logowanie do serwera jednostek — konto Google tylko z adresem e-mail
+/// i imieniem, bez dostępu do Dysku (feature/081).
 final googleAuthServiceProvider = Provider<GoogleAuthService>((ref) {
-  return ref.watch(syncBackendProvider) == SyncBackend.server
-      ? ServerAuthService()
-      : GoogleAuthService();
+  return ServerAuthService();
 });
 
 final googleDriveServiceProvider = Provider<GoogleDriveService>((ref) {
@@ -34,9 +27,11 @@ final syncServiceProvider = Provider<SyncService>((ref) {
   final db = ref.watch(databaseServiceProvider);
   final auth = ref.watch(googleAuthServiceProvider);
   final drive = ref.watch(googleDriveServiceProvider);
-  final service = auth is ServerAuthService
-      ? ServerSyncService(db, auth, drive)
-      : SyncService(db, auth, drive);
+  // Tylko serwer jednostek (Dawid, 27.11.2026: „przerzucamy się na
+  // Firebase i tyle"). Synchronizacja z Dyskiem zostaje w kodzie jako
+  // podstawa scalania, ale aplikacja jej nie używa.
+  final SyncService service =
+      ServerSyncService(db, auth as ServerAuthService, drive);
   ref.onDispose(service.dispose);
   service.onDataPulled = () {
     ref.read(reportsProvider.notifier).refresh();

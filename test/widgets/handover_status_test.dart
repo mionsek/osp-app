@@ -12,7 +12,7 @@ import 'package:osp_app/services/database_service.dart';
 
 import '../helpers/test_app.dart';
 
-/// Ekran i lista przekazań mienia: czy przekazanie jest na Dysku jednostki.
+/// Ekran i lista przekazań mienia: czy przekazanie jest na serwerze jednostki.
 ///
 /// Zgłoszenie z testu 1.7.6: przekazanie kolegi nie dotarło do Dawida, a ekran
 /// przekazania nie mówił, czy w ogóle wyszło z telefonu — inaczej niż ekran
@@ -82,14 +82,14 @@ void main() {
     await pump(tester, const HandoverDetailScreen(handoverId: 'h1'),
         awaiting: {'h1'});
 
-    expect(find.text('Czeka na wysłanie na Dysk jednostki'), findsOneWidget);
+    expect(find.text('Czeka na wysłanie na serwer jednostki'), findsOneWidget);
     expect(find.text('Wyślij teraz'), findsOneWidget);
   });
 
-  testWidgets('wysłane — „Zapisano na Dysku jednostki"', (tester) async {
+  testWidgets('wysłane — „Zapisano na serwerze jednostki"', (tester) async {
     await pump(tester, const HandoverDetailScreen(handoverId: 'h1'));
 
-    expect(find.text('Zapisano na Dysku jednostki'), findsOneWidget);
+    expect(find.text('Zapisano na serwerze jednostki'), findsOneWidget);
   });
 
   testWidgets('po błędzie — że przekazanie jest tylko na telefonie',
@@ -107,16 +107,16 @@ void main() {
 
     expect(
       find.textContaining(
-          'Przekazanie jest na telefonie, ale jeszcze nie na Dysku'),
+          'Przekazanie jest na telefonie, ale jeszcze nie na serwerze'),
       findsOneWidget,
     );
   });
 
-  testWidgets('bez jednostki — bez paska o Dysku', (tester) async {
+  testWidgets('bez jednostki — bez paska o serwerze', (tester) async {
     await pump(tester, const HandoverDetailScreen(handoverId: 'h1'),
         state: const SyncState());
 
-    expect(find.textContaining('Dysku jednostki'), findsNothing);
+    expect(find.textContaining('serwerze jednostki'), findsNothing);
   });
 
   testWidgets('lista oznacza przekazanie czekające na wysłanie i przy '

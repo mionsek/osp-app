@@ -90,7 +90,7 @@ void main() {
     expect(find.text('Zmień konto'), findsOneWidget);
     expect(find.text('Wyloguj'), findsOneWidget);
     expect(find.text('Dołącz do jednostki kodem'), findsOneWidget);
-    expect(find.text('Utwórz jednostkę na Dysku'), findsOneWidget);
+    expect(find.text('Utwórz jednostkę'), findsOneWidget);
     expect(find.text('Zaloguj się kontem Google'), findsNothing);
   });
 
@@ -369,10 +369,11 @@ void main() {
         findsOneWidget);
   });
 
-  testWidgets('w jednostce widać przycisk do folderu na Dysku',
-      (tester) async {
+  testWidgets('jednostka na serwerze — bez przycisku folderu na Dysku '
+      '(feature/081)', (tester) async {
     await pumpSettings(tester, founderInUnit);
-    expect(find.text('Otwórz folder jednostki na Dysku'), findsOneWidget);
+    expect(find.textContaining('folder'), findsNothing);
+    expect(find.textContaining('Dysk'), findsNothing);
   });
 
   testWidgets(
@@ -419,8 +420,8 @@ void main() {
           ),
         ]);
 
-    await tester.ensureVisible(find.text('Utwórz jednostkę na Dysku'));
-    await tester.tap(find.text('Utwórz jednostkę na Dysku'));
+    await tester.ensureVisible(find.text('Utwórz jednostkę'));
+    await tester.tap(find.text('Utwórz jednostkę'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(ElevatedButton, 'Utwórz'));
     await tester.pumpAndSettle();
