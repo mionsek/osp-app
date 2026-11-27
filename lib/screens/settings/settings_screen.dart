@@ -457,11 +457,7 @@ class _GoogleSyncSectionState extends ConsumerState<_GoogleSyncSection> {
       if (choice != CreateUnitChoice.create || !mounted) return;
       final code = await ref.read(syncStateProvider.notifier).createUnit(name);
       if (!mounted) return;
-      final wantsSwitch =
-          await showInviteCodeDialog(context, code, offerPersonalSwitch: true);
-      if (wantsSwitch && mounted) {
-        await runSwitchToPersonalAccount(context, ref);
-      }
+      await showInviteCodeDialog(context, code);
     });
   }
 
@@ -621,11 +617,7 @@ class _GoogleSyncSectionState extends ConsumerState<_GoogleSyncSection> {
                   : 'Synchronizuj teraz'),
             ),
             const SizedBox(height: 4),
-            // Na Dysku konta jednostki może leżeć kilka folderów o tej samej
-            // nazwie — stąd prosto do właściwego.
-            // Wspólne konto (np. tablet w samochodzie) nie przełącza się na
-            // „swoje" — przełączenie nadaje podanemu adresowi uprawnienia
-            // administratora, a tablet ma ich nie mieć.
+            // Wspólne urządzenie jednostki (np. tablet w wozie).
             if (syncState.isSharedAccount) ...[
               const SizedBox(height: 16),
               _Notice(
@@ -643,29 +635,6 @@ class _GoogleSyncSectionState extends ConsumerState<_GoogleSyncSection> {
                 label: const Text('Jak to działa?'),
               ),
             ]
-            // Jednostkę często zakłada się na wspólnym koncie jednostki,
-            // a wyjazdy podpisują się kontem, na którym się jest. Przy
-            // jednostce założonej na prywatnym koncie — bez tej podpowiedzi.
-            else if (syncState.isFounder(email) &&
-                ref.read(databaseServiceProvider).founderOnUnitAccount) ...[
-              const SizedBox(height: 16),
-              _Notice(
-                icon: Icons.person_outline,
-                color: OspTheme.info,
-                background: OspTheme.infoSurface,
-                text: 'Jednostka jest założona na tym koncie. Jeśli to '
-                    'wspólne konto jednostki, przełącz się na swoje — wtedy '
-                    'wyjazdy dodasz jako Ty, a nie jako jednostka.',
-              ),
-              const SizedBox(height: 8),
-              OutlinedButton.icon(
-                onPressed: _busy
-                    ? null
-                    : () => runSwitchToPersonalAccount(context, ref),
-                icon: const Icon(Icons.person),
-                label: const Text('Przełącz na swoje konto'),
-              ),
-            ],
           ],
         ],
       ],

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/theme/osp_theme.dart';
 
 /// Samouczek: tablet w samochodzie na wspólnym koncie jednostki
-/// ([SyncState.sharedFounder]).
+/// ([SyncState.isSharedDevice]).
 ///
 /// Jeden tekst dla wszystkich miejsc, z których się go otwiera — Członkowie
 /// jednostki, wspólne konto w Ustawieniach i „O aplikacji" — żeby kroki nie
@@ -38,29 +38,26 @@ class SharedAccountGuide extends StatelessWidget {
           style: TextStyle(height: 1.4),
         ),
         const SizedBox(height: 16),
+        // Bez „Przełącz na swoje konto" (Dawid, 27.11.2026): tablet loguje
+        // się kontem jednostki, telefon swoim — kto założył jednostkę, nie
+        // ma znaczenia.
         const _Step(
           number: 1,
-          title: 'Administrator na własnym koncie',
-          text: 'Jednostką zarządza ktoś na swoim prywatnym koncie. Jeśli '
-              'założyłeś ją na koncie jednostki, użyj w Ustawieniach '
-              '„Przełącz na swoje konto".',
+          title: 'Zaproś konto jednostki',
+          text: 'Administrator na swoim telefonie: Ustawienia → Członkowie '
+              'jednostki → Zaproś do jednostki. Wpisz adres konta jednostki '
+              'i zaznacz „Wspólne urządzenie jednostki". Konto, które już '
+              'jest w jednostce, oznaczysz w menu ⋮ przy nim.',
         ),
         const _Step(
           number: 2,
-          title: 'Oznacz konto jednostki jako wspólne',
-          text: 'Na swoim koncie: Ustawienia → Członkowie jednostki → „Konto '
-              'jednostki jest wspólne". Można to też zaznaczyć od razu przy '
-              'przełączaniu na swoje konto.',
-        ),
-        const _Step(
-          number: 3,
           title: 'Zaloguj tablet',
           text: 'Na tablecie zainstaluj aplikację, wybierz „Dołącz do '
               'jednostki", zaloguj się kontem jednostki i wpisz kod '
               'zaproszenia z Ustawień.',
         ),
         const _Step(
-          number: 4,
+          number: 3,
           title: 'Wpisuj z tabletu',
           text: 'Przy zapisie wyjazdu i przekazania mienia wybierz siebie '
               'w polu „Kto wpisuje?". W szczegółach dokumentu widać potem, '
@@ -82,7 +79,12 @@ class SharedAccountGuide extends StatelessWidget {
           'sprzętu i nikomu nie nada uprawnień.',
         ),
         const _Bullet(
-          'Wspólne konto wyłączy tylko administrator na własnym koncie.',
+          'Wspólne urządzenie wyłączy tylko administrator na własnym koncie.',
+        ),
+        const _Bullet(
+          'Jednostkę założono na koncie jednostki? Je też można oznaczyć, ale '
+          'najpierw ktoś musi być administratorem na swoim koncie — wspólne '
+          'urządzenie jednostką nie zarządza.',
         ),
         const _Bullet(
           'Zgubiony tablet: zmień hasło do konta jednostki i wyloguj tablet '

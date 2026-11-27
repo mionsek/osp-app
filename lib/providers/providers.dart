@@ -118,17 +118,6 @@ class SyncStateNotifier extends StateNotifier<SyncState> {
     return success;
   }
 
-  /// Przejście z konta jednostki na prywatne konto tej samej osoby.
-  Future<AccountSwitchResult> switchToPersonalAccount(
-    String email, {
-    bool sharedAccount = false,
-  }) async {
-    final result = await _syncService.switchToPersonalAccount(email,
-        sharedAccount: sharedAccount);
-    _afterAccountChange();
-    return result;
-  }
-
   /// Nowe konto z dostępem do jednostki synchronizuje od razu; bez dostępu
   /// nie ponawiamy co 5 minut tego samego błędu.
   void _afterAccountChange() {

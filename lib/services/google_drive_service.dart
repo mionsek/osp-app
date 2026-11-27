@@ -15,11 +15,16 @@ class UnitMemberAccess {
   /// Zaproszony, który jeszcze nie dołączył (serwer jednostek, feature/081).
   final bool invited;
 
+  /// Imię i nazwisko z konta Google — zapisane przy dołączeniu; pusty, gdy
+  /// konto go nie podało albo osoba jeszcze nie dołączyła.
+  final String name;
+
   const UnitMemberAccess({
     required this.permissionId,
     required this.email,
     required this.isOwner,
     this.invited = false,
+    this.name = '',
   });
 }
 
@@ -46,6 +51,10 @@ class UnitCandidate {
   /// w bazie, a [ownerEmail] — kto zaprosił (albo założyciel).
   final bool onServer;
 
+  /// Imię i nazwisko zapraszającego z jego konta Google (serwer) — obok
+  /// adresu w oknie „Dołączyć do tej jednostki?".
+  final String? ownerName;
+
   const UnitCandidate({
     required this.folderId,
     required this.unitName,
@@ -53,6 +62,7 @@ class UnitCandidate {
     this.inviteCode,
     this.createdAt,
     this.onServer = false,
+    this.ownerName,
   });
 }
 

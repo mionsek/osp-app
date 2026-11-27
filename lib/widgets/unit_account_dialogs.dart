@@ -7,8 +7,8 @@ import '../providers/providers.dart';
 import '../services/google_drive_service.dart';
 import '../services/sync_service.dart';
 
-// Okna wspólne dla wprowadzenia i Ustawień: kod zaproszenia, dołączenie
-// kodem i przejście z konta jednostki na własne konto.
+// Okna wspólne dla wprowadzenia i Ustawień: kod zaproszenia i dołączenie
+// kodem.
 //
 // Wcześniej dołączyć albo założyć jednostkę dało się wyłącznie przy pierwszym
 // uruchomieniu — kto wybrał wtedy tryb offline albo zalogował się dopiero
@@ -135,10 +135,19 @@ class _ConfirmUnitDialog extends StatelessWidget {
             Text(
                 unit.onServer ? 'Zaproszenie od' : 'Właściciel folderu na Dysku',
                 style: TextStyle(color: Colors.grey[600])),
-            Text(
-              unit.ownerEmail ?? 'nieznany',
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
+            // Imię z konta Google zapraszającego (serwer), adres pod nim.
+            if ((unit.ownerName ?? '').isNotEmpty) ...[
+              Text(
+                unit.ownerName!,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              Text(unit.ownerEmail ?? 'nieznany',
+                  style: const TextStyle(fontSize: 13)),
+            ] else
+              Text(
+                unit.ownerEmail ?? 'nieznany',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
             const SizedBox(height: 16),
             Text(
               unit.onServer
@@ -376,16 +385,10 @@ class _OwnUnitsDialogState extends State<_OwnUnitsDialog> {
 
 /// Kod zaproszenia zaraz po założeniu jednostki.
 ///
-/// Z [offerPersonalSwitch] pyta też, czy przejść na własne konto: raporty
-/// podpisują się kontem, na którym się jest, a jednostkę często zakłada się
-/// na wspólnym koncie (np. ospkielno@gmail.com). Zwraca `true`, gdy ktoś
-/// wybrał przejście.
-Future<bool> showInviteCodeDialog(
-  BuildContext context,
-  String code, {
-  bool offerPersonalSwitch = false,
-}) async {
-  final result = await showDialog<bool>(
+/// Wcześniej proponował tu przejście z konta jednostki na własne — zbędne
+/// (Dawid, 27.11.2026): tablet loguje się kontem jednostki, telefon swoim.
+Future<void> showInviteCodeDialog(BuildContext context, String code) async {
+  await showDialog<void>(
     context: context,
     barrierDismissible: false,
     builder: (ctx) => AlertDialog(
@@ -396,8 +399,9 @@ Future<bool> showInviteCodeDialog(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text(
-              'Strażaków zapraszasz w Ustawieniach → Członkowie jednostki. '
-              'Każdy dostanie e-mail z tym kodem:',
+              'Członków zapraszasz w Ustawieniach → Członkowie jednostki, '
+              'a potem wysyłasz im ten kod SMS-em, komunikatorem albo '
+              'e-mailem:',
             ),
             const SizedBox(height: 16),
             Container(
@@ -423,47 +427,17 @@ Future<bool> showInviteCodeDialog(
               'Kod znajdziesz też w Ustawieniach.',
               style: TextStyle(fontSize: 12, color: Colors.grey),
             ),
-            if (offerPersonalSwitch) ...[
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: OspTheme.infoSurface,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Text(
-                  'Wyjazdy i przekazania podpisują się kontem, na którym '
-                  'jesteś zalogowany. Jeśli założyłeś jednostkę na wspólnym '
-                  'koncie jednostki, przełącz się na swoje — wtedy dodasz '
-                  'je jako Ty, a nie jako jednostka. Konto jednostki może '
-                  'potem służyć np. na tablecie w samochodzie.',
-                  style: TextStyle(fontSize: 13),
-                ),
-              ),
-            ],
           ],
         ),
       ),
-      actions: offerPersonalSwitch
-          ? [
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(false),
-                child: const Text('Zostaję na tym koncie'),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.of(ctx).pop(true),
-                child: const Text('Przełącz na swoje konto'),
-              ),
-            ]
-          : [
-              ElevatedButton(
-                onPressed: () => Navigator.of(ctx).pop(false),
-                child: const Text('Rozumiem'),
-              ),
-            ],
+      actions: [
+        ElevatedButton(
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: const Text('Rozumiem'),
+        ),
+      ],
     ),
   );
-  return result ?? false;
 }
 
 /// Dołączenie do jednostki kodem z Ustawień. `true` — dołączono.
@@ -573,168 +547,6 @@ class _JoinUnitDialogState extends ConsumerState<_JoinUnitDialog> {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : const Text('Dołącz'),
-        ),
-      ],
-    );
-  }
-}
-
-/// Przejście z konta, na którym założono jednostkę, na prywatne konto.
-///
-/// Pyta o adres, udostępnia mu jednostkę z uprawnieniami administratora,
-/// a potem otwiera wybór konta Google. Wynik pokazuje na pasku.
-///
-/// W tym samym oknie można od razu oznaczyć konto jednostki jako wspólne
-/// (np. tablet w samochodzie) — to jedyna chwila przy zakładaniu jednostki,
-/// kiedy jest już komu zostawić uprawnienia administratora.
-Future<void> runSwitchToPersonalAccount(
-  BuildContext context,
-  WidgetRef ref,
-) async {
-  final choice = await showDialog<({String email, bool shared})>(
-    context: context,
-    builder: (_) => const _PersonalAccountDialog(),
-  );
-  if (choice == null || !context.mounted) return;
-  final email = choice.email;
-
-  final messenger = ScaffoldMessenger.of(context);
-  final navigator = Navigator.of(context, rootNavigator: true);
-  showDialog<void>(
-    context: context,
-    barrierDismissible: false,
-    builder: (_) => const PopScope(
-      canPop: false,
-      child: AlertDialog(
-        content: Row(
-          children: [
-            SizedBox(
-              width: 24,
-              height: 24,
-              child: CircularProgressIndicator(strokeWidth: 3),
-            ),
-            SizedBox(width: 16),
-            Expanded(child: Text('Udostępniam jednostkę i zmieniam konto…')),
-          ],
-        ),
-      ),
-    ),
-  );
-
-  String message;
-  try {
-    final result = await ref
-        .read(syncStateProvider.notifier)
-        .switchToPersonalAccount(email, sharedAccount: choice.shared);
-    final sharedNote = choice.shared &&
-            result != AccountSwitchResult.sameAccount
-        ? ' Konto jednostki jest teraz wspólne — można nim zalogować tablet.'
-        : '';
-    message = switch (result) {
-      AccountSwitchResult.done => 'Zalogowano jako $email. Jednostka bez '
-          'zmian — nowe wyjazdy podpiszą się Twoim kontem, a uprawnienia '
-          'administratora masz nadal.',
-      AccountSwitchResult.sameAccount => 'Już jesteś zalogowany na $email.',
-      AccountSwitchResult.cancelled => 'Nie wybrano konta — aplikacja jest '
-          'wylogowana. Zaloguj się w Ustawieniach kontem $email; dostęp do '
-          'jednostki jest już nadany.',
-      AccountSwitchResult.otherAccount => 'Wybrano inne konto niż $email '
-          '— ono nie ma dostępu do jednostki. W Ustawieniach użyj „Zmień '
-          'konto" i wybierz $email.',
-      AccountSwitchResult.noAccess => 'Konto $email jeszcze nie widzi '
-          'jednostki. Spróbuj za chwilę „Synchronizuj teraz".',
-    } + sharedNote;
-  } catch (e) {
-    message = 'Nie udało się przełączyć konta: $e';
-  }
-
-  navigator.pop();
-  messenger.showSnackBar(SnackBar(
-    content: Text(message),
-    duration: const Duration(seconds: 8),
-  ));
-}
-
-class _PersonalAccountDialog extends StatefulWidget {
-  const _PersonalAccountDialog();
-
-  @override
-  State<_PersonalAccountDialog> createState() => _PersonalAccountDialogState();
-}
-
-class _PersonalAccountDialogState extends State<_PersonalAccountDialog> {
-  final _email = TextEditingController();
-  String? _error;
-  bool _shared = false;
-
-  @override
-  void dispose() {
-    _email.dispose();
-    super.dispose();
-  }
-
-  void _submit() {
-    final email = _email.text.trim();
-    if (!email.contains('@') || email.startsWith('@') || email.endsWith('@')) {
-      setState(() => _error = 'To nie wygląda na adres e-mail.');
-      return;
-    }
-    Navigator.of(context).pop((email: email, shared: _shared));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Przełącz na swoje konto'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text(
-              'Podaj adres swojego konta Google. Udostępnię mu jednostkę '
-              'i nadam uprawnienia administratora, a potem poproszę '
-              'o wybranie tego konta. Obecne konto zostaje założycielem '
-              'jednostki.',
-              style: TextStyle(fontSize: 13),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _email,
-              decoration: InputDecoration(
-                labelText: 'Twój adres e-mail (Gmail)',
-                hintText: 'np. jan.kowalski@gmail.com',
-                errorText: _error,
-              ),
-              keyboardType: TextInputType.emailAddress,
-              autofocus: true,
-              onSubmitted: (_) => _submit(),
-            ),
-            const SizedBox(height: 8),
-            CheckboxListTile(
-              contentPadding: EdgeInsets.zero,
-              controlAffinity: ListTileControlAffinity.leading,
-              value: _shared,
-              onChanged: (v) => setState(() => _shared = v ?? false),
-              title: const Text('Konto jednostki będzie wspólne'),
-              subtitle: const Text(
-                'Np. tablet w samochodzie. Konto jednostki straci '
-                'uprawnienia administratora, a przy wpisach zapyta, kto '
-                'wpisuje. Można to zmienić później w Ustawieniach.',
-                style: TextStyle(fontSize: 12),
-              ),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Anuluj'),
-        ),
-        ElevatedButton(
-          onPressed: _submit,
-          child: const Text('Dalej'),
         ),
       ],
     );

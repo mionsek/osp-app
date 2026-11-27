@@ -67,12 +67,12 @@ class _UnitMembersSectionState extends ConsumerState<UnitMembersSection> {
   }
 
   Future<void> _invite() async {
-    final email = await showDialog<String>(
+    final invite = await showDialog<({String email, bool shared})>(
       context: context,
-      builder: (_) =>
-          const _InviteDialog(),
+      builder: (_) => const _InviteDialog(),
     );
-    if (email == null || email.isEmpty || !mounted) return;
+    final email = invite?.email ?? '';
+    if (email.isEmpty || !mounted) return;
 
     if (!email.contains('@')) {
       setState(() => _error = 'To nie wygląda na adres e-mail.');
@@ -84,7 +84,9 @@ class _UnitMembersSectionState extends ConsumerState<UnitMembersSection> {
       _error = null;
     });
     try {
-      final message = await ref.read(syncServiceProvider).inviteMember(email);
+      final message = await ref
+          .read(syncServiceProvider)
+          .inviteMember(email, sharedDevice: invite!.shared);
       await _loadMembers();
       if (mounted) await _offerToSend(email, message);
     } catch (e) {
@@ -142,29 +144,35 @@ class _UnitMembersSectionState extends ConsumerState<UnitMembersSection> {
     }
   }
 
-  /// Wspólne konto jednostki, np. tablet w samochodzie — patrz
-  /// [SyncState.sharedFounder].
-  Future<void> _toggleShared(bool shared) async {
+  /// Wspólne urządzenie jednostki, np. tablet w wozie zalogowany kontem
+  /// jednostki ([SyncState.isSharedDevice]) — dowolne konto, nie tylko
+  /// założyciela (Dawid, 27.11.2026).
+  Future<void> _toggleShared(UnitMemberAccess member, bool shared) async {
     final syncState = ref.read(syncStateProvider);
-    final founder = syncState.founderEmail ?? '';
-    final onThisAccount = syncState.isFounder(syncState.userEmail ?? '');
+    final who = member.name.trim().isEmpty ? member.email : member.name.trim();
+    final founder = syncState.isFounder(member.email);
+    final onThisAccount = (syncState.userEmail ?? '').trim().toLowerCase() ==
+        member.email.trim().toLowerCase();
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(shared
-            ? 'Konto jednostki jako wspólne?'
-            : 'Wyłączyć wspólne konto?'),
+            ? 'Wspólne urządzenie jednostki?'
+            : 'Wyłączyć wspólne urządzenie?'),
         content: Text(shared
-            ? '$founder będzie działać jak konto zwykłego członka: doda '
+            ? '$who będzie działać jak konto zwykłego członka: doda '
                 'wyjazdy i przekazania mienia i poprawi tylko te dodane '
                 'z niego, ale nie zmieni ustawień jednostki, list ani '
                 'uprawnień. Przy każdym wpisie zapyta, kto wpisuje.\n\n'
                 'Cofnąć to może tylko administrator na własnym koncie.'
                 '${onThisAccount ? '\n\nTo konto, na którym jesteś — '
                     'od razu stracisz tu uprawnienia administratora.' : ''}'
-            : '$founder odzyska uprawnienia administratora na każdym '
-                'urządzeniu, na którym jest zalogowane, i przestanie pytać, '
-                'kto wpisuje.'),
+            : founder
+                ? '$who odzyska uprawnienia administratora na każdym '
+                    'urządzeniu, na którym jest zalogowane, i przestanie '
+                    'pytać, kto wpisuje.'
+                : '$who stanie się zwykłym członkiem i przestanie pytać, '
+                    'kto wpisuje.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -179,7 +187,7 @@ class _UnitMembersSectionState extends ConsumerState<UnitMembersSection> {
     );
     if (confirmed != true) return;
     try {
-      await ref.read(syncServiceProvider).setSharedFounder(shared);
+      await ref.read(syncServiceProvider).setSharedDevice(member.email, shared);
       if (mounted) setState(() => _error = null);
     } on LastPersonalAdminException {
       if (mounted) {
@@ -198,7 +206,8 @@ class _UnitMembersSectionState extends ConsumerState<UnitMembersSection> {
       builder: (ctx) => AlertDialog(
         title: const Text('Odbierz dostęp'),
         content: Text(
-          '${member.email} straci dostęp do danych jednostki. '
+          '${member.name.trim().isEmpty ? member.email : member.name.trim()} '
+          'straci dostęp do danych jednostki. '
           'Dane już pobrane na jego telefon pozostaną tam, ale nie będzie '
           'ich dalej synchronizować.',
         ),
@@ -262,25 +271,11 @@ class _UnitMembersSectionState extends ConsumerState<UnitMembersSection> {
           icon: const Icon(Icons.person_add_alt),
           label: const Text('Zaproś do jednostki'),
         ),
-        if (syncState.founderEmail != null) ...[
-          const SizedBox(height: 8),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            value: syncState.sharedFounder,
-            onChanged: _loading ? null : _toggleShared,
-            title: const Text('Konto jednostki jest wspólne'),
-            subtitle: Text(
-              'Np. tablet w samochodzie. ${syncState.founderEmail} działa '
-              'wtedy jak zwykły członek, a przy wpisach pyta, kto wpisuje.',
-              style: const TextStyle(fontSize: 12),
-            ),
-          ),
-          TextButton.icon(
-            onPressed: () => showSharedAccountGuide(context),
-            icon: const Icon(Icons.help_outline, size: 18),
-            label: const Text('Tablet w samochodzie — krok po kroku'),
-          ),
-        ],
+        TextButton.icon(
+          onPressed: () => showSharedAccountGuide(context),
+          icon: const Icon(Icons.help_outline, size: 18),
+          label: const Text('Tablet w samochodzie — krok po kroku'),
+        ),
         const SizedBox(height: 8),
         if (_members == null)
           TextButton.icon(
@@ -294,17 +289,24 @@ class _UnitMembersSectionState extends ConsumerState<UnitMembersSection> {
             label: const Text('Pokaż członków'),
           )
         else ...[
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              membersSummary(_members!),
+              style: const TextStyle(fontWeight: FontWeight.w500),
+            ),
+          ),
           for (final m in _members!)
             _MemberTile(
               member: m,
               isFounder: syncState.isFounder(m.email),
-              sharedAccount:
-                  syncState.isFounder(m.email) && syncState.sharedFounder,
+              sharedDevice: syncState.isSharedDevice(m.email),
               isAdmin: syncState.isAdmin(m.email),
               isMe: (syncState.userEmail ?? '').trim().toLowerCase() ==
                   m.email.trim().toLowerCase(),
               note: _notes[m.email.trim().toLowerCase()],
               onToggleAdmin: (v) => _toggleAdmin(m, v),
+              onToggleShared: (v) => _toggleShared(m, v),
               onRevoke: () => _revoke(m),
             ),
           TextButton.icon(
@@ -318,12 +320,23 @@ class _UnitMembersSectionState extends ConsumerState<UnitMembersSection> {
   }
 }
 
+/// Ile osób dołączyło i ile zaproszeń czeka — nad listą członków.
+@visibleForTesting
+String membersSummary(List<UnitMemberAccess> members) {
+  final waiting = members.where((m) => m.invited).length;
+  final joined = members.length - waiting;
+  return 'W jednostce: $joined'
+      '${waiting > 0 ? ' · zaproszeni, którzy jeszcze nie dołączyli: $waiting' : ''}';
+}
+
+enum _MemberAction { admin, shared, revoke }
+
 class _MemberTile extends StatelessWidget {
   final UnitMemberAccess member;
   final bool isFounder;
 
-  /// Założyciel z włączonym wspólnym kontem jednostki.
-  final bool sharedAccount;
+  /// Wspólne urządzenie jednostki ([SyncState.isSharedDevice]).
+  final bool sharedDevice;
   final bool isAdmin;
   final bool isMe;
 
@@ -331,29 +344,46 @@ class _MemberTile extends StatelessWidget {
   /// ma wersję sprzed feature/080.
   final MemberNote? note;
   final ValueChanged<bool> onToggleAdmin;
+  final ValueChanged<bool> onToggleShared;
   final VoidCallback onRevoke;
 
   const _MemberTile({
     required this.member,
     required this.isFounder,
-    this.sharedAccount = false,
+    this.sharedDevice = false,
     required this.isAdmin,
     required this.isMe,
     this.note,
     required this.onToggleAdmin,
+    required this.onToggleShared,
     required this.onRevoke,
   });
+
+  String get _role {
+    if (sharedDevice) {
+      if (isFounder && isAdmin) {
+        return 'Wspólne urządzenie — administrator, dopóki nikt inny nim '
+            'nie jest';
+      }
+      return 'Wspólne urządzenie — jak zwykły członek, pyta, kto wpisuje';
+    }
+    if (isFounder || member.isOwner) return 'Założyciel — stały administrator';
+    return isAdmin ? 'Administrator' : 'Użytkownik';
+  }
 
   @override
   Widget build(BuildContext context) {
     // Założyciel zawsze zostaje administratorem i nie da się go usunąć —
     // inaczej jednostka mogłaby zostać bez nikogo, kto może nią zarządzać.
     final locked = isFounder || member.isOwner;
+    // Imię z konta Google (zapisane przy dołączeniu), a pod nim adres.
+    final name = member.name.trim();
+    final me = isMe ? '  (Ty)' : '';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+        padding: const EdgeInsets.fromLTRB(12, 8, 0, 8),
         child: Row(
           children: [
             Expanded(
@@ -361,20 +391,19 @@ class _MemberTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    member.email + (isMe ? '  (Ty)' : ''),
+                    (name.isEmpty ? member.email : name) + me,
                     style: const TextStyle(fontWeight: FontWeight.w500),
                     overflow: TextOverflow.ellipsis,
                   ),
+                  if (name.isNotEmpty)
+                    Text(
+                      member.email,
+                      style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   const SizedBox(height: 2),
                   Text(
-                    sharedAccount
-                        ? (isAdmin
-                            ? 'Wspólne konto — administrator, dopóki nikt '
-                                'inny nim nie jest'
-                            : 'Wspólne konto jednostki — jak zwykły członek')
-                        : locked
-                            ? 'Założyciel — stały administrator'
-                            : (isAdmin ? 'Administrator' : 'Użytkownik'),
+                    _role,
                     style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                   ),
                   const SizedBox(height: 2),
@@ -392,21 +421,35 @@ class _MemberTile extends StatelessWidget {
                 ],
               ),
             ),
-            if (!locked) ...[
-              Tooltip(
-                message: 'Uprawnienia administratora',
-                child: Switch(
-                  value: isAdmin,
-                  onChanged: onToggleAdmin,
+            PopupMenuButton<_MemberAction>(
+              tooltip: 'Rola i dostęp',
+              onSelected: (action) => switch (action) {
+                _MemberAction.admin => onToggleAdmin(!isAdmin),
+                _MemberAction.shared => onToggleShared(!sharedDevice),
+                _MemberAction.revoke => onRevoke(),
+              },
+              itemBuilder: (_) => [
+                if (!locked)
+                  CheckedPopupMenuItem(
+                    value: _MemberAction.admin,
+                    checked: isAdmin,
+                    child: const Text('Administrator'),
+                  ),
+                CheckedPopupMenuItem(
+                  value: _MemberAction.shared,
+                  checked: sharedDevice,
+                  child: const Text('Wspólne urządzenie (tablet)'),
                 ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.person_remove_outlined,
-                    color: OspTheme.danger),
-                tooltip: 'Odbierz dostęp',
-                onPressed: onRevoke,
-              ),
-            ],
+                if (!locked) ...[
+                  const PopupMenuDivider(),
+                  const PopupMenuItem(
+                    value: _MemberAction.revoke,
+                    child: Text('Odbierz dostęp',
+                        style: TextStyle(color: OspTheme.danger)),
+                  ),
+                ],
+              ],
+            ),
           ],
         ),
       ),
@@ -500,6 +543,9 @@ class _InviteDialog extends StatefulWidget {
 class _InviteDialogState extends State<_InviteDialog> {
   final _controller = TextEditingController();
 
+  /// Wspólne urządzenie jednostki — np. tablet w wozie na koncie jednostki.
+  bool _shared = false;
+
   @override
   void dispose() {
     _controller.dispose();
@@ -530,6 +576,19 @@ class _InviteDialogState extends State<_InviteDialog> {
             keyboardType: TextInputType.emailAddress,
             autofocus: true,
           ),
+          const SizedBox(height: 8),
+          CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            controlAffinity: ListTileControlAffinity.leading,
+            value: _shared,
+            onChanged: (v) => setState(() => _shared = v ?? false),
+            title: const Text('Wspólne urządzenie jednostki'),
+            subtitle: const Text(
+              'Np. tablet w wozie na koncie jednostki — przy wpisach '
+              'zapyta, kto wpisuje.',
+              style: TextStyle(fontSize: 12),
+            ),
+          ),
         ],
       ),
       actions: [
@@ -538,7 +597,8 @@ class _InviteDialogState extends State<_InviteDialog> {
           child: const Text('Anuluj'),
         ),
         ElevatedButton(
-          onPressed: () => Navigator.pop(context, _controller.text.trim()),
+          onPressed: () => Navigator.pop(
+              context, (email: _controller.text.trim(), shared: _shared)),
           child: const Text('Zaproś'),
         ),
       ],

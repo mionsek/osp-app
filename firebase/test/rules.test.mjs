@@ -281,6 +281,25 @@ describe('zaproszenia', () => {
       invitedBy: 'a@gmail.com', invitedAt: serverTimestamp(),
     }));
     await assertFails(inviteFrom('a', 'd@gmail.com', 'owner'));
+    await assertFails(inviteFrom('a', 'd@gmail.com', 'superadmin'));
+  });
+
+  test('imię zapraszającego — tylko tekst', async () => {
+    await seedUnit();
+    const invite = (invitedByName) => setDoc(doc(as('a'), 'units', U, 'invites', 'd@gmail.com'), {
+      email: 'd@gmail.com', role: 'member', unitName: 'OSP Test',
+      invitedBy: 'a@gmail.com', invitedByName, invitedAt: serverTimestamp(),
+    });
+    await assertSucceeds(invite('Anna Nowak'));
+    await assertFails(invite(42));
+  });
+
+  test('wspólne urządzenie zaproszone od razu jako „shared” dołącza z tą rolą', async () => {
+    await seedUnit();
+    await assertSucceeds(inviteFrom('c', 'd@gmail.com', 'shared'));
+    await assertFails(joinBatch('d', 'member').commit());
+    await assertFails(joinBatch('d', 'admin').commit());
+    await assertSucceeds(joinBatch('d', 'shared').commit());
   });
 
   test('zaproszony widzi tylko swoje zaproszenie; listę — administrator', async () => {
@@ -488,6 +507,28 @@ describe('członkowie i role', () => {
     await assertFails(updateDoc(doc(as('c'), 'units', U, 'members', 'a'), { role: 'member' }));
     await assertFails(updateDoc(doc(as('c'), 'units', U, 'members', 'b'), { role: 'owner' }));
     await assertFails(updateDoc(doc(as('b'), 'units', U, 'members', 'c'), { role: 'member' }));
+  });
+
+  test('wspólne urządzenie: rolę nadaje administrator, a urządzenie ma '
+      + 'uprawnienia zwykłego członka', async () => {
+    await seedUnit();
+    await assertFails(updateDoc(doc(as('b'), 'units', U, 'members', 'b'), { role: 'shared' }));
+    await assertSucceeds(updateDoc(doc(as('c'), 'units', U, 'members', 'b'), { role: 'shared' }));
+    // Dodaje wpisy jako ono samo — jak każdy członek.
+    await assertSucceeds(put('b', 'reports', 'r1', 'b@gmail.com'));
+    await assertFails(put('b', 'reports', 'r2', 'a@gmail.com'));
+    // Ale nie zarządza jednostką.
+    await assertFails(setDoc(doc(as('b'), 'units', U, 'firefighters', 'f1'), {
+      data: { id: 'f1', updatedAt: '2026-11-27T10:00:00.000' },
+      deleted: false,
+      serverAt: serverTimestamp(),
+      by: 'b@gmail.com',
+    }));
+    await assertFails(inviteFrom('b', 'e@gmail.com'));
+    await assertFails(updateDoc(doc(as('b'), 'units', U, 'members', 'c'), { role: 'member' }));
+    await assertFails(updateDoc(doc(as('b'), 'units', U, 'members', 'b'), { role: 'admin' }));
+    // Administrator cofa rolę.
+    await assertSucceeds(updateDoc(doc(as('a'), 'units', U, 'members', 'b'), { role: 'member' }));
   });
 
   test('administrator odbiera dostęp, członek nie; każdy może odejść', async () => {

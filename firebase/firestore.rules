@@ -10,7 +10,8 @@ rules_version = '2';
 //   config/app                          minimalna wersja aplikacji (tylko konsola)
 //   inviteCodes/{kod}                   kod zaproszenia → identyfikator jednostki
 //   units/{u}                           dane jednostki, właściciel, kod
-//   units/{u}/members/{uid}             członek: e-mail, rola, ostatnio, wersja
+//   units/{u}/members/{uid}             członek: e-mail, rola (owner, admin,
+//                                       member, shared), ostatnio, wersja
 //   units/{u}/invites/{e-mail}          lista zaproszonych (kto może dołączyć)
 //   units/{u}/consents/{id}             akceptacje umowy powierzenia (rejestr)
 //   units/{u}/reports|handovers|trips|equipmentWork/{id}   wpisy z autorem
@@ -61,6 +62,13 @@ service cloud.firestore {
 
     function isOwner(u) {
       return isMember(u) && myRole(u) == 'owner';
+    }
+
+    // Role, które nadaje administrator. `shared` — wspólne urządzenie
+    // jednostki, np. tablet w wozie na koncie jednostki: uprawnienia
+    // zwykłego członka, a aplikacja przy wpisach pyta, kto wpisuje.
+    function grantableRole(r) {
+      return r in ['member', 'admin', 'shared'];
     }
 
     // ── Wersja aplikacji ──────────────────────────────────────────────
@@ -157,7 +165,7 @@ service cloud.firestore {
           (isAdmin(u)
             && resource.data.role != 'owner'
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role'])
-            && request.resource.data.role in ['member', 'admin'])
+            && grantableRole(request.resource.data.role))
         );
 
         // Odejście z jednostki, „Odbierz dostęp” albo usunięcie konta.
@@ -178,10 +186,11 @@ service cloud.firestore {
           && email == email.lower()
           // Nazwa jednostki — zaproszony nie jest jeszcze członkiem, więc
           // samej jednostki nie odczyta, a ekran dołączania ją pokazuje.
-          && request.resource.data.keys().hasOnly(['email', 'role', 'unitName', 'invitedBy', 'invitedAt'])
+          && request.resource.data.keys().hasOnly(['email', 'role', 'unitName', 'invitedBy', 'invitedByName', 'invitedAt'])
           && request.resource.data.get('unitName', '') is string
+          && request.resource.data.get('invitedByName', '') is string
           && request.resource.data.email == email
-          && request.resource.data.role in ['member', 'admin']
+          && grantableRole(request.resource.data.role)
           && request.resource.data.invitedBy == myEmail()
           && request.resource.data.invitedAt == request.time;
 

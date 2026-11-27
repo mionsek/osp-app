@@ -395,7 +395,9 @@ class SyncService {
   /// Zwraca treść zaproszenia — ekran proponuje wysłać ją jeszcze SMS-em
   /// albo komunikatorem, bo powiadomienie Google wygląda jak zwykłe
   /// udostępnienie folderu i łatwo je przeoczyć (Dawid, 19.11.2026).
-  Future<String> inviteMember(String email) async {
+  /// Z [sharedDevice] zaproszony od razu jest wspólnym urządzeniem
+  /// jednostki (rola `shared`, tylko na serwerze).
+  Future<String> inviteMember(String email, {bool sharedDevice = false}) async {
     final folderId = _state.unitFolderId;
     if (folderId == null) {
       throw StateError('Brak połączenia z jednostką.');
@@ -707,6 +709,15 @@ class SyncService {
       throw const LastPersonalAdminException();
     }
     await _writeAdmins(_state.adminEmails, sharedFounder: shared);
+  }
+
+  /// Wspólne urządzenie jednostki, np. tablet w wozie
+  /// ([SyncState.isSharedDevice]). Założyciel — [setSharedFounder]; inne
+  /// konta tylko na serwerze (rola `shared`).
+  Future<void> setSharedDevice(String email, bool shared) async {
+    if (_state.isFounder(email)) return setSharedFounder(shared);
+    throw UnsupportedError('Wspólne urządzenie inne niż konto założyciela '
+        'działa tylko na serwerze jednostek.');
   }
 
   Future<void> _writeAdmins(List<String> admins, {bool? sharedFounder}) async {

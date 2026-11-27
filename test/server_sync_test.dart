@@ -25,13 +25,14 @@ class FakeServerAuth implements ServerAuthService {
   /// Konto, które „wybierze” użytkownik przy zmianie konta.
   ({String uid, String email})? nextAccount;
 
-  FakeServerAuth(this.uid, this.userEmail);
+  FakeServerAuth(this.uid, this.userEmail, [this.displayName]);
 
   @override
   bool get isSignedIn => uid != null;
 
+  /// Imię i nazwisko z konta Google.
   @override
-  String? get displayName => null;
+  String? displayName;
 
   @override
   Future<bool> signIn() async {
@@ -74,10 +75,11 @@ void main() {
 
   /// Telefon [name] z kontem `<name>@gmail.com` (albo [account]).
   Future<ServerSyncService> phone(String name,
-      {String? account, String? uid}) async {
+      {String? account, String? uid, String? displayName}) async {
     await openPhoneDb(root, name);
     final email = account ?? '$name@gmail.com';
-    final auth = FakeServerAuth(uid ?? email.split('@').first, email);
+    final auth =
+        FakeServerAuth(uid ?? email.split('@').first, email, displayName);
     final sync = ServerSyncService(db, auth, FakeDrive(), firestore: fs);
     await sync.restoreState();
     return sync;
@@ -403,6 +405,89 @@ void main() {
       await a.revokeMember(members.firstWhere((m) => m.email == 'c@gmail.com'));
       final c = await phone('c');
       expect(await c.lookupUnit(code), isA<UnitNotInvited>());
+    });
+
+    // Dawid, 27.11.2026: „skoro i tak jest logowanie Google, to można by
+    // dodać imię i nazwisko, kto dołączył".
+    test('imię z konta Google: u zaproszonego przy dołączaniu i na liście '
+        'członków', () async {
+      final a = await phone('a', displayName: 'Anna Nowak');
+      final code = await create(a);
+      await a.inviteMember('b@gmail.com');
+
+      final b = await phone('b', displayName: 'Bartek Kowalski');
+      final lookup = await b.lookupUnit(code) as UnitFound;
+      expect(lookup.unit.ownerName, 'Anna Nowak');
+      expect(lookup.unit.ownerEmail, 'a@gmail.com');
+      await b.joinFoundUnit(lookup.unit, code);
+
+      final a2 = await phone('a', displayName: 'Anna Nowak');
+      final members = await a2.listMembers();
+      String nameOf(String email) =>
+          members.firstWhere((m) => m.email == email).name;
+      expect(nameOf('a@gmail.com'), 'Anna Nowak');
+      expect(nameOf('b@gmail.com'), 'Bartek Kowalski');
+    });
+
+    // Dawid, 27.11.2026: tablet w wozie loguje się kontem jednostki,
+    // telefon swoim — niezależnie od tego, kto założył jednostkę.
+    test('wspólne urządzenie, które nie zakładało jednostki: pyta, kto '
+        'wpisuje, i nie zarządza jednostką — także po restarcie', () async {
+      final code = await unitWithMember();
+      final unitId = await unitIdOf(code);
+      final a = await phone('a');
+      await a.listMembers();
+      await a.setSharedDevice('b@gmail.com', true);
+      expect((await serverDoc('units/$unitId/members/b'))!['role'], 'shared');
+      expect(a.state.sharedEmails, ['b@gmail.com']);
+      expect(a.state.isSharedDevice('b@gmail.com'), isTrue);
+
+      final b = await phone('b');
+      await b.syncAll();
+      expect(b.state.isSharedAccount, isTrue);
+      expect(b.state.isCurrentUserAdmin, isFalse);
+      // Restart bez zasięgu — z pamięci telefonu.
+      final bAgain = await phone('b');
+      expect(bAgain.state.isSharedAccount, isTrue);
+
+      final a2 = await phone('a');
+      await a2.listMembers();
+      await a2.setSharedDevice('b@gmail.com', false);
+      expect((await serverDoc('units/$unitId/members/b'))!['role'], 'member');
+      final b2 = await phone('b');
+      await b2.syncAll();
+      expect(b2.state.isSharedAccount, isFalse);
+    });
+
+    test('zaproszony od razu jako wspólne urządzenie dołącza z tą rolą',
+        () async {
+      final a = await phone('a');
+      final code = await create(a);
+      await a.inviteMember('t@gmail.com', sharedDevice: true);
+      expect(a.state.sharedEmails, ['t@gmail.com']);
+
+      final t = await phone('t');
+      expect(await t.joinUnit(code), isTrue);
+      expect(t.state.isSharedAccount, isTrue);
+      expect(t.state.isCurrentUserAdmin, isFalse);
+    });
+
+    test('konto założyciela jako wspólne urządzenie; ostatni administrator '
+        'na własnym koncie nim nie zostanie', () async {
+      final code = await unitWithMember();
+      final unitId = await unitIdOf(code);
+      final a = await phone('a');
+      await a.listMembers();
+      await expectLater(a.setSharedDevice('a@gmail.com', true),
+          throwsA(isA<LastPersonalAdminException>()));
+
+      await a.grantAdmin('b@gmail.com');
+      await a.setSharedDevice('a@gmail.com', true);
+      expect((await serverDoc('units/$unitId'))!['sharedOwner'], isTrue);
+      expect(a.state.isSharedAccount, isTrue);
+      await expectLater(a.setSharedDevice('b@gmail.com', true),
+          throwsA(isA<LastPersonalAdminException>()));
+      expect((await serverDoc('units/$unitId/members/b'))!['role'], 'admin');
     });
 
     test('ślad w aplikacji: ostatnia synchronizacja i wersja', () async {

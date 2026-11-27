@@ -49,15 +49,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
   }
 
-  /// Wybrana karta „Użyj konta jednostki" — tylko wtedy po założeniu
-  /// jednostki ma sens przejście na własne konto.
-  bool _unitAccount = false;
-
-  Future<void> _handleGoogleSignIn({bool unitAccount = false}) async {
-    setState(() {
-      _isSigningIn = true;
-      _unitAccount = unitAccount;
-    });
+  Future<void> _handleGoogleSignIn() async {
+    setState(() => _isSigningIn = true);
     try {
       final success = await ref.read(syncStateProvider.notifier).signIn();
       if (success && mounted) {
@@ -103,13 +96,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       if (syncState.userEmail != null) {
         final code =
             await ref.read(syncStateProvider.notifier).createUnit(fullName);
-        await db.setFounderOnUnitAccount(_unitAccount);
         if (!mounted) return;
-        final wantsSwitch = await showInviteCodeDialog(context, code,
-            offerPersonalSwitch: _unitAccount);
-        if (wantsSwitch && mounted) {
-          await runSwitchToPersonalAccount(context, ref);
-        }
+        await showInviteCodeDialog(context, code);
       }
 
       if (mounted) goHome(context);
@@ -377,26 +365,26 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             ),
           ),
           const SizedBox(height: 24),
+          // Tablet w wozie — konto jednostki, telefon — swoje (Dawid,
+          // 27.11.2026). Podświetlona karta pasuje do tego urządzenia.
           _ChoiceCard(
-            icon: Icons.apartment,
-            title: 'Użyj konta jednostki',
-            // Dane są na serwerze (feature/081) — konto mówi tylko, kto
-            // zarządza jednostką.
-            subtitle: 'Zalecane — np. ospkielno@gmail.com\n'
-                'Jednostka zostaje przy koncie jednostki, także gdy '
-                'zmieni się zarząd.',
-            onTap: _isSigningIn
-                ? () {}
-                : () => _handleGoogleSignIn(unitAccount: true),
-            badge: 'zalecane',
+            icon: Icons.tablet_android,
+            title: 'Konto jednostki',
+            subtitle: 'Na tablet lub telefon jednostki, np. w wozie — '
+                'np. ospkielno@gmail.com.\n'
+                'Jednostka zostaje przy tym koncie, także gdy zmieni się '
+                'zarząd.',
+            onTap: _isSigningIn ? () {} : _handleGoogleSignIn,
+            badge: isTabletLayout(context) ? 'zalecane na tablecie' : null,
           ),
           const SizedBox(height: 16),
           _ChoiceCard(
-            icon: Icons.person,
-            title: 'Użyj prywatnego konta',
-            subtitle: 'np. jan.kowalski@gmail.com\n'
-                'Zarządzasz jednostką ze swojego konta.',
+            icon: Icons.smartphone,
+            title: 'Swoje konto',
+            subtitle: 'Na swój telefon — np. jan.kowalski@gmail.com.\n'
+                'Wyjazdy podpisują się Tobą.',
             onTap: _isSigningIn ? () {} : _handleGoogleSignIn,
+            badge: isTabletLayout(context) ? null : 'zalecane na telefonie',
           ),
           if (_isSigningIn) ...[
             const SizedBox(height: 24),
@@ -453,7 +441,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 ),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 16),
+          AccountForDeviceHint(tablet: isTabletLayout(context)),
+          const SizedBox(height: 24),
           ElevatedButton.icon(
             onPressed: _isSigningIn ? null : _handleGoogleSignIn,
             icon: _isSigningIn
@@ -681,6 +671,65 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Tablet albo duży ekran — po najkrótszym boku, jak w wytycznych Androida.
+bool isTabletLayout(BuildContext context) =>
+    MediaQuery.sizeOf(context).shortestSide >= 600;
+
+/// Którym kontem zalogować to urządzenie: tablet w wozie — kontem jednostki,
+/// swój telefon — swoim. Wiersz pasujący do urządzenia jest pogrubiony.
+class AccountForDeviceHint extends StatelessWidget {
+  final bool tablet;
+
+  const AccountForDeviceHint({super.key, required this.tablet});
+
+  Widget _row(IconData icon, String text, bool current) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, size: 20, color: OspTheme.info),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                text,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: current ? FontWeight.w600 : FontWeight.normal,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: OspTheme.infoSurface,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _row(
+            Icons.tablet_android,
+            'Tablet lub telefon jednostki, np. w wozie — konto jednostki '
+            '(np. ospkielno@gmail.com).',
+            tablet,
+          ),
+          _row(
+            Icons.smartphone,
+            'Swój telefon — swoje konto (np. jan.kowalski@gmail.com).',
+            !tablet,
+          ),
+        ],
       ),
     );
   }

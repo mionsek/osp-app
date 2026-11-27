@@ -190,6 +190,7 @@ class ServerSyncService extends SyncService {
       founderEmail: owner.isEmpty ? null : owner,
       adminEmails: _db.cachedAdminEmails,
       sharedFounder: _db.cachedSharedFounder,
+      sharedEmails: _db.cachedSharedEmails,
     ));
   }
 
@@ -223,6 +224,8 @@ class ServerSyncService extends SyncService {
     _invites.clear();
     _membersReadAt = null;
     await _db.settingsBox.delete(_cacheKey);
+    await _db.cacheSharedEmails(const []);
+    _updateState(_state.copyWith(sharedEmails: const []));
   }
 
   @override
@@ -350,6 +353,7 @@ class ServerSyncService extends SyncService {
       folderId: unitId,
       unitName: SyncService._text(data['unitName']) ?? '',
       ownerEmail: SyncService._text(data['invitedBy']),
+      ownerName: SyncService._text(data['invitedByName']),
       inviteCode: normalized,
       onServer: true,
     ));
@@ -440,9 +444,10 @@ class ServerSyncService extends SyncService {
   // ── Członkowie, zaproszenia, role ─────────────────────────────────────
 
   @override
-  Future<String> inviteMember(String email) async {
+  Future<String> inviteMember(String email, {bool sharedDevice = false}) async {
     final address = email.trim().toLowerCase();
-    await _writeInvite(address, 'member');
+    await _writeInvite(address, sharedDevice ? 'shared' : 'member');
+    if (sharedDevice) await _applyRoles();
     return SyncService.inviteMessage(
       unitName: _db.getConfig().fullName,
       code: _state.unitInviteCode ?? '',
@@ -456,6 +461,10 @@ class ServerSyncService extends SyncService {
       'role': role,
       'unitName': _db.getConfig().fullName,
       'invitedBy': _me,
+      // Imię zapraszającego w oknie dołączania — zaproszony nie odczyta
+      // jeszcze listy członków.
+      if ((authService.displayName ?? '').isNotEmpty)
+        'invitedByName': authService.displayName,
       'invitedAt': FieldValue.serverTimestamp(),
     }).timeout(serverTimeout);
     _invites[address] = {'email': address, 'role': role};
@@ -472,6 +481,7 @@ class ServerSyncService extends SyncService {
           permissionId: 'm:${m['uid']}',
           email: email,
           isOwner: m['role'] == 'owner',
+          name: SyncService._text(m['displayName']) ?? '',
         ),
       for (final email in _invites.keys)
         if (!_members.containsKey(email))
@@ -530,23 +540,39 @@ class ServerSyncService extends SyncService {
 
   String? _myRole;
 
-  /// Administratorzy według serwera: członkowie z rolą `admin` i zaproszeni
-  /// jako administratorzy (np. przy przejściu na własne konto).
+  /// Administratorzy i wspólne urządzenia według serwera: członkowie
+  /// z rolą `admin` albo `shared` i tak samo zaproszeni.
   Future<void> _applyRoles() async {
-    final admins = <String>{
-      for (final MapEntry(key: email, value: m) in _members.entries)
-        if (m['role'] == 'admin') email,
-      for (final MapEntry(key: email, value: i) in _invites.entries)
-        if (i['role'] == 'admin' && !_members.containsKey(email)) email,
-    }.toList()
-      ..sort();
-    await _setAdmins(admins);
+    List<String> withRole(String role) => <String>{
+          for (final MapEntry(key: email, value: m) in _members.entries)
+            if (m['role'] == role) email,
+          for (final MapEntry(key: email, value: i) in _invites.entries)
+            if (i['role'] == role && !_members.containsKey(email)) email,
+        }.toList()
+          ..sort();
+    final shared = withRole('shared');
+    await _db.cacheSharedEmails(shared);
+    _updateState(_state.copyWith(sharedEmails: shared));
+    await _setAdmins(withRole('admin'));
   }
 
   Future<void> _setAdmins(List<String> admins) async {
     await _db.cacheAdminEmails(admins);
     await _db.setAdminsTrusted(true);
     _updateState(_state.copyWith(adminEmails: admins));
+  }
+
+  /// Wspólne urządzenie: rola `shared` zamiast `member`/`admin`. Ostatni
+  /// administrator na własnym koncie przy wspólnym koncie założyciela
+  /// zostaje — jak przy odbieraniu uprawnień.
+  @override
+  Future<void> setSharedDevice(String email, bool shared) async {
+    if (_state.isFounder(email)) return setSharedFounder(shared);
+    if (_membersReadAt == null) await _readMembers();
+    final address = SyncService._normalizeEmail(email);
+    if (shared) _ensureNotLastPersonalAdmin(address);
+    await _setRole(address, shared ? 'shared' : 'member');
+    await _applyRoles();
   }
 
   @override
@@ -614,41 +640,16 @@ class ServerSyncService extends SyncService {
     throw StateError('$email nie jest członkiem jednostki.');
   }
 
-  /// Przejście na własne konto: zaproszenie z uprawnieniami administratora,
-  /// zmiana konta i dołączenie nowym kontem.
+  /// Przejścia z konta jednostki na własne już nie ma (Dawid, 27.11.2026):
+  /// tablet loguje się kontem jednostki, telefon — swoim, a wspólne
+  /// urządzenie oznacza administrator ([setSharedDevice]). Wersja
+  /// odziedziczona po Dysku byłaby tu błędem.
   @override
   Future<AccountSwitchResult> switchToPersonalAccount(
     String email, {
     bool sharedAccount = false,
-  }) async {
-    final code = _state.unitInviteCode;
-    if (_state.unitFolderId == null || code == null) {
-      throw StateError('Brak połączenia z jednostką.');
-    }
-    final address = SyncService._normalizeEmail(email);
-    if (address == _me) return AccountSwitchResult.sameAccount;
-    if (_membersReadAt == null) await _readMembers();
-    if (!_members.containsKey(address)) await _writeInvite(address, 'admin');
-    await grantAdmin(address);
-    if (sharedAccount) await setSharedFounder(true);
-
-    stopAutoSync();
-    if (!await authService.switchAccount()) {
-      await restoreState();
-      return AccountSwitchResult.cancelled;
-    }
-    if (_me != address) {
-      await restoreState();
-      return AccountSwitchResult.otherAccount;
-    }
-    final lookup = await lookupUnit(code);
-    if (lookup is! UnitFound) {
-      await restoreState();
-      return AccountSwitchResult.noAccess;
-    }
-    await joinFoundUnit(lookup.unit, code);
-    return AccountSwitchResult.done;
-  }
+  }) =>
+      throw UnsupportedError('Przejście na własne konto usunięte.');
 
   @override
   Future<bool> switchAccount() async {

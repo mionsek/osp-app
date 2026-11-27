@@ -6,7 +6,6 @@ import 'package:mocktail/mocktail.dart';
 import 'package:osp_app/models/sync_state.dart';
 import 'package:osp_app/providers/providers.dart';
 import 'package:osp_app/screens/settings/settings_screen.dart';
-import 'package:osp_app/services/database_service.dart';
 import 'package:osp_app/services/google_auth_service.dart';
 import 'package:osp_app/services/google_drive_service.dart';
 import 'package:osp_app/services/sync_service.dart';
@@ -95,22 +94,17 @@ void main() {
     expect(find.text('Zaloguj się kontem Google'), findsNothing);
   });
 
-  testWidgets('założyciel na koncie jednostki dostaje propozycję przejścia '
-      'na własne konto', (tester) async {
-    await tester.runAsync(() => DatabaseService().setFounderOnUnitAccount(true));
+  // Przejścia z konta jednostki na swoje już nie ma (Dawid, 27.11.2026):
+  // tablet loguje się kontem jednostki, telefon swoim.
+  testWidgets('założyciel widzi konto i kod, bez przechodzenia na inne '
+      'konto', (tester) async {
     await pumpSettings(tester, founderInUnit);
 
     expect(find.text('ospkielno@gmail.com'), findsOneWidget);
     expect(find.text('ABC234'), findsOneWidget);
-    expect(find.text('Przełącz na swoje konto'), findsOneWidget);
-    expect(find.text('Dołącz do jednostki kodem'), findsNothing);
-  });
-
-  testWidgets('założyciel na prywatnym koncie — bez propozycji przejścia '
-      '(Dawid, 27.11.2026)', (tester) async {
-    await pumpSettings(tester, founderInUnit);
     expect(find.text('Przełącz na swoje konto'), findsNothing);
     expect(find.textContaining('Jednostka jest założona'), findsNothing);
+    expect(find.text('Dołącz do jednostki kodem'), findsNothing);
   });
 
   testWidgets('członek jednostki nie dostaje propozycji przejścia',
@@ -153,8 +147,8 @@ void main() {
     expect(find.text('Członkowie jednostki'), findsNothing);
   });
 
-  testWidgets('administrator na własnym koncie włącza wspólne konto '
-      'jednostki po potwierdzeniu', (tester) async {
+  testWidgets('administrator na własnym koncie robi z konta założyciela '
+      'wspólne urządzenie w menu przy nim', (tester) async {
     await pumpSettings(
       tester,
       const SyncState(
@@ -166,18 +160,61 @@ void main() {
         adminEmails: ['dawid@gmail.com'],
       ),
     );
-    when(() => sync.setSharedFounder(any())).thenAnswer((_) async {});
+    when(() => sync.listMembers()).thenAnswer((_) async => const [
+          UnitMemberAccess(
+              permissionId: 'm:a', email: 'ospkielno@gmail.com', isOwner: true),
+          UnitMemberAccess(
+              permissionId: 'm:d',
+              email: 'dawid@gmail.com',
+              isOwner: false,
+              name: 'Dawid Mionskowski'),
+        ]);
+    when(() => sync.memberNotes()).thenAnswer((_) async => const {});
+    when(() => sync.setSharedDevice(any(), any())).thenAnswer((_) async {});
 
-    final toggle = find.widgetWithText(
-        SwitchListTile, 'Konto jednostki jest wspólne');
-    await tester.ensureVisible(toggle);
-    await tester.tap(toggle);
+    await tester.ensureVisible(find.text('Pokaż członków'));
+    await tester.tap(find.text('Pokaż członków'));
     await tester.pumpAndSettle();
-    expect(find.text('Konto jednostki jako wspólne?'), findsOneWidget);
+    final founderMenu = find.descendant(
+      of: find.ancestor(
+          of: find.text('ospkielno@gmail.com').last,
+          matching: find.byType(Card)).first,
+      matching: find.byTooltip('Rola i dostęp'),
+    );
+    await tester.ensureVisible(founderMenu);
+    await tester.tap(founderMenu);
+    await tester.pumpAndSettle();
+    // Założyciela nie da się pozbawić administratora ani usunąć — w menu
+    // tylko wspólne urządzenie.
+    expect(find.byWidgetPredicate((w) => w is CheckedPopupMenuItem),
+        findsOneWidget);
+    expect(find.text('Odbierz dostęp'), findsNothing);
+    await tester.tap(find.text('Wspólne urządzenie (tablet)'));
+    await tester.pumpAndSettle();
+    expect(find.text('Wspólne urządzenie jednostki?'), findsOneWidget);
 
     await tester.tap(find.text('Włącz'));
     await tester.pumpAndSettle();
-    verify(() => sync.setSharedFounder(true)).called(1);
+    verify(() => sync.setSharedDevice('ospkielno@gmail.com', true)).called(1);
+  });
+
+  testWidgets('wspólne urządzenie, które nie zakładało jednostki, też pyta, '
+      'kto wpisuje, i nie zarządza jednostką', (tester) async {
+    await pumpSettings(
+      tester,
+      const SyncState(
+        status: SyncStatus.idle,
+        userEmail: 'ospkielno@gmail.com',
+        unitFolderId: 'folder',
+        unitInviteCode: 'ABC234',
+        founderEmail: 'dawid@gmail.com',
+        sharedEmails: ['ospkielno@gmail.com'],
+      ),
+    );
+
+    expect(find.textContaining('To wspólne konto jednostki'), findsOneWidget);
+    expect(find.text('Wspólne konto jednostki'), findsOneWidget);
+    expect(find.text('Członkowie jednostki'), findsNothing);
   });
 
   /// Okno samouczka „Tablet w samochodzie" — jego treść jest w jednym
@@ -194,8 +231,8 @@ void main() {
     expect(find.text('Zaloguj tablet'), findsNothing);
   }
 
-  testWidgets('samouczek tabletu u administratora przy przełączniku '
-      'wspólnego konta', (tester) async {
+  testWidgets('samouczek tabletu u administratora przy członkach jednostki',
+      (tester) async {
     await pumpSettings(
       tester,
       const SyncState(
@@ -224,58 +261,6 @@ void main() {
       ),
     );
     await expectGuideFrom(tester, 'Jak to działa?');
-  });
-
-  testWidgets('przełączenie na swoje konto może od razu zrobić z konta '
-      'jednostki wspólne', (tester) async {
-    await tester.runAsync(() => DatabaseService().setFounderOnUnitAccount(true));
-    await pumpSettings(tester, founderInUnit);
-    when(() => sync.switchToPersonalAccount(any(),
-            sharedAccount: any(named: 'sharedAccount')))
-        .thenAnswer((_) async => AccountSwitchResult.done);
-
-    await tester.ensureVisible(find.text('Przełącz na swoje konto'));
-    await tester.tap(find.text('Przełącz na swoje konto'));
-    await tester.pumpAndSettle();
-    await tester.enterText(
-      find.descendant(
-          of: find.byType(AlertDialog), matching: find.byType(TextField)),
-      'dawid@gmail.com',
-    );
-    await tester.tap(find.text('Konto jednostki będzie wspólne'));
-    await tester.pump();
-    await tester.tap(find.text('Dalej'));
-    await tester.pumpAndSettle();
-
-    verify(() => sync.switchToPersonalAccount('dawid@gmail.com',
-        sharedAccount: true)).called(1);
-    expect(find.textContaining('Konto jednostki jest teraz wspólne'),
-        findsOneWidget);
-  });
-
-  testWidgets('bez zaznaczenia przełączenie nie zmienia konta jednostki',
-      (tester) async {
-    await tester.runAsync(() => DatabaseService().setFounderOnUnitAccount(true));
-    await pumpSettings(tester, founderInUnit);
-    when(() => sync.switchToPersonalAccount(any(),
-            sharedAccount: any(named: 'sharedAccount')))
-        .thenAnswer((_) async => AccountSwitchResult.done);
-
-    await tester.ensureVisible(find.text('Przełącz na swoje konto'));
-    await tester.tap(find.text('Przełącz na swoje konto'));
-    await tester.pumpAndSettle();
-    await tester.enterText(
-      find.descendant(
-          of: find.byType(AlertDialog), matching: find.byType(TextField)),
-      'dawid@gmail.com',
-    );
-    await tester.tap(find.text('Dalej'));
-    await tester.pumpAndSettle();
-
-    verify(() => sync.switchToPersonalAccount('dawid@gmail.com',
-        sharedAccount: false)).called(1);
-    expect(find.textContaining('Konto jednostki jest teraz wspólne'),
-        findsNothing);
   });
 
   /// Otwiera okno dołączania i wysyła w nim kod.

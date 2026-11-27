@@ -42,6 +42,13 @@ class SyncState {
   /// [isAdmin] i [isSharedAccount].
   final bool sharedFounder;
 
+  /// Pozostałe wspólne urządzenia jednostki — konta z rolą `shared` na
+  /// serwerze (Dawid, 27.11.2026: tablet w wozie loguje się kontem
+  /// jednostki, telefon — swoim, niezależnie od tego, kto założył
+  /// jednostkę). Jak [sharedFounder]: uprawnienia zwykłego członka i pytanie
+  /// „Kto wpisuje?".
+  final List<String> sharedEmails;
+
   /// Pliki z Dysku pominięte przy ostatniej synchronizacji, bo nie dało się
   /// ich odczytać. Dawniej jeden taki plik przerywał całą synchronizację.
   final int skippedFiles;
@@ -70,6 +77,7 @@ class SyncState {
     this.founderEmail,
     this.adminEmails = const [],
     this.sharedFounder = false,
+    this.sharedEmails = const [],
     this.skippedFiles = 0,
     this.renumberNotes = const [],
     this.rejectedChanges = const [],
@@ -89,6 +97,7 @@ class SyncState {
     String? founderEmail,
     List<String>? adminEmails,
     bool? sharedFounder,
+    List<String>? sharedEmails,
     int? skippedFiles,
     List<String>? renumberNotes,
     List<RejectedChange>? rejectedChanges,
@@ -109,6 +118,7 @@ class SyncState {
       founderEmail: founderEmail ?? this.founderEmail,
       adminEmails: adminEmails ?? this.adminEmails,
       sharedFounder: sharedFounder ?? this.sharedFounder,
+      sharedEmails: sharedEmails ?? this.sharedEmails,
       skippedFiles: skippedFiles ?? this.skippedFiles,
       renumberNotes: renumberNotes ?? this.renumberNotes,
       rejectedChanges: rejectedChanges ?? this.rejectedChanges,
@@ -155,11 +165,18 @@ class SyncState {
   /// je wpisał, więc formularze pytają „Kto wpisuje?".
   bool get isSharedAccount {
     final me = userEmail;
-    return sharedFounder &&
-        isConnected &&
+    return isConnected &&
         unitFolderId != null &&
         me != null &&
-        isFounder(me);
+        isSharedDevice(me);
+  }
+
+  /// Czy [email] to wspólne urządzenie jednostki — założyciel z
+  /// [sharedFounder] albo konto z [sharedEmails].
+  bool isSharedDevice(String email) {
+    if (isFounder(email)) return sharedFounder;
+    final normalized = _normalize(email);
+    return sharedEmails.any((e) => _normalize(e) == normalized);
   }
 
   /// Czy podany adres jest założycielem jednostki.

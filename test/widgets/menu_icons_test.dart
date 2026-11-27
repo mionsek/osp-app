@@ -206,7 +206,7 @@ void main() {
       await tester.tap(guide);
       await tester.pumpAndSettle();
       expect(find.text('Zaloguj tablet'), findsOneWidget);
-      expect(find.text('Oznacz konto jednostki jako wspólne'), findsOneWidget);
+      expect(find.text('Zaproś konto jednostki'), findsOneWidget);
     });
 
     testWidgets('ewidencja: każdy cel przejazdu ma swoją ikonę',

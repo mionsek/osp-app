@@ -308,8 +308,8 @@ class InfoScreen extends StatelessWidget {
                 title: 'Tablet w samochodzie',
                 description:
                     'Na wspólnym urządzeniu loguje się konto jednostki. Gdy '
-                    'administrator oznaczy je jako wspólne (Ustawienia → '
-                    'Członkowie jednostki), działa jak konto zwykłego członka, '
+                    'administrator oznaczy je jako wspólne urządzenie '
+                    '(Ustawienia → Członkowie jednostki), działa jak konto zwykłego członka, '
                     'a przy zapisie wyjazdu i przekazania mienia pyta „Kto '
                     'wpisuje?". W dokumencie widać wtedy osobę, a nie tylko '
                     'konto jednostki.',

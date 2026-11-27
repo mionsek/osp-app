@@ -76,9 +76,10 @@ config/app                          minimalna wersja aplikacji (zmienia tylko ko
 inviteCodes/{kod}                   kod → identyfikator jednostki (bez listowania)
 units/{u}                           nazwa, adres remizy, kod, właściciel (uid, e-mail),
                                     sharedOwner (wspólne konto), migratedFrom
-units/{u}/members/{uid}             uid, e-mail, rola (owner/admin/member),
+units/{u}/members/{uid}             uid, e-mail, imię, rola (owner/admin/member/shared),
                                     dołączył (czas serwera), ostatnio, wersja aplikacji
-units/{u}/invites/{e-mail}          rola, kto zaprosił, kiedy (lista dopuszczonych)
+units/{u}/invites/{e-mail}          rola, kto zaprosił (adres i imię), kiedy
+                                    (lista dopuszczonych)
 units/{u}/consents/{id}             akceptacja umowy powierzenia (rejestr, bez zmian)
 units/{u}/reports|handovers|trips|equipmentWork/{id}
     { data: treść jak na Dysku (SyncJson), author: createdBy na zawsze,
@@ -114,8 +115,10 @@ Reguły (sprawdzane przez serwer, z testami na emulatorze Firebase):
   dzisiejszego `SyncService` (Dysk) powstaje `ServerSyncService` (baza)
   z tym samym zadaniem — wysłać zmiany, pobrać zmiany.
 - **Logowanie:** Firebase Auth — Google tylko z e-mailem i imieniem, do tego
-  logowanie linkiem na e-mail (dla osób bez Gmaila). Konto wspólne na tablecie
-  działa jak dziś (rola `shared`).
+  logowanie linkiem na e-mail (dla osób bez Gmaila). Tablet w wozie loguje się
+  kontem jednostki, telefon swoim — bez przełączania (27.11.2026); wspólnym
+  urządzeniem może być każde konto (rola `shared`), konto założyciela przez
+  `sharedOwner`.
 - **Zaproszenie:** administrator dopisuje e-mail (lista zaproszonych) i wysyła
   kod przez „Udostępnij kod”. Bez udostępniania folderu i bez maila od Google.
 - **Nowe wymogi:** usuwanie konta w aplikacji (Play), wymuszenie aktualizacji

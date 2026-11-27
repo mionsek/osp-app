@@ -43,7 +43,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
 
     final sync = fakeSync();
-    when(() => sync.inviteMember('jan@gmail.com'))
+    when(() => sync.inviteMember('jan@gmail.com', sharedDevice: false))
         .thenAnswer((_) async => 'TREŚĆ ZAPROSZENIA Z KODEM ABC234');
     when(() => sync.listMembers()).thenAnswer((_) async => const []);
     UnitMembersSection.shareText = (text) async => shared.add(text);
@@ -73,7 +73,7 @@ void main() {
     final shared = <String>[];
     final sync = await pumpSection(tester, shared: shared);
 
-    verify(() => sync.inviteMember('jan@gmail.com')).called(1);
+    verify(() => sync.inviteMember('jan@gmail.com', sharedDevice: false)).called(1);
     expect(find.text('Zaproszenie wysłane'), findsOneWidget);
     expect(
         find.textContaining('jan@gmail.com jest na liście zaproszonych'),

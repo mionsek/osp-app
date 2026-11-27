@@ -121,6 +121,19 @@ class DatabaseService {
   Future<void> cacheSharedFounder(bool shared) =>
       settingsBox.put(_sharedFounderKey, shared);
 
+  /// Pozostałe wspólne urządzenia ([SyncState.sharedEmails]) — tablet bez
+  /// zasięgu po restarcie dalej pyta, kto wpisuje.
+  static const String _sharedEmailsKey = 'sharedEmails';
+
+  List<String> get cachedSharedEmails =>
+      (settingsBox.get(_sharedEmailsKey) as List?)
+          ?.map((e) => e.toString())
+          .toList() ??
+      const [];
+
+  Future<void> cacheSharedEmails(List<String> emails) =>
+      settingsBox.put(_sharedEmailsKey, emails);
+
   // --- Lista administratorów sprawdzona na tym telefonie (fix/067) ---
   //
   // Zmianę `admins.json` telefon przyjmuje tylko od właściciela folderu albo
@@ -180,17 +193,6 @@ class DatabaseService {
   Future<void> markUnitConfigEdited([DateTime? at]) => settingsBox.put(
       _unitConfigEditedAtKey, (at ?? DateTime.now()).toIso8601String());
 
-  // Jednostkę założono na wspólnym koncie jednostki (wybór karty „Użyj
-  // konta jednostki" na wprowadzeniu) — tylko wtedy aplikacja proponuje
-  // przejście na własne konto (Dawid, 27.11.2026: przy prywatnym koncie ta
-  // podpowiedź nie ma sensu).
-  static const String _founderOnUnitAccountKey = 'founderOnUnitAccount';
-
-  bool get founderOnUnitAccount =>
-      settingsBox.get(_founderOnUnitAccountKey) == true;
-
-  Future<void> setFounderOnUnitAccount(bool value) =>
-      settingsBox.put(_founderOnUnitAccountKey, value);
 
   // --- Znaczniki usunięcia (synchronizacja) ---
   //
