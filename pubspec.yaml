@@ -42,6 +42,9 @@ dependencies:
   # PDF), share_plus wysyła plik — Printing.sharePdf oznacza wszystko jako PDF.
   archive: ^4.0.9
   share_plus: ^13.3.1
+  firebase_core: ^5.2.0
+  firebase_auth: ^7.1.0
+  cloud_firestore: ^7.2.0
 
 dev_dependencies:
   integration_test:
@@ -55,6 +58,7 @@ dev_dependencies:
   mocktail: ^1.0.4
   # App icon
   flutter_launcher_icons: ^0.14.3
+  fake_cloud_firestore: ^4.5.0
 
 flutter_launcher_icons:
   android: true

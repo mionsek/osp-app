@@ -19,6 +19,8 @@ val hasReleaseKey = keystorePropertiesFile.exists()
 
 plugins {
     id("com.android.application")
+    // Konfiguracja Firebase z google-services.json (feature/081).
+    id("com.google.gms.google-services")
     // Wtyczki Kotlina celowo tu nie ma: od AGP 9 dostarcza ją sam AGP
     // (Built-in Kotlin). Jawne `id("kotlin-android")` sprawiało, że Flutter
     // ostrzegał o nadchodzącym błędzie budowania.
