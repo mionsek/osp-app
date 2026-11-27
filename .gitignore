@@ -64,3 +64,9 @@ app.*.map.json
 
 # Lokalne ustawienia Claude Code (zawieraja sciezki tego komputera)
 .claude/settings.local.json
+
+# Firebase (feature/081): narzędzia do testów zasad i logi emulatora
+firebase/test/node_modules/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log

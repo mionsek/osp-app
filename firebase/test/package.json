@@ -1,0 +1,15 @@
+{
+  "name": "osp-firestore-rules-tests",
+  "private": true,
+  "type": "module",
+  "description": "Testy zasad bezpieczeństwa Firestore na lokalnym emulatorze (feature/081).",
+  "scripts": {
+    "test": "firebase emulators:exec --only firestore --project demo-osp --config ../../firebase.json \"node --test --test-concurrency=1\"",
+    "mutations": "firebase emulators:exec --only firestore --project demo-osp --config ../../firebase.json \"node mutations.mjs\""
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
+    "firebase": "^12.19.0",
+    "firebase-tools": "^15.37.0"
+  }
+}

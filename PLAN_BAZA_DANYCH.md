@@ -6,7 +6,13 @@ Analiza z 27.11.2026, wersja 1.9.19+42 (test zamknięty w Google Play,
 a niezweryfikowana aplikacja z tym uprawnieniem obsłuży najwyżej 100 kont.
 Zakładamy 1–2 jednostki na start i migrację ich danych przyciskiem w aplikacji.
 
-**Stan: plan, nic nie wdrożone. Czeka na decyzje z Etapu 0.**
+**Stan (27.11.2026): decyzje podjęte, wdrażanie na gałęzi `feature/081-firebase`.**
+- Etap 0 — zrobione (odpowiedzi niżej). Etap 1 — zrobione w feature/080.
+- Etap 2 — projekt Firebase `osp-app-2026` (Firestore `europe-central2`,
+  Auth: Google i link z e-maila, aplikacja Android z odciskami SHA-1),
+  zasady w [firebase/firestore.rules](firebase/firestore.rules) z testami
+  każdej roli na emulatorze ([firebase/test](firebase/test)). Zostaje: kopie
+  zapasowe i alert kosztów (wymagają planu Blaze).
 Wcześniejsze plany: [PLAN_OCHRONA_DANYCH.md](PLAN_OCHRONA_DANYCH.md),
 [PLAN_DYSK_WSPOLDZIELONY.md](PLAN_DYSK_WSPOLDZIELONY.md) (ten drugi
 przestaje mieć sens, jeśli wybierzemy bazę).
@@ -66,20 +72,25 @@ własny serwer, w tej kolejności.
 ## Model danych (Firebase)
 
 ```
-units/{unitId}                      nazwa, adres remizy, kod zaproszenia, właściciel
-units/{unitId}/members/{uid}        e-mail, rola (owner/admin/member/shared),
-                                    dołączył, ostatnio, wersja aplikacji
-units/{unitId}/invites/{e-mail}     kto zaprosił, kiedy (lista dopuszczonych)
-units/{unitId}/reports/{id}         ta sama treść co dziś (SyncJson) +
-             /handovers/{id}        createdBy, updatedAt, deleted (znacznik)
-             /trips/{id}
-             /equipmentWork/{id}
-units/{unitId}/firefighters/{id}    listy prowadzone przez administratora
-             /vehicles/{id}
-             /equipment/{id}
-             /threatTypes/{id}
-config/app                          minimalna wersja aplikacji (wymuszenie aktualizacji)
+config/app                          minimalna wersja aplikacji (zmienia tylko konsola)
+inviteCodes/{kod}                   kod → identyfikator jednostki (bez listowania)
+units/{u}                           nazwa, adres remizy, kod, właściciel (uid, e-mail),
+                                    sharedOwner (wspólne konto), migratedFrom
+units/{u}/members/{uid}             uid, e-mail, rola (owner/admin/member),
+                                    dołączył (czas serwera), ostatnio, wersja aplikacji
+units/{u}/invites/{e-mail}          rola, kto zaprosił, kiedy (lista dopuszczonych)
+units/{u}/consents/{id}             akceptacja umowy powierzenia (rejestr, bez zmian)
+units/{u}/reports|handovers|trips|equipmentWork/{id}
+    { data: treść jak na Dysku (SyncJson), author: createdBy na zawsze,
+      deleted, serverAt: czas serwera, by: kto zapisał }
+units/{u}/firefighters|vehicles|equipment/{id}   { data, deleted, serverAt, by }
+units/{u}/threatTypes/{kategoria}                { data, serverAt, by }
 ```
+
+`serverAt` (czas serwera, nie telefonu) służy do pobierania tylko zmian
+od ostatniej synchronizacji; scalanie dalej idzie po `updatedAt` z treści.
+Właściciel jest dla serwera zawsze administratorem — ograniczenie
+„wspólnego konta” zostaje w aplikacji.
 
 Reguły (sprawdzane przez serwer, z testami na emulatorze Firebase):
 - czytać może tylko członek jednostki;
@@ -87,8 +98,14 @@ Reguły (sprawdzane przez serwer, z testami na emulatorze Firebase):
 - zmienić lub usunąć — autor albo administrator (jak `canEditDocument` dziś);
 - listy ratowników, pojazdów, sprzętu — tylko administrator;
 - role nadaje administrator; właściciela nie da się usunąć;
-- dołączenie: zalogowany e-mail jest na liście zaproszonych i podał kod —
-  wtedy sam zakłada swój rekord członka.
+- dołączenie: zalogowany, potwierdzony e-mail jest na liście zaproszonych —
+  wtedy sam zakłada swój rekord członka z rolą z zaproszenia. Kod tylko
+  wskazuje jednostkę (zabezpieczeniem jest lista zaproszonych);
+- czas serwera i „kto zapisał” nie do podrobienia; autor wpisu niezmienny,
+  także po usunięciu (znacznik nie da się „wskrzesić” jako własny);
+- naprawdę usuwa tylko właściciel, razem z całą jednostką.
+- Testy: 42 przypadki + 26 celowo osłabionych zasad, z których każdą
+  wykrywa co najmniej jeden test (`npm test`, `npm run mutations`).
 
 ## Aplikacja — co zostaje, co się zmienia
 
@@ -157,7 +174,21 @@ kto ma jaką wersję (patrz Etap 1).
 Test zamknięty, który trwa teraz (wersja z Dyskiem), nie przeszkadza: przy
 1–2 jednostkach limit 100 kont nie grozi, a 14 dni i tak trzeba odbyć.
 
-## Pytania do Dawida (Etap 0)
+## Odpowiedzi Dawida (Etap 0, 27.11.2026)
+
+1. **Firebase** — tak.
+2. **Logowanie:** Google (tylko e-mail i imię) + link na e-mail. Facebook
+   pominięty (pomysł na później w BACKLOG).
+3. **Domena** — jeszcze bez decyzji. Nie blokuje wdrożenia; przyda się
+   przy weryfikacji marki (nazwa i logo na ekranie logowania).
+4. **Podmiot przetwarzający** — tak; umowa akceptowana w aplikacji przez
+   upoważnionego przedstawiciela jednostki (nazwa, KRS, imię i nazwisko,
+   funkcja, wersja umowy — zapis w `units/{u}/consents`).
+5. **Termin badań** — zostaje w bazie jednostki.
+6. **Kolejność** — najpierw „kto dołączył” (feature/080), potem serwer.
+7. **Podpis autora** wszędzie „Dawid Mionskowski” (fix/079).
+
+## Pytania z analizy (archiwum)
 
 1. **Firebase** (Google jako serwer, bez dostępu do niczyjego Dysku) — tak,
    czy zasada „żadnego Google”, i wtedy Supabase albo własny serwer?

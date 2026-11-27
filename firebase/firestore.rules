@@ -1,0 +1,300 @@
+rules_version = '2';
+
+// Zasady bezpieczeństwa bazy Raporty OSP (feature/081, PLAN_BAZA_DANYCH.md).
+//
+// Na Dysku każdy członek mógł zmienić każdy plik, a role z aplikacji tylko
+// sprawdzał telefon (fix/067). Tutaj pilnuje ich serwer: zapis, którego
+// aplikacja by nie zrobiła, baza odrzuca u źródła.
+//
+// Układ:
+//   config/app                          minimalna wersja aplikacji (tylko konsola)
+//   inviteCodes/{kod}                   kod zaproszenia → identyfikator jednostki
+//   units/{u}                           dane jednostki, właściciel, kod
+//   units/{u}/members/{uid}             członek: e-mail, rola, ostatnio, wersja
+//   units/{u}/invites/{e-mail}          lista zaproszonych (kto może dołączyć)
+//   units/{u}/consents/{id}             akceptacje umowy powierzenia (rejestr)
+//   units/{u}/reports|handovers|trips|equipmentWork/{id}   wpisy z autorem
+//   units/{u}/firefighters|vehicles|equipment/{id}          listy administratora
+//   units/{u}/threatTypes/{kategoria}   słownik zagrożeń (każdy członek)
+//
+// Testy każdej roli: firebase/test/rules.test.mjs (emulator, `npm test`).
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Kto pyta ──────────────────────────────────────────────────────
+
+    // Zalogowany z potwierdzonym adresem: Google albo link z e-maila.
+    function signedIn() {
+      return request.auth != null
+        && request.auth.token.email is string
+        && request.auth.token.email_verified == true;
+    }
+
+    function myEmail() {
+      return request.auth.token.email.lower();
+    }
+
+    function unitPath(u) {
+      return /databases/$(database)/documents/units/$(u);
+    }
+
+    function memberPath(u) {
+      return /databases/$(database)/documents/units/$(u)/members/$(request.auth.uid);
+    }
+
+    function isMember(u) {
+      return signedIn() && exists(memberPath(u));
+    }
+
+    function myRole(u) {
+      return get(memberPath(u)).data.role;
+    }
+
+    // Właściciel jest administratorem zawsze. „Wspólne konto jednostki”
+    // (tablet w samochodzie) ogranicza tylko aplikacja — konto należy do
+    // jednostki, a bez tego jednostka mogłaby zostać bez nikogo, kto nią
+    // zarządza.
+    function isAdmin(u) {
+      return isMember(u) && myRole(u) in ['owner', 'admin'];
+    }
+
+    function isOwner(u) {
+      return isMember(u) && myRole(u) == 'owner';
+    }
+
+    // ── Wersja aplikacji ──────────────────────────────────────────────
+
+    match /config/app {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // ── Kod zaproszenia ───────────────────────────────────────────────
+
+    // Kod tylko wskazuje jednostkę — dołączyć można dopiero z adresem
+    // z listy zaproszonych. Listy kodów nie da się pobrać.
+    match /inviteCodes/{code} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['unitId'])
+        && request.resource.data.unitId is string
+        && (isAdmin(request.resource.data.unitId)
+            || getAfter(unitPath(request.resource.data.unitId)).data.ownerUid
+                == request.auth.uid)
+        && getAfter(unitPath(request.resource.data.unitId)).data.inviteCode == code;
+      allow update: if false;
+      allow delete: if signedIn() && isAdmin(resource.data.unitId);
+    }
+
+    // ── Jednostka ─────────────────────────────────────────────────────
+
+    function unitFieldsOk(d) {
+      return d.keys().hasOnly([
+          'name', 'locality', 'unitStreet', 'inviteCode', 'ownerUid',
+          'ownerEmail', 'sharedOwner', 'syncFormat', 'createdAt',
+          'updatedAt', 'migratedFrom'])
+        && d.name is string && d.name.size() > 0 && d.name.size() <= 200
+        && d.inviteCode is string
+        && d.ownerUid is string
+        && d.ownerEmail is string;
+    }
+
+    match /units/{u} {
+      allow read: if isMember(u);
+
+      // Zakłada się ją razem z rekordem właściciela (jedna paczka zapisów),
+      // więc nie ma jednostki bez nikogo w środku.
+      allow create: if signedIn()
+        && unitFieldsOk(request.resource.data)
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.ownerEmail == myEmail()
+        && request.resource.data.createdAt == request.time
+        && getAfter(memberPath(u)).data.role == 'owner';
+
+      allow update: if isAdmin(u)
+        && unitFieldsOk(request.resource.data)
+        && !request.resource.data.diff(resource.data).affectedKeys()
+            .hasAny(['ownerUid', 'ownerEmail', 'createdAt']);
+
+      allow delete: if isOwner(u);
+
+      // ── Członkowie ──────────────────────────────────────────────────
+
+      match /members/{uid} {
+        allow read: if isMember(u);
+
+        allow create: if signedIn()
+          && uid == request.auth.uid
+          && request.resource.data.keys().hasOnly([
+              'uid', 'email', 'role', 'displayName', 'joinedAt',
+              'lastSyncAt', 'appVersion'])
+          && request.resource.data.uid == uid
+          && request.resource.data.email == myEmail()
+          && request.resource.data.joinedAt == request.time
+          && (
+            // Założyciel — tylko razem z nową jednostką.
+            (request.resource.data.role == 'owner'
+              && !exists(unitPath(u))
+              && getAfter(unitPath(u)).data.ownerUid == uid)
+            ||
+            // Zaproszony — z rolą nadaną w zaproszeniu.
+            (exists(/databases/$(database)/documents/units/$(u)/invites/$(myEmail()))
+              && request.resource.data.role
+                  == get(/databases/$(database)/documents/units/$(u)/invites/$(myEmail())).data.role)
+          );
+
+        allow update: if signedIn() && (
+          // Sam o sobie: tylko ślad w aplikacji, bez roli i adresu.
+          (uid == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['lastSyncAt', 'appVersion', 'displayName']))
+          ||
+          // Administrator: rola członka, nigdy właściciela.
+          (isAdmin(u)
+            && resource.data.role != 'owner'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role'])
+            && request.resource.data.role in ['member', 'admin'])
+        );
+
+        // Odejście z jednostki, „Odbierz dostęp” albo usunięcie konta.
+        // Właściciel odchodzi tylko razem z jednostką.
+        allow delete: if signedIn() && (
+          (resource.data.role != 'owner' && (uid == request.auth.uid || isAdmin(u)))
+          ||
+          (uid == request.auth.uid && isOwner(u) && !existsAfter(unitPath(u)))
+        );
+      }
+
+      // ── Zaproszeni ──────────────────────────────────────────────────
+
+      match /invites/{email} {
+        allow read: if isAdmin(u) || (signedIn() && email == myEmail());
+
+        allow create, update: if isAdmin(u)
+          && email == email.lower()
+          && request.resource.data.keys().hasOnly(['email', 'role', 'invitedBy', 'invitedAt'])
+          && request.resource.data.email == email
+          && request.resource.data.role in ['member', 'admin']
+          && request.resource.data.invitedBy == myEmail()
+          && request.resource.data.invitedAt == request.time;
+
+        // Administrator cofa zaproszenie; zaproszony usuwa je przy dołączeniu.
+        allow delete: if isAdmin(u) || (signedIn() && email == myEmail());
+      }
+
+      // ── Umowa powierzenia ───────────────────────────────────────────
+
+      // Rejestr akceptacji: kto, w imieniu jakiej jednostki, którą wersję,
+      // kiedy (czas serwera). Raz zapisany zostaje — nawet po usunięciu
+      // jednostki, jako dowód zawarcia umowy.
+      match /consents/{cid} {
+        allow read: if isAdmin(u);
+        allow create: if signedIn()
+          && (isAdmin(u) || getAfter(unitPath(u)).data.ownerUid == request.auth.uid)
+          && request.resource.data.keys().hasOnly([
+              'type', 'version', 'unitName', 'krs', 'personName',
+              'personFunction', 'uid', 'email', 'acceptedAt', 'appVersion'])
+          && request.resource.data.type is string
+          && request.resource.data.version is string
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.email == myEmail()
+          && request.resource.data.acceptedAt == request.time;
+        allow update, delete: if false;
+      }
+
+      // ── Wpisy, listy i słownik ──────────────────────────────────────
+
+      function isDocKind(c) {
+        return c in ['reports', 'handovers', 'trips', 'equipmentWork'];
+      }
+
+      function isListKind(c) {
+        return c in ['firefighters', 'vehicles', 'equipment'];
+      }
+
+      // Wspólne dla wpisów i list: treść z aplikacji w `data` (ta sama co
+      // w plikach na Dysku), znacznik usunięcia, czas serwera i kto zapisał.
+      function stampsOk(id) {
+        let d = request.resource.data;
+        return d.data is map
+          && d.data.id == id
+          && d.deleted is bool
+          && d.deleted == (d.data.get('deleted', false) == true)
+          && d.serverAt == request.time
+          && d.by == myEmail();
+      }
+
+      // Autor wpisu (`author`) to `createdBy` z treści, raz na zawsze —
+      // także po usunięciu, kiedy znacznik nie ma już treści.
+      function docOk(id) {
+        let d = request.resource.data;
+        return d.keys().hasOnly(['data', 'author', 'deleted', 'serverAt', 'by'])
+          && stampsOk(id)
+          && d.author is string
+          && (d.deleted || d.data.get('createdBy', '') == d.author);
+      }
+
+      function authorIsMe(author) {
+        return author == '' || author.lower() == myEmail();
+      }
+
+      // Przejazd z wyjazdu: uzgadnianie z raportem biegnie na każdym
+      // telefonie i zmienia te pola — może je zmienić każdy członek
+      // (jak `_reportLinkedTripFields` w SyncService).
+      function reportLinkedTripUpdate(coll) {
+        return coll == 'trips'
+          && request.resource.data.deleted == false
+          && resource.data.data.get('reportId', null) != null
+          && request.resource.data.data.diff(resource.data.data).affectedKeys().hasOnly([
+              'date', 'departureTime', 'returnTime', 'routeTo', 'driverName',
+              'driverId', 'overriddenFields', 'updatedAt']);
+      }
+
+      match /{coll}/{id} {
+        allow read: if (isDocKind(coll) || isListKind(coll) || coll == 'threatTypes')
+          && isMember(u);
+
+        // Wpisy: dodaje każdy członek — jako autor tylko on sam;
+        // administrator także cudze (przeniesienie jednostki z Dysku).
+        allow create: if isDocKind(coll) && isMember(u)
+          && docOk(id)
+          && (isAdmin(u) || authorIsMe(request.resource.data.author));
+
+        // Zmiana i znacznik usunięcia: autor albo administrator. Wpis bez
+        // autora (starszy, z trybu offline) zmienia każdy — jak w aplikacji.
+        allow update: if isDocKind(coll) && isMember(u)
+          && docOk(id)
+          && request.resource.data.author == resource.data.author
+          && (isAdmin(u) || authorIsMe(resource.data.author) || reportLinkedTripUpdate(coll));
+
+        // Listy ratowników, pojazdów i sprzętu prowadzi administrator.
+        allow create, update: if isListKind(coll) && isAdmin(u)
+          && request.resource.data.keys().hasOnly(['data', 'deleted', 'serverAt', 'by'])
+          && stampsOk(id);
+
+        // Słownik zagrożeń: własne podtypy dopisuje każdy przy wyjeździe.
+        allow create, update: if coll == 'threatTypes' && isMember(u)
+          && request.resource.data.keys().hasOnly(['data', 'serverAt', 'by'])
+          && request.resource.data.data is map
+          && request.resource.data.data.category == id
+          && request.resource.data.serverAt == request.time
+          && request.resource.data.by == myEmail();
+
+        // Usuwa się znacznikiem (zmianą), żeby dowiedziały się inne telefony.
+        // Naprawdę usuwa tylko właściciel, razem z całą jednostką.
+        allow delete: if (isDocKind(coll) || isListKind(coll) || coll == 'threatTypes')
+          && isOwner(u);
+      }
+    }
+
+    // ── Moje jednostki ────────────────────────────────────────────────
+
+    // Telefon po zalogowaniu szuka swoich jednostek zapytaniem po wszystkich
+    // `members` z własnym `uid`.
+    match /{path=**}/members/{memberId} {
+      allow read: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+  }
+}
