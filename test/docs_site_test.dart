@@ -133,6 +133,25 @@ void main() {
     }
   });
 
+  test('polityka opisuje notatkę członka tak, jak zapisuje ją kod '
+      '(feature/080)', () {
+    final note = read('lib/models/member_note.dart');
+    final sync = read('lib/services/sync_service.dart');
+    // Kod zapisuje dokładnie te pola — polityka wymienia te same.
+    for (final field in ["'email'", "'joinedAt'", "'lastSyncAt'", "'appVersion'"]) {
+      expect(note, contains(field), reason: field);
+    }
+    expect(sync, contains("_membersFolder = 'members'"));
+    expect(pages['pl'], contains('Członkowie jednostki</strong>'));
+    expect(pages['pl'], contains('wersję aplikacji'));
+    expect(pages['pl'], isNot(contains('wyłącznie to, co wpisze użytkownik')),
+        reason: 'notatka zapisuje się sama, nie jest wpisywana');
+    expect(pages['en'], contains('Unit members</strong>'));
+    expect(pages['usuwanie'], contains('notatkę członka'));
+    expect(read('store/sklep-play.md'), contains('Interakcje z aplikacją'),
+        reason: 'deklaracja w Play musi się zgadzać z aplikacją');
+  });
+
   test('adres polityki w aplikacji wskazuje plik z folderu docs', () {
     expect(kPrivacyPolicyUrl, startsWith('https://'));
     expect(kPrivacyPolicyUrl, endsWith('/polityka-prywatnosci.html'));

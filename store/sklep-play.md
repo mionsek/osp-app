@@ -178,6 +178,12 @@ cel **Funkcje aplikacji**:
 | Lokalizacja → Dokładna lokalizacja | adres zdarzenia z przycisku „Wstaw adres z GPS” |
 | Zdrowie i aktywność fizyczna → Informacje o zdrowiu | termin ważności badań lekarskich ratownika |
 | Aktywność w aplikacji → Inne treści wygenerowane przez użytkownika | wyjazdy, przekazania, przejazdy, uwagi |
+| Aktywność w aplikacji → Interakcje z aplikacją | **od 1.9.20 (feature/080):** data dołączenia i ostatniej synchronizacji w notatce członka; cel także **Zarządzanie kontem** |
+| Informacje o aplikacjach i działaniu → Inne dane o działaniu aplikacji | **od 1.9.20 (feature/080):** wersja aplikacji w notatce członka; cel także **Zarządzanie kontem** |
+
+**Przy wgrywaniu 1.9.20 do Play** dopisać w formularzu „Bezpieczeństwo
+danych” dwa ostatnie typy (zbierane, nieudostępniane, nie tymczasowo,
+opcjonalne) — inaczej deklaracja nie zgadza się z aplikacją.
 
 Termin badań to dana z pogranicza. Lepiej ją zadeklarować, niż ryzykować
 zarzut ukrycia, bo skutkiem jest tylko dodatkowa pozycja w etykiecie.

@@ -251,6 +251,13 @@ class FakeDrive implements GoogleDriveService {
   @override
   Future<String?> folderOwner(String folderId) async => files[folderId]?.owner;
 
+  @override
+  Future<void> deleteFile(String fileId) async {
+    _maybeFail();
+    writes++;
+    files.remove(fileId);
+  }
+
   /// Zmiana pliku z pominięciem aplikacji — jak przez drive.google.com:
   /// nowa treść, nowa chwila zmiany i [by] jako autor zmiany według Dysku.
   void editByHand(String fileId, Map<String, dynamic> data, {required String by}) {

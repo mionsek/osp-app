@@ -196,6 +196,8 @@ class SyncStateNotifier extends StateNotifier<SyncState> {
   /// Wylogowanie razem z usunięciem danych jednostki z telefonu. Ekran
   /// najpierw synchronizuje, żeby zmiany z tego telefonu nie przepadły.
   Future<void> signOutAndWipe() async {
+    // Przed wylogowaniem — potem nie ma już dostępu do Dysku (feature/080).
+    await _syncService.removeOwnMemberNote();
     await signOut();
     await _syncService.wipeLocalUnitData();
     state = _syncService.state;

@@ -323,7 +323,7 @@ Analiza z 26.10.2026 (gałąź `claude/raporty-osp-analysis-1wbpj3`, na wersji
 
 ### Zaproszenie i widoczność jednostki
 Zgłoszone po teście na dwóch telefonach 27.10.2026 (wersja 1.7.4).
-- [ ] **Kto naprawdę dołączył do jednostki** (Dawid, 25.11.2026) — „Pokaż, kto ma dostęp" pokazuje uprawnienia do folderu na Dysku, czyli **kogo zaproszono**, a nie kto zainstalował aplikację i dołączył kodem (bez serwera nikt tego nie zapisuje). Pomysł:
+- [x] **Kto naprawdę dołączył do jednostki** (Dawid, 25.11.2026) — **zrobione w feature/080**, opis niżej — „Pokaż, kto ma dostęp" pokazuje uprawnienia do folderu na Dysku, czyli **kogo zaproszono**, a nie kto zainstalował aplikację i dołączył kodem (bez serwera nikt tego nie zapisuje). Pomysł:
   - każdy telefon przy dołączeniu i synchronizacji zapisuje w folderze jednostki małą notatkę (np. `members/<konto>.json`): adres e-mail konta, data dołączenia, ostatnia synchronizacja, wersja aplikacji — **nic więcej** (bez modelu telefonu, lokalizacji itp.)
   - lista członków: „dołączył 25.11, ostatnio 2 godz. temu, wersja 1.9.19" albo „zaproszony, jeszcze nie dołączył"; przy okazji widać, kto ma starą wersję
   - notatka znika przy „Odbierz dostęp" i „Wyloguj i usuń dane"; zmienić ją może tylko jej właściciel (sprawdzanie autora zmian z fix/067)
@@ -1136,6 +1136,19 @@ był już wszędzie `raporty.osp@gmail.com`; niespójny był **podpis autora**
   - Google Cloud → Google Auth Platform → **Elementy marki → „Adres e-mail pomocy dla użytkowników"** — widać go na ekranie logowania Google; ma być `raporty.osp@gmail.com` (wymaga dodania tego konta jako Właściciela w IAM i wybrania go po zalogowaniu na nie)
   - Play Console → **Ustawienia sklepu → Dane kontaktowe** (`raporty.osp@gmail.com`) i **Strona dewelopera / dane konta dewelopera** (nazwa publiczna, e-mail kontaktowy)
   - **Mail z zaproszeniem z Dysku** przychodzi z konta osoby zapraszającej (np. prywatnego konta administratora) — to szablon Google, kod tego nie zmieni; zniknie po przejściu na bazę (PLAN_BAZA_DANYCH.md)
+
+## Zrobione (feature/080-kto-dolaczyl) — czeka na UAT, razem z fix/079
+Prośba Dawida z 25.11.2026: lista członków pokazywała uprawnienia do folderu
+(kogo zaproszono), a nie kto naprawdę zainstalował aplikację i dołączył.
+
+- [x] **Notatka członka** w `members/<adres>.json` w folderze jednostki: adres, data dołączenia, ostatnia synchronizacja, wersja aplikacji — nic więcej. Zapis przy założeniu jednostki i dołączeniu, przy synchronizacji najwyżej co 6 godzin albo po zmianie wersji (bez zapisu na Dysku co 5 minut). Data dołączenia zostaje po ponownej instalacji
+- [x] **Lista „Członkowie jednostki"**: przy każdej osobie z dostępem „W aplikacji od 25.11.2026 · ostatnio dziś 14:05 · wersja 1.9.20" albo „Brak śladu w aplikacji — zaproszenie nieprzyjęte albo starsza wersja aplikacji" (wersje do 1.9.19 notatki nie zapisują). Błąd odczytu notatek nie blokuje listy
+- [x] Notatkę zmienioną przez kogoś innego niż jej właściciel lista pomija (jak sprawdzanie autora zmian z fix/067); „Wyloguj i usuń dane" usuwa własną notatkę z Dysku przed wylogowaniem
+- [x] **RODO:** polityka prywatności PL i EN — punkt „Członkowie jednostki" i poprawione zdanie „przechowuje wyłącznie to, co wpisze użytkownik"; nowa data obowiązywania 1.12.2026; strona usuwania danych wspomina notatkę
+- [x] `store/sklep-play.md`: dwa nowe typy w „Bezpieczeństwie danych" — **do wpisania w Play Console przy wgrywaniu 1.9.20** (Interakcje z aplikacją, Inne dane o działaniu aplikacji; cel także Zarządzanie kontem)
+- [x] Testy (`member_notes_test.dart`, `member_status_test.dart`, `docs_site_test.dart`): notatki założyciela i dołączającego (tylko 5 pól), ograniczenie zapisów, zmiana wersji, data dołączenia po reinstalacji, podrobiona notatka pominięta, usuwanie własnej, napisy dziś/wczoraj/wcześniej, ekran z notatką i bez, błąd odczytu; polityka zgodna z polami w kodzie. Łącznie **564**
+- [x] Emulator: lista członków — założyciel z dzisiejszą synchronizacją, osoba z notatką z wczoraj, osoba bez śladu (prawdziwa aplikacja, atrapa Dysku)
+- [x] Wersja **1.9.20+43** (zawiera fix/079)
 
 ## W toku (chore/064-paczka-play)
 18.11.2026 konto osobiste w Play Console założone i zweryfikowane

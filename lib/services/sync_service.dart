@@ -236,6 +236,7 @@ class SyncService {
 
     // Push all local data to Drive
     await _pushAllData();
+    await _writeMemberNote(force: true);
 
     return inviteCode;
   }
@@ -286,6 +287,7 @@ class SyncService {
       final ids = _remoteListIds[kind];
       if (ids != null) await _db.keepOnlyListEntries(kind, ids);
     }
+    await _writeMemberNote(force: true);
   }
 
   /// Ratownicy i pojazdy z telefonu, których nie ma na listach jednostki
@@ -404,6 +406,133 @@ class SyncService {
       'jednostki", zaloguj się kontem $email i wpisz kod. Jeśli aplikację '
       'już masz: Ustawienia → Dołącz do jednostki kodem.\n\n'
       'O aplikacji: $appPage';
+
+  // ── Kto dołączył (feature/080) ────────────────────────────────────
+  //
+  // Uprawnienia do folderu mówią, kogo zaproszono. Kto naprawdę dołączył,
+  // wie tylko jego telefon — zapisuje więc w `members/` krótką notatkę
+  // o swoim koncie ([MemberNote]).
+
+  /// Wersja aplikacji do notatki członka — ustawiana w `main()`, w testach
+  /// wpisywana wprost.
+  static String appVersion = '';
+
+  static const String _membersFolder = 'members';
+
+  /// Jak często telefon odświeża swoją notatkę. Przy każdej synchronizacji
+  /// (co 5 minut) byłby to zapis na Dysku co chwilę, a „ostatnio"
+  /// z dokładnością do kilku godzin wystarczy.
+  static const Duration memberNoteInterval = Duration(hours: 6);
+
+  static const String _memberNoteKey = 'memberNote';
+
+  /// Zapisuje notatkę tego konta — przy założeniu jednostki i dołączeniu
+  /// zawsze ([force]), przy synchronizacji najwyżej co [memberNoteInterval]
+  /// albo po zmianie wersji aplikacji. Błąd nie zatrzymuje synchronizacji.
+  Future<void> _writeMemberNote({bool force = false}) async {
+    final email = authService.userEmail?.trim().toLowerCase();
+    final unit = _state.unitFolderId;
+    if (email == null || email.isEmpty || unit == null) return;
+
+    final saved = _db.settingsBox.get(_memberNoteKey);
+    final last = saved is Map ? saved : const {};
+    final sameUnit = last['unit'] == unit && last['email'] == email;
+    final lastAt = DateTime.tryParse('${last['at']}');
+    final now = DateTime.now();
+    if (!force &&
+        sameUnit &&
+        last['version'] == appVersion &&
+        lastAt != null &&
+        now.difference(lastAt) < memberNoteInterval) {
+      return;
+    }
+
+    try {
+      final folders = await _membersFolders();
+      final folder = folders.firstOrNull ??
+          await _driveService.createSubfolder(unit, _membersFolder);
+      final name = MemberNote.fileName(email);
+      // Data dołączenia zostaje pierwsza — także po reinstalacji aplikacji.
+      var joinedAt = sameUnit ? DateTime.tryParse('${last['joinedAt']}') : null;
+      if (joinedAt == null) {
+        final existing = MemberNote.fromJson(
+            await _driveService.readJsonFileByName(folder, name));
+        joinedAt = existing?.joinedAt;
+      }
+      joinedAt ??= now;
+      await _driveService.writeJsonFile(folder, name, {
+        ...MemberNote(
+          email: email,
+          joinedAt: joinedAt,
+          lastSyncAt: now,
+          appVersion: appVersion,
+        ).toJson(),
+        'updatedAt': now.toIso8601String(),
+      });
+      await _db.settingsBox.put(_memberNoteKey, {
+        'unit': unit,
+        'email': email,
+        'at': now.toIso8601String(),
+        'version': appVersion,
+        'joinedAt': joinedAt.toIso8601String(),
+      });
+    } catch (e) {
+      debugPrint('Notatka członka niezapisana: $e');
+    }
+  }
+
+  /// Foldery `members/` jednostki — zwykle jeden; przy dwóch założonych
+  /// naraz czytamy oba, a piszemy do pierwszego.
+  Future<List<String>> _membersFolders() async {
+    final folderId = _state.unitFolderId;
+    if (folderId == null) return const [];
+    return [
+      for (final f in await _driveService.listSubfolders(folderId))
+        if (f.name == _membersFolder && f.id != null) f.id!,
+    ];
+  }
+
+  /// Notatki członków — do listy „Członkowie jednostki", klucz to adres
+  /// małymi literami. Notatkę zmienioną przez kogoś innego niż jej właściciel
+  /// pomijamy (jak w fix/067): nikt nie „dołączy" za kolegę.
+  Future<Map<String, MemberNote>> memberNotes() async {
+    final notes = <String, MemberNote>{};
+    for (final folder in await _membersFolders()) {
+      for (final file in await _driveService.listJsonFiles(folder)) {
+        final note =
+            MemberNote.fromJson(await _driveService.readJsonFile(file.id!));
+        if (note == null) continue;
+        final key = _normalizeEmail(note.email);
+        final by = file.lastModifyingUser?.emailAddress;
+        if (by != null && _normalizeEmail(by) != key) continue;
+        final current = notes[key];
+        final at = note.lastSyncAt ?? DateTime(2000);
+        if (current == null ||
+            at.isAfter(current.lastSyncAt ?? DateTime(2000))) {
+          notes[key] = note;
+        }
+      }
+    }
+    return notes;
+  }
+
+  /// Usuwa notatkę tego konta — przy „Wyloguj i usuń dane". Bez sieci
+  /// zostaje na Dysku; lista członków i tak pokazuje tylko osoby z dostępem.
+  Future<void> removeOwnMemberNote() async {
+    final email = authService.userEmail;
+    if (email == null || _state.unitFolderId == null) return;
+    final name = MemberNote.fileName(email);
+    try {
+      for (final folder in await _membersFolders()) {
+        for (final file in await _driveService.listJsonFiles(folder)) {
+          if (file.name == name) await _driveService.deleteFile(file.id!);
+        }
+      }
+      await _db.settingsBox.delete(_memberNoteKey);
+    } catch (e) {
+      debugPrint('Notatka członka nieusunięta: $e');
+    }
+  }
 
   // ── Konto Google ───────────────────────────────────────────────────
 
@@ -653,6 +782,7 @@ class SyncService {
         await _resolveNumberConflicts();
         await _pushConfig();
         await _pushDocuments();
+        await _writeMemberNote();
       });
 
       final duplicates = _db.findDuplicateReportNumbers();

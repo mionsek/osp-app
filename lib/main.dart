@@ -3,15 +3,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'core/theme/osp_theme.dart';
 import 'core/router/app_router.dart';
 import 'models/sync_state.dart';
 import 'services/database_service.dart';
+import 'services/sync_service.dart';
 import 'providers/providers.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await DatabaseService.initialize();
+  // Wersja do notatki członka jednostki (feature/080) — widać ją na liście
+  // „Członkowie jednostki", np. kto jeszcze nie zaktualizował aplikacji.
+  try {
+    SyncService.appVersion = (await PackageInfo.fromPlatform()).version;
+  } catch (_) {}
   // Czcionka wydruków (Open Sans) jest w paczce aplikacji — jej licencja
   // wymaga dołączenia tekstu licencji.
   LicenseRegistry.addLicense(() async* {

@@ -521,6 +521,11 @@ class GoogleDriveService {
     return result.files?.isNotEmpty == true ? result.files!.first.id : null;
   }
 
+  /// Usuwa plik na stałe — tylko własny (notatka członka przy „Wyloguj
+  /// i usuń dane", feature/080). Cudzych plików Dysk i tak nie pozwala usunąć.
+  Future<void> deleteFile(String fileId) =>
+      _retry(() => _api.files.delete(fileId));
+
   /// Check if a folder exists and is accessible.
   Future<bool> isFolderAccessible(String folderId) async {
     try {

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../providers/providers.dart';
+import '../../models/member_note.dart';
 import '../../models/sync_state.dart' show RejectedChange;
 import '../../core/utils/time_format.dart';
 import '../../services/google_drive_service.dart';
@@ -34,6 +35,7 @@ class UnitMembersSection extends ConsumerStatefulWidget {
 
 class _UnitMembersSectionState extends ConsumerState<UnitMembersSection> {
   List<UnitMemberAccess>? _members;
+  Map<String, MemberNote> _notes = const {};
   bool _loading = false;
   String? _error;
 
@@ -43,8 +45,20 @@ class _UnitMembersSectionState extends ConsumerState<UnitMembersSection> {
       _error = null;
     });
     try {
-      final members = await ref.read(syncServiceProvider).listMembers();
-      if (mounted) setState(() => _members = members);
+      final sync = ref.read(syncServiceProvider);
+      final members = await sync.listMembers();
+      // Notatki „kto dołączył" (feature/080) — ich brak nie może zablokować
+      // samej listy uprawnień.
+      var notes = const <String, MemberNote>{};
+      try {
+        notes = await sync.memberNotes();
+      } catch (_) {}
+      if (mounted) {
+        setState(() {
+          _members = members;
+          _notes = notes;
+        });
+      }
     } catch (e) {
       if (mounted) setState(() => _error = 'Nie udało się pobrać listy: $e');
     } finally {
@@ -288,6 +302,7 @@ class _UnitMembersSectionState extends ConsumerState<UnitMembersSection> {
               isAdmin: syncState.isAdmin(m.email),
               isMe: (syncState.userEmail ?? '').trim().toLowerCase() ==
                   m.email.trim().toLowerCase(),
+              note: _notes[m.email.trim().toLowerCase()],
               onToggleAdmin: (v) => _toggleAdmin(m, v),
               onRevoke: () => _revoke(m),
             ),
@@ -310,6 +325,10 @@ class _MemberTile extends StatelessWidget {
   final bool sharedAccount;
   final bool isAdmin;
   final bool isMe;
+
+  /// Notatka z telefonu tej osoby — `null`, gdy jeszcze nie dołączyła albo
+  /// ma wersję sprzed feature/080.
+  final MemberNote? note;
   final ValueChanged<bool> onToggleAdmin;
   final VoidCallback onRevoke;
 
@@ -319,6 +338,7 @@ class _MemberTile extends StatelessWidget {
     this.sharedAccount = false,
     required this.isAdmin,
     required this.isMe,
+    this.note,
     required this.onToggleAdmin,
     required this.onRevoke,
   });
@@ -355,6 +375,16 @@ class _MemberTile extends StatelessWidget {
                             ? 'Założyciel — stały administrator'
                             : (isAdmin ? 'Administrator' : 'Użytkownik'),
                     style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    memberStatus(note, DateTime.now()),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: note == null
+                          ? OspTheme.attention
+                          : Colors.grey[700],
+                    ),
                   ),
                 ],
               ),
@@ -511,4 +541,32 @@ class _InviteDialogState extends State<_InviteDialog> {
       ],
     );
   }
+}
+
+/// Czy i kiedy osoba z dostępem naprawdę dołączyła (feature/080), np.
+/// „W aplikacji od 25.11.2026 · ostatnio dziś 14:05 · wersja 1.9.20".
+///
+/// Bez notatki nie da się odróżnić „nie przyjęła zaproszenia" od „ma wersję
+/// sprzed tej funkcji" — napis mówi o obu, bez zgadywania.
+@visibleForTesting
+String memberStatus(MemberNote? note, DateTime now) {
+  if (note == null) {
+    return 'Brak śladu w aplikacji — zaproszenie nieprzyjęte albo starsza '
+        'wersja aplikacji';
+  }
+  final parts = <String>[
+    if (note.joinedAt != null) 'W aplikacji od ${TimeFormat.date(note.joinedAt!)}',
+    if (note.lastSyncAt != null) 'ostatnio ${_when(note.lastSyncAt!, now)}',
+    if (note.appVersion.isNotEmpty) 'wersja ${note.appVersion}',
+  ];
+  return parts.isEmpty ? 'W aplikacji' : parts.join(' · ');
+}
+
+String _when(DateTime at, DateTime now) {
+  final day = DateTime(at.year, at.month, at.day);
+  final today = DateTime(now.year, now.month, now.day);
+  final days = today.difference(day).inDays;
+  if (days == 0) return 'dziś ${TimeFormat.hhmm(at)}';
+  if (days == 1) return 'wczoraj ${TimeFormat.hhmm(at)}';
+  return TimeFormat.date(at);
 }
