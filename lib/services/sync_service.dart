@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
@@ -11,10 +12,13 @@ import 'drive_retry.dart';
 import 'google_auth_service.dart';
 import 'google_drive_service.dart';
 import 'report_numbers.dart';
+import 'server_auth_service.dart';
 import 'sync_json.dart';
 import '../core/constants/support_links.dart';
 import '../core/utils/file_names.dart';
 import '../core/utils/time_format.dart';
+
+part 'server_sync_service.dart';
 
 /// Komunikat dla użytkownika zamiast surowego tekstu wyjątku.
 ///
@@ -22,6 +26,18 @@ import '../core/utils/time_format.dart';
 /// caused connection abort, uri=https://www.googleapis.com/upload/…", choć
 /// chodziło tylko o zerwane połączenie, a dane były bezpieczne na telefonie.
 String describeSyncError(Object e) {
+  // Serwer jednostek (feature/081): brak sieci albo chwilowa awaria.
+  if (e is TimeoutException ||
+      (e is FirebaseException &&
+          const {'unavailable', 'deadline-exceeded', 'aborted'}
+              .contains(e.code))) {
+    return 'Serwer jednostki chwilowo nie odpowiada. Dane są zapisane na '
+        'telefonie, synchronizacja ponowi się sama.';
+  }
+  if (e is FirebaseException && e.code == 'permission-denied') {
+    return 'Serwer odmówił dostępu — to konto może nie należeć już do '
+        'jednostki. Dane są zapisane na telefonie.';
+  }
   if (isTransientDriveError(e)) {
     return e is drive.DetailedApiRequestError
         ? 'Dysk Google chwilowo nie odpowiada. Dane są zapisane na telefonie, '
@@ -87,6 +103,9 @@ class SyncService {
     this._driveService, {
     this.localChangeDelay = const Duration(seconds: 2),
   });
+
+  /// Jednostka na serwerze ([ServerSyncService]), a nie na Dysku.
+  bool get onServer => false;
 
   // ── Initialization ─────────────────────────────────────────────
 
@@ -2127,6 +2146,13 @@ class UnitNotFound extends UnitLookup {
 class UnitAmbiguous extends UnitLookup {
   final int count;
   const UnitAmbiguous(this.count);
+}
+
+/// Kod pasuje do jednostki na serwerze, ale tego adresu nie ma na liście
+/// zaproszonych (feature/081).
+class UnitNotInvited extends UnitLookup {
+  final String email;
+  const UnitNotInvited(this.email);
 }
 
 class UnitFound extends UnitLookup {

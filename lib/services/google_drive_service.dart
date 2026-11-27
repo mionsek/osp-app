@@ -12,10 +12,14 @@ class UnitMemberAccess {
   /// Właściciela folderu (założyciela) nie da się z niego usunąć.
   final bool isOwner;
 
+  /// Zaproszony, który jeszcze nie dołączył (serwer jednostek, feature/081).
+  final bool invited;
+
   const UnitMemberAccess({
     required this.permissionId,
     required this.email,
     required this.isOwner,
+    this.invited = false,
   });
 }
 
@@ -38,12 +42,17 @@ class UnitCandidate {
   /// odróżnić tylko po dacie i kodzie.
   final DateTime? createdAt;
 
+  /// Jednostka na serwerze (feature/081): [folderId] to identyfikator
+  /// w bazie, a [ownerEmail] — kto zaprosił (albo założyciel).
+  final bool onServer;
+
   const UnitCandidate({
     required this.folderId,
     required this.unitName,
     this.ownerEmail,
     this.inviteCode,
     this.createdAt,
+    this.onServer = false,
   });
 }
 

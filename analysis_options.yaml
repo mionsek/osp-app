@@ -12,6 +12,8 @@ analyzer:
     - build/**
     - android/**
     - web/**
+    # Narzędzia Firebase (node_modules) — testy zasad bazy, nie kod aplikacji.
+    - firebase/**
 include: package:flutter_lints/flutter.yaml
 
 linter:

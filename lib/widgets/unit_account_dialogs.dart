@@ -25,6 +25,14 @@ String joinNotFoundMessage(String? email) {
       '(Ustawienia → Członkowie jednostki → Zaproś do jednostki).';
 }
 
+/// Kod jest prawidłowy, ale zalogowanego adresu nie ma na liście
+/// zaproszonych jednostki na serwerze (feature/081).
+String joinNotInvitedMessage(String email) =>
+    'Adresu $email nie ma na liście zaproszonych do tej jednostki. Poproś '
+    'administratora, żeby zaprosił dokładnie ten adres (Ustawienia → '
+    'Członkowie jednostki → Zaproś do jednostki), albo zaloguj się kontem, '
+    'na które przyszło zaproszenie.';
+
 /// Po dołączeniu do jednostki: zamyka wprowadzenie i odświeża listy danymi
 /// pobranymi z Dysku.
 Future<void> finishJoiningUnit(WidgetRef ref) async {
@@ -80,6 +88,8 @@ Future<JoinAttempt> joinUnitWithConfirmation(
         joined: false,
         error: joinNotFoundMessage(ref.read(syncStateProvider).userEmail),
       );
+    case UnitNotInvited(:final email):
+      return (joined: false, error: joinNotInvitedMessage(email));
     case UnitAmbiguous():
       return (
         joined: false,
@@ -122,18 +132,25 @@ class _ConfirmUnitDialog extends StatelessWidget {
             Text('Jednostka', style: TextStyle(color: Colors.grey[600])),
             Text(name, style: const TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: 12),
-            Text('Właściciel folderu na Dysku',
+            Text(
+                unit.onServer ? 'Zaproszenie od' : 'Właściciel folderu na Dysku',
                 style: TextStyle(color: Colors.grey[600])),
             Text(
               unit.ownerEmail ?? 'nieznany',
               style: const TextStyle(fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 16),
-            const Text(
-              'Dołącz tylko, jeśli znasz to konto — zwykle to konto jednostki '
-              'albo jej administratora. Po dołączeniu wyjazdy, przekazania '
-              'i przejazdy z tego telefonu trafią do tego folderu.',
-              style: TextStyle(fontSize: 13),
+            Text(
+              unit.onServer
+                  ? 'Dołącz tylko, jeśli znasz tę osobę — zwykle to '
+                      'administrator jednostki. Po dołączeniu wyjazdy, '
+                      'przekazania i przejazdy z tego telefonu trafią do '
+                      'tej jednostki.'
+                  : 'Dołącz tylko, jeśli znasz to konto — zwykle to konto '
+                      'jednostki albo jej administratora. Po dołączeniu '
+                      'wyjazdy, przekazania i przejazdy z tego telefonu '
+                      'trafią do tego folderu.',
+              style: const TextStyle(fontSize: 13),
             ),
             if (!localOnly.isEmpty) ...[
               const SizedBox(height: 12),

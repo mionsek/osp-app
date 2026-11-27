@@ -123,7 +123,9 @@ service cloud.firestore {
       // ── Członkowie ──────────────────────────────────────────────────
 
       match /members/{uid} {
-        allow read: if isMember(u);
+        // Własny rekord także spoza jednostki — telefon sprawdza po kodzie,
+        // czy to konto już do niej należy (np. nowy telefon).
+        allow read: if isMember(u) || (signedIn() && uid == request.auth.uid);
 
         allow create: if signedIn()
           && uid == request.auth.uid
@@ -174,7 +176,10 @@ service cloud.firestore {
 
         allow create, update: if isAdmin(u)
           && email == email.lower()
-          && request.resource.data.keys().hasOnly(['email', 'role', 'invitedBy', 'invitedAt'])
+          // Nazwa jednostki — zaproszony nie jest jeszcze członkiem, więc
+          // samej jednostki nie odczyta, a ekran dołączania ją pokazuje.
+          && request.resource.data.keys().hasOnly(['email', 'role', 'unitName', 'invitedBy', 'invitedAt'])
+          && request.resource.data.get('unitName', '') is string
           && request.resource.data.email == email
           && request.resource.data.role in ['member', 'admin']
           && request.resource.data.invitedBy == myEmail()

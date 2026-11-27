@@ -113,6 +113,7 @@ function inviteFrom(by, email, role = 'member') {
   return setDoc(doc(as(by), 'units', U, 'invites', email), {
     email,
     role,
+    unitName: 'OSP Test',
     invitedBy: `${by}@gmail.com`,
     invitedAt: serverTimestamp(),
   });
@@ -246,6 +247,12 @@ describe('kod zaproszenia i dołączanie', () => {
       uid: 'd', email: 'x@gmail.com', role: 'member',
       joinedAt: serverTimestamp(), appVersion: '2.0.0',
     }));
+  });
+
+  test('przed dołączeniem widać tylko, czy własny rekord istnieje', async () => {
+    await seedUnit();
+    await assertSucceeds(getDoc(doc(as('x'), 'units', U, 'members', 'x')));
+    await assertFails(getDoc(doc(as('x'), 'units', U, 'members', 'b')));
   });
 
   test('adres z wielkimi literami pasuje do zaproszenia', async () => {
