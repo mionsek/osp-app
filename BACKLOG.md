@@ -1140,7 +1140,7 @@ Google), potem 14 dni i wniosek o produkcję.
 Alpha z 1.9.19 (42), Polska, lista 15 testerów, wpis, deklaracje). **Google
 zatwierdził — test zamknięty działa, testerzy instalują** (Dawid, 25.11).
 14 dni liczy się od dnia, w którym co najmniej 12 testerów ma przyjęte
-zaproszenie — najwcześniej ok. **9.12.2026** wniosek o produkcję. Testerów
+zaproszenie. **27.11.2026: 12 testerów, dzień 1 z 14** (Play Console) — wniosek o produkcję najwcześniej ok. **10.12.2026**. Testerów
 można dopisywać na bieżąco (lista e-mailowa ścieżki); kto przyjmie
 zaproszenie, zostaje testerem do końca testu.
 - [ ] Wniosek o produkcję po 14 dniach (Panel → Produkcyjna → „Poproś
