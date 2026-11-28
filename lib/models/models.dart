@@ -9,4 +9,4 @@ export 'trip_equipment_use.dart';
 export 'equipment.dart';
 export 'equipment_work.dart';
 export 'vehicle_trip.dart';
-export 'member_note.dart';
+export 'unit_member.dart';

@@ -1,6 +1,6 @@
-import 'dart:convert';
 import 'dart:io';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:osp_app/models/models.dart';
@@ -9,24 +9,24 @@ import 'package:osp_app/services/database_service.dart';
 import 'package:osp_app/services/sync_json.dart';
 import 'package:osp_app/services/sync_service.dart';
 
-import 'helpers/fake_drive.dart';
-import 'helpers/phone_db.dart';
+import 'helpers/server_phones.dart';
 
 /// Każdy rodzaj danych od kolegi dociera do jednostki i na drugi telefon.
 ///
 /// Zgłoszenie z testu 1.7.6: „kolega dodał przekazanie mienia, a ja go dalej
-/// nie widzę, na Dysku też nic". Testy dwóch telefonów sprawdzały dotąd
-/// wyjazdy i listy — przekazania i ewidencji przejazdów żaden.
+/// nie widzę". Testy dwóch telefonów sprawdzały wcześniej tylko wyjazdy
+/// i listy.
 void main() {
   late Directory root;
-  late FakeDrive drive;
+  late ServerPhones phones;
   final db = DatabaseService();
+  late String code;
 
   setUpAll(DatabaseService.registerAdapters);
 
   setUp(() async {
     root = await Directory.systemTemp.createTemp('osp_sync_all_kinds');
-    drive = FakeDrive();
+    phones = ServerPhones(root);
   });
 
   tearDown(() async {
@@ -34,21 +34,14 @@ void main() {
     if (root.existsSync()) root.deleteSync(recursive: true);
   });
 
-  Future<SyncService> phone(String name) async {
-    await openPhoneDb(root, name);
-    drive.account = '$name@gmail.com';
-    final sync = SyncService(db, FakeAuth('$name@gmail.com'), drive);
-    await sync.restoreState();
-    return sync;
-  }
+  Future<SyncService> phone(String name) => phones.phone(name);
 
   /// A (ospkielno) zakłada jednostkę, B (wojtek) dołącza.
-  Future<void> unit() async {
-    final a = await phone('ospkielno');
-    final code = await a.createUnit('OSP Kielno');
-    final b = await phone('wojtek');
-    expect(await b.joinUnit(code), isTrue);
-  }
+  Future<void> unit() async => code =
+      await phones.unitWith('ospkielno', 'wojtek', unitName: 'OSP Kielno');
+
+  Future<List<String>> idsOnServer(String collection) async =>
+      [for (final d in await phones.live(code, collection)) d['id'] as String];
 
   PropertyHandover handover(String id, {String location = 'Kielno'}) {
     final at = DateTime(2026, 10, 27, 17, 30);
@@ -83,7 +76,7 @@ void main() {
     );
   }
 
-  test('przekazanie mienia od kolegi trafia na Dysk i do drugiego telefonu',
+  test('przekazanie mienia od kolegi trafia na serwer i do drugiego telefonu',
       () async {
     await unit();
     final b = await phone('wojtek');
@@ -91,7 +84,7 @@ void main() {
     await b.syncAll();
 
     expect(b.state.status, SyncStatus.idle);
-    expect(drive.jsonIn('handovers').map((j) => j['id']), ['h-w']);
+    expect(await idsOnServer('handovers'), ['h-w']);
 
     final a = await phone('ospkielno');
     await a.syncAll();
@@ -125,21 +118,21 @@ void main() {
     expect(db.getHandover('h-w'), isNull);
   });
 
-  test('przejazd z ewidencji od kolegi trafia na Dysk i do drugiego '
+  test('przejazd z ewidencji od kolegi trafia na serwer i do drugiego '
       'telefonu', () async {
     await unit();
     final b = await phone('wojtek');
     await db.addTrip(trip('t-w'));
     await b.syncAll();
-    expect(drive.jsonIn('trips').map((j) => j['id']), contains('t-w'));
+    expect(await idsOnServer('trips'), contains('t-w'));
 
     final a = await phone('ospkielno');
     await a.syncAll();
     expect(db.getTrip('t-w')?.routeTo, 'Gdynia');
   });
 
-  test('rozruch sprzętu od kolegi trafia do equipment_work i do drugiego '
-      'telefonu; usunięcie też', () async {
+  test('rozruch sprzętu od kolegi trafia na serwer i do drugiego telefonu; '
+      'usunięcie też', () async {
     await unit();
     var b = await phone('wojtek');
     final at = DateTime(2026, 11, 1, 10);
@@ -157,7 +150,7 @@ void main() {
       createdBy: 'wojtek@gmail.com',
     ));
     await b.syncAll();
-    expect(drive.jsonIn('equipment_work').map((j) => j['id']), ['w-rozruch']);
+    expect(await idsOnServer('equipmentWork'), ['w-rozruch']);
 
     var a = await phone('ospkielno');
     await a.syncAll();
@@ -173,7 +166,7 @@ void main() {
 
   test('ratownik i pojazd od administratora docierają do kolegi', () async {
     await unit();
-    var a = await phone('ospkielno');
+    final a = await phone('ospkielno');
     await db.addFirefighter(Firefighter(
       id: 'f1',
       firstName: 'Dawid',
@@ -195,72 +188,6 @@ void main() {
     expect(db.getVehicle('v1')?.name, 'GBA 2,5/16');
   });
 
-  group('dwa foldery o tej samej nazwie', () {
-    /// Drugi folder [name] w folderze jednostki — jak po dwóch telefonach,
-    /// które w tej samej chwili zapisały pierwszy wpis i oba go założyły.
-    Future<String> secondFolder(SyncService a, String name) =>
-        drive.createSubfolder(a.state.unitFolderId!, name);
-
-    test('przekazanie z drugiego folderu handovers dociera', () async {
-      await unit();
-      final a = await phone('ospkielno');
-      final second = await secondFolder(a, 'handovers');
-      drive.putRaw(second, 'h.json',
-          jsonEncode(SyncJson.handoverToJson(handover('h-w'))));
-
-      await a.syncAll();
-      expect(db.getHandover('h-w'), isNotNull);
-    });
-
-    test('przejazd z drugiego folderu trips dociera, a nowy zapis idzie do '
-        'najstarszego', () async {
-      await unit();
-      var b = await phone('wojtek');
-      await db.addTrip(trip('t-1'));
-      await b.syncAll();
-      final oldest = drive.folderIdByName('trips')!;
-
-      final a = await phone('ospkielno');
-      final second = await secondFolder(a, 'trips');
-      drive.putRaw(second, 't2.json',
-          jsonEncode(SyncJson.tripToJson(trip('t-2'))));
-      await a.syncAll();
-      expect(db.getTrip('t-1'), isNotNull);
-      expect(db.getTrip('t-2'), isNotNull);
-
-      b = await phone('wojtek');
-      await db.addTrip(trip('t-3'));
-      await b.syncAll();
-      final t3 = drive.files.values.singleWhere(
-          (f) => f.content?.contains('"t-3"') ?? false);
-      expect(t3.parent, oldest, reason: 'każdy telefon pisze do tego samego');
-    });
-
-    test('wyjazd z drugiego folderu reports dociera', () async {
-      await unit();
-      final a = await phone('ospkielno');
-      final second = await secondFolder(a, 'reports');
-      final year = await drive.createSubfolder(second, '2026');
-      drive.putRaw(year, 'r.json', jsonEncode(SyncJson.reportToJson(Report(
-        id: 'r-w',
-        reportNumber: '0005/2026',
-        year: 2026,
-        date: DateTime(2026, 10, 27),
-        departureTime: DateTime(2026, 10, 27, 17, 10),
-        addressLocality: 'Kielno',
-        addressStreet: '',
-        addressDescription: '',
-        threatCategory: 'Pożar',
-        createdAt: DateTime(2026, 10, 27, 17, 10),
-        updatedAt: DateTime(2026, 10, 27, 17, 10),
-        createdBy: 'wojtek@gmail.com',
-      ))));
-
-      await a.syncAll();
-      expect(db.getReport('r-w'), isNotNull);
-    });
-  });
-
   test('otwarcie listy pobiera zmiany kolegi, ale nie częściej niż co pół '
       'minuty', () async {
     // Test 1.7.6: „raz nie pokazało, dopiero po naciśnięciu chmurki".
@@ -273,16 +200,23 @@ void main() {
     await a.syncIfStale();
     expect(db.getHandover('h-w'), isNotNull);
 
-    drive.putRaw(drive.folderIdByName('handovers')!, 'h2.json',
-        jsonEncode(SyncJson.handoverToJson(handover('h-2'))));
+    await phones.fs
+        .doc('units/${await phones.unitIdOf(code)}/handovers/h-2')
+        .set({
+      'data': SyncJson.handoverToJson(handover('h-2')),
+      'author': 'wojtek@gmail.com',
+      'deleted': false,
+      'serverAt': FieldValue.serverTimestamp(),
+      'by': 'wojtek@gmail.com',
+    });
     await a.syncIfStale();
     expect(db.getHandover('h-2'), isNull,
-        reason: 'przed chwilą była synchronizacja — nie pytamy Dysku znowu');
+        reason: 'przed chwilą była synchronizacja — nie pytamy serwera znowu');
     await a.syncAll();
     expect(db.getHandover('h-2'), isNotNull);
   });
 
-  test('przekazanie czeka na wysłanie, a po synchronizacji jest na Dysku',
+  test('przekazanie czeka na wysłanie, a po synchronizacji jest na serwerze',
       () async {
     await unit();
     final b = await phone('wojtek');
@@ -339,21 +273,6 @@ void main() {
       final a = await phone('ospkielno');
       await a.syncAll();
       expect(db.getEquipment('e-saw'), isNull);
-    });
-
-    test('przy dołączaniu ostrzeżenie wymienia sprzęt z telefonu, który '
-        'zastąpi lista jednostki', () async {
-      final a = await phone('ospkielno');
-      final code = await a.createUnit('OSP Kielno');
-
-      final b = await phone('wojtek');
-      await db.addEquipment(saw(name: 'Testowa piła'));
-      final unitFound = (await b.lookupUnit(code) as UnitFound).unit;
-      expect((await b.localOnlyListEntries(unitFound.folderId)).equipment,
-          ['Testowa piła']);
-
-      await b.joinFoundUnit(unitFound, code);
-      expect(db.getAllEquipment(), isEmpty);
     });
   });
 

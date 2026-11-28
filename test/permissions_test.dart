@@ -9,7 +9,7 @@ SyncState connected({
     SyncState(
       status: SyncStatus.idle,
       userEmail: me,
-      unitFolderId: 'folder-1',
+      unitId: 'folder-1',
       founderEmail: founder,
       adminEmails: admins,
     );

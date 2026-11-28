@@ -1,32 +1,23 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:googleapis/drive/v3.dart' as drive;
+import 'package:flutter/foundation.dart';
+
+import '../core/constants/support_links.dart';
+import '../core/utils/time_format.dart';
 import '../models/models.dart';
 import '../models/sync_state.dart';
+import 'auth_service.dart';
 import 'database_service.dart';
-import 'drive_retry.dart';
-import 'google_auth_service.dart';
-import 'google_drive_service.dart';
 import 'report_numbers.dart';
-import 'server_auth_service.dart';
 import 'sync_json.dart';
-import '../core/constants/support_links.dart';
-import '../core/utils/file_names.dart';
-import '../core/utils/time_format.dart';
-
-part 'server_sync_service.dart';
 
 /// Komunikat dla użytkownika zamiast surowego tekstu wyjątku.
-///
-/// Zgłoszenie z testów 1.7.3: na ekranie stało „ClientException: Software
-/// caused connection abort, uri=https://www.googleapis.com/upload/…", choć
-/// chodziło tylko o zerwane połączenie, a dane były bezpieczne na telefonie.
 String describeSyncError(Object e) {
-  // Serwer jednostek (feature/081): brak sieci albo chwilowa awaria.
+  // Brak sieci albo chwilowa awaria serwera.
   if (e is TimeoutException ||
       (e is FirebaseException &&
           const {'unavailable', 'deadline-exceeded', 'aborted'}
@@ -38,38 +29,36 @@ String describeSyncError(Object e) {
     return 'Serwer odmówił dostępu — to konto może nie należeć już do '
         'jednostki. Dane są zapisane na telefonie.';
   }
-  if (isTransientDriveError(e)) {
-    return e is drive.DetailedApiRequestError
-        ? 'Dysk Google chwilowo nie odpowiada. Dane są zapisane na telefonie, '
-            'synchronizacja ponowi się sama.'
-        : 'Połączenie z internetem zostało przerwane. Dane są zapisane na '
-            'telefonie, synchronizacja ponowi się sama.';
-  }
   return '$e';
 }
 
-/// Ratownicy i pojazdy z telefonu, których nie ma w jednostce — przy
-/// dołączaniu zostaną zastąpione jej listą.
-class LocalListEntries {
-  final List<String> firefighters;
-  final List<String> vehicles;
-  final List<String> equipment;
-
-  const LocalListEntries({
-    this.firefighters = const [],
-    this.vehicles = const [],
-    this.equipment = const [],
-  });
-
-  bool get isEmpty =>
-      firefighters.isEmpty && vehicles.isEmpty && equipment.isEmpty;
-}
-
-/// Orchestrates bidirectional sync between local Hive and Google Drive.
+/// Synchronizacja bazy na telefonie (Hive) z serwerem jednostek — Firestore
+/// (feature/081, PLAN_BAZA_DANYCH.md).
+///
+/// ```
+/// units/{u}                    dane jednostki, właściciel, kod
+/// units/{u}/members/{uid}      członek: adres, rola, imię, ostatnio, wersja
+/// units/{u}/invites/{adres}    lista zaproszonych
+/// units/{u}/reports/{id}       { data: treść (SyncJson), author, deleted,
+///                                serverAt, by } — tak samo przekazania,
+///                                przejazdy i praca sprzętu
+/// units/{u}/firefighters/{id}  listy administratora (bez `author`)
+/// units/{u}/threatTypes/{kat.} słownik zagrożeń
+/// ```
+///
+/// Scalanie rozstrzyga stempel `updatedAt` każdego rekordu, usunięcia jeżdżą
+/// jako znaczniki bez treści. Uprawnień pilnuje serwer
+/// ([firebase/firestore.rules]) — zapisu, którego aplikacja by nie zrobiła,
+/// baza po prostu nie przyjmie.
 class SyncService {
   final DatabaseService _db;
-  final GoogleAuthService authService;
-  final GoogleDriveService _driveService;
+  final AuthService authService;
+
+  /// Baza w testach; w aplikacji [FirebaseFirestore.instance], pobierana
+  /// dopiero przy pierwszym użyciu — bez uruchomionego Firebase (testy
+  /// ekranów) sama usługa da się utworzyć.
+  FirebaseFirestore? _firestore;
+  FirebaseFirestore get _fs => _firestore ??= FirebaseFirestore.instance;
 
   Timer? _autoSyncTimer;
   StreamSubscription? _connectivitySubscription;
@@ -78,7 +67,7 @@ class SyncService {
   /// Callback to notify listeners about sync state changes.
   void Function(SyncState)? onStateChanged;
 
-  /// Wołane po zapisaniu danych pobranych z Dysku.
+  /// Wołane po zapisaniu danych pobranych z serwera.
   ///
   /// Listy na ekranach trzymają migawkę z chwili utworzenia, więc bez
   /// odświeżenia raport dodany przez kolegę pojawiał się dopiero po
@@ -99,20 +88,52 @@ class SyncService {
 
   SyncService(
     this._db,
-    this.authService,
-    this._driveService, {
+    this.authService, {
+    FirebaseFirestore? firestore,
     this.localChangeDelay = const Duration(seconds: 2),
-  });
+  }) : _firestore = firestore;
 
-  /// Jednostka na serwerze ([ServerSyncService]), a nie na Dysku.
-  bool get onServer => false;
+  /// Jak długo czekamy na serwer. Bez limitu zapis przy zerwanym połączeniu
+  /// czekałby w nieskończoność, a z nim cała synchronizacja.
+  static const serverTimeout = Duration(seconds: 30);
 
-  /// Klucz w `configBox` z folderem jednostki na Dysku.
-  static const String driveConfigKey = 'driveSync';
+  /// Zapas przy pobieraniu zmian „od ostatniego razu” — zapis, który był
+  /// w drodze w chwili poprzedniego pobrania, przyjdzie przy następnym.
+  static const sinceOverlap = Duration(minutes: 2);
 
-  // ── Initialization ─────────────────────────────────────────────
+  /// Najwięcej zapisów w jednej paczce (limit Firestore to 500).
+  static const _batchSize = 200;
 
-  /// Start auto-sync: every 5 minutes + on connectivity change.
+  /// Jak często telefon odczytuje pełną listę członków (role innych osób).
+  /// Własną rolę sprawdza przy każdej synchronizacji.
+  static const membersInterval = Duration(hours: 6);
+
+  static const _collections = {
+    SyncKind.report: 'reports',
+    SyncKind.handover: 'handovers',
+    SyncKind.trip: 'trips',
+    SyncKind.equipmentWork: 'equipmentWork',
+    SyncKind.firefighter: 'firefighters',
+    SyncKind.vehicle: 'vehicles',
+    SyncKind.equipment: 'equipment',
+  };
+  static const _docKinds = [
+    SyncKind.report,
+    SyncKind.handover,
+    SyncKind.trip,
+    SyncKind.equipmentWork,
+  ];
+  static const _listKinds = [
+    SyncKind.firefighter,
+    SyncKind.vehicle,
+    SyncKind.equipment,
+  ];
+  static const _threatKind = 'threat';
+  static const _threatsCollection = 'threatTypes';
+
+  // ── Synchronizacja w tle ───────────────────────────────────────────
+
+  /// Co 5 minut, gdy aplikacja jest otwarta, i po powrocie zasięgu.
   void startAutoSync() {
     _autoSyncTimer?.cancel();
     _autoSyncTimer = Timer.periodic(
@@ -131,7 +152,6 @@ class SyncService {
     });
   }
 
-  /// Stop auto-sync.
   void stopAutoSync() {
     _autoSyncTimer?.cancel();
     _autoSyncTimer = null;
@@ -152,7 +172,7 @@ class SyncService {
   /// Bez sieci przebieg kończy się błędem, a zmiana czeka na powrót
   /// połączenia albo na następną synchronizację.
   void notifyLocalChange() {
-    if (!_state.isConnected || _state.unitFolderId == null) return;
+    if (!_state.isConnected || _state.unitId == null) return;
     if (_isSyncing) {
       _changedWhileSyncing = true;
       return;
@@ -200,7 +220,7 @@ class SyncService {
   /// coś dodać, a w tle telefon pobiera co 5 minut — zgłoszenie z testu
   /// 1.7.6: „raz nie pokazało, dopiero po naciśnięciu chmurki". Najwyżej
   /// raz na [staleAfter], także po nieudanej próbie, żeby przechodzenie
-  /// między ekranami nie pytało Dysku za każdym razem.
+  /// między ekranami nie pytało serwera za każdym razem.
   Future<void> syncIfStale() async {
     final last = [_state.lastSyncTime, _state.errorTime]
         .whereType<DateTime>()
@@ -213,164 +233,157 @@ class SyncService {
     stopAutoSync();
   }
 
-  // ── Unit creation / joining ────────────────────────────────────
+  // ── Zakładanie jednostki i dołączanie ──────────────────────────────
 
-  /// Create a new unit on Google Drive. Returns invite code.
+  /// Zakłada jednostkę z danymi z telefonu. Zwraca kod zaproszenia.
   Future<String> createUnit(String unitName) async {
     await _resetUnitState();
-    final folderId = await _driveService.createUnitFolder(unitName);
-    final inviteCode = _generateInviteCode();
+    final email = _me;
+    final config = _db.getConfig();
 
-    // Write unit config to Drive (in config subfolder)
-    var configFolderId = await _driveService.findConfigFolder(folderId);
-    configFolderId ??= await _driveService.createSubfolder(folderId, 'config');
-    final unitConfig = {
-      'unitName': unitName,
-      'inviteCode': inviteCode,
-      'createdAt': DateTime.now().toIso8601String(),
-      'createdBy': authService.userEmail,
-      'syncFormat': syncFormat,
-    };
-    await _driveService.writeJsonFile(
-        configFolderId, 'unit_config.json', unitConfig);
-    _remoteUnitConfig = unitConfig;
+    // Kod jest identyfikatorem dokumentu — gdyby wylosował się zajęty,
+    // serwer odmówi i losujemy jeszcze raz.
+    for (var attempt = 1;; attempt++) {
+      final code = _generateInviteCode();
+      final unit = _fs.collection('units').doc();
+      final batch = _fs.batch()
+        ..set(unit, {
+          'name': unitName,
+          'locality': config.locality,
+          'unitStreet': config.unitStreet,
+          'inviteCode': code,
+          'ownerUid': _uid,
+          'ownerEmail': email,
+          'sharedOwner': false,
+          'syncFormat': syncFormat,
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': DateTime.now().toIso8601String(),
+        })
+        ..set(unit.collection('members').doc(_uid), _memberRecord('owner'))
+        ..set(_fs.collection('inviteCodes').doc(code), {'unitId': unit.id});
+      try {
+        await batch.commit().timeout(serverTimeout);
+      } on FirebaseException catch (e) {
+        if (e.code == 'permission-denied' && attempt < 5) continue;
+        rethrow;
+      }
 
-    _updateState(
-      _state.copyWith(
+      _remoteUnitConfig = {
+        'unitName': unitName,
+        'locality': config.locality,
+        'unitStreet': config.unitStreet,
+      };
+      _updateState(_state.copyWith(
         status: SyncStatus.idle,
         userEmail: authService.userEmail,
-        unitFolderId: folderId,
-        unitInviteCode: inviteCode,
-        // Zakładający jednostkę jest jej stałym administratorem.
-        founderEmail: authService.userEmail,
+        unitId: unit.id,
+        unitInviteCode: code,
+        founderEmail: email,
         adminEmails: const [],
-      ),
-    );
-
-    // Save Drive folder ID to local config
-    await _saveDriveConfig(folderId, inviteCode);
-
-    // Set ownerEmail on local config for the unit creator
-    final config = _db.getConfig();
-    await _db.saveConfig(
-      config.copyWith(ownerEmail: authService.userEmail ?? ''),
-    );
-
-    // Push all local data to Drive
-    await _pushAllData();
-    await _writeMemberNote(force: true);
-
-    return inviteCode;
+      ));
+      await _saveUnit(unit.id, code);
+      await _db.saveConfig(_db.getConfig().copyWith(ownerEmail: email));
+      await _db.settingsBox.put(_memberNoteKey, _memberStamp());
+      await _pushAllData();
+      await _saveServerCache();
+      return code;
+    }
   }
 
+  /// Rekord członka — przy założeniu jednostki i przy dołączeniu.
+  Map<String, dynamic> _memberRecord(String role) => {
+        'uid': _uid,
+        'email': _me,
+        'role': role,
+        if ((authService.displayName ?? '').isNotEmpty)
+          'displayName': authService.displayName,
+        'joinedAt': FieldValue.serverTimestamp(),
+        // Od razu — inaczej „ostatnio" na liście członków pojawiało się
+        // dopiero po [memberNoteInterval].
+        'lastSyncAt': FieldValue.serverTimestamp(),
+        'appVersion': appVersion,
+      };
+
   /// Szuka jednostki po kodzie zaproszenia, niczego jeszcze nie zmieniając.
-  ///
-  /// Kod nie jest tajemnicą (krąży po czatach), a przy pełnym dostępie do
-  /// Dysku wyszukiwanie widzi też foldery udostępnione przez obcych. Kiedy
-  /// kod pasuje do kilku folderów, nie zgadujemy, który jest prawdziwy.
   Future<UnitLookup> lookupUnit(String code) async {
-    final found = await _driveService.findUnitsByInviteCode(
-      code.trim().toUpperCase(),
-    );
-    return switch (found.length) {
-      0 => const UnitNotFound(),
-      1 => UnitFound(found.single),
-      _ => UnitAmbiguous(found.length),
-    };
+    final normalized = code.trim().toUpperCase();
+    final found = await _fs
+        .collection('inviteCodes')
+        .doc(normalized)
+        .get()
+        .timeout(serverTimeout);
+    final unitId = found.data()?['unitId'];
+    if (unitId is! String) return const UnitNotFound();
+    final unit = _unitRef(unitId);
+
+    // To konto już należy do jednostki (np. nowy telefon) — zaproszenie
+    // zużyło się przy pierwszym dołączeniu.
+    final member =
+        await unit.collection('members').doc(_uid).get().timeout(serverTimeout);
+    if (member.exists) {
+      final data = (await unit.get().timeout(serverTimeout)).data() ?? {};
+      return UnitFound(UnitCandidate(
+        unitId: unitId,
+        unitName: _text(data['name']) ?? '',
+        ownerEmail: _text(data['ownerEmail']),
+        inviteCode: normalized,
+      ));
+    }
+
+    final invite =
+        await unit.collection('invites').doc(_me).get().timeout(serverTimeout);
+    final data = invite.data();
+    if (data == null) return UnitNotInvited(_me);
+    return UnitFound(UnitCandidate(
+      unitId: unitId,
+      unitName: _text(data['unitName']) ?? '',
+      ownerEmail: _text(data['invitedBy']),
+      ownerName: _text(data['invitedByName']),
+      inviteCode: normalized,
+    ));
   }
 
   /// Dołącza do jednostki znalezionej przez [lookupUnit].
   Future<void> joinFoundUnit(UnitCandidate unit, String code) async {
     final normalized = code.trim().toUpperCase();
     await _resetUnitState();
+    final ref = _unitRef(unit.unitId);
+    final memberRef = ref.collection('members').doc(_uid);
 
-    _updateState(
-      _state.copyWith(
-        status: SyncStatus.idle,
-        userEmail: authService.userEmail,
-        unitFolderId: unit.folderId,
-        unitInviteCode: normalized,
-      ),
-    );
+    if (!(await memberRef.get().timeout(serverTimeout)).exists) {
+      final inviteRef = ref.collection('invites').doc(_me);
+      final invite = await inviteRef.get().timeout(serverTimeout);
+      final role = _text(invite.data()?['role']) ?? 'member';
+      final batch = _fs.batch()
+        ..set(memberRef, _memberRecord(role))
+        // Zaproszenie zużyte — na liście członków jest już sam członek.
+        ..delete(inviteRef);
+      await batch.commit().timeout(serverTimeout);
+    }
 
-    await _saveDriveConfig(unit.folderId, normalized);
+    _updateState(_state.copyWith(
+      status: SyncStatus.idle,
+      userEmail: authService.userEmail,
+      unitId: unit.unitId,
+      unitInviteCode: normalized,
+    ));
+    await _saveUnit(unit.unitId, normalized);
+    await _db.settingsBox.put(_memberNoteKey, _memberStamp());
 
-    // Pull remote data to local
     await _pullAllData();
-
     // Ratownicy, pojazdy i sprzęt pochodzą od jednostki. Wyjazdy,
-    // przekazania i przejazdy z tego telefonu zostają i pojadą na Dysk — to
-    // praca tej osoby, a nie lista, którą prowadzi administrator.
-    for (final kind in const [
-      SyncKind.firefighter,
-      SyncKind.vehicle,
-      SyncKind.equipment,
-    ]) {
+    // przekazania i przejazdy z tego telefonu zostają i pojadą na serwer —
+    // to praca tej osoby, a nie lista, którą prowadzi administrator.
+    for (final kind in _listKinds) {
       final ids = _remoteListIds[kind];
       if (ids != null) await _db.keepOnlyListEntries(kind, ids);
     }
-    await _writeMemberNote(force: true);
+    await _saveServerCache();
   }
 
-  /// Ratownicy i pojazdy z telefonu, których nie ma na listach jednostki
-  /// z folderu [unitFolderId] — do ostrzeżenia przed dołączeniem.
-  Future<LocalListEntries> localOnlyListEntries(String unitFolderId) async {
-    final configFolderId = await _driveService.findConfigFolder(unitFolderId);
-    final dataFolderId = configFolderId ?? unitFolderId;
-
-    /// `null`, gdy listy nie udało się przeczytać — wtedy dołączenie jej nie
-    /// zastąpi (jak w [joinFoundUnit]), więc nie ma przed czym ostrzegać.
-    Future<Set<String>?> idsIn(String fileName) async {
-      final data =
-          (await _driveService.readJsonFileByName(dataFolderId, fileName))?[
-              'data'];
-      if (data is! List) return null;
-      return {
-        for (final e in data)
-          if (e is Map && e['id'] is String) e['id'] as String,
-      };
-    }
-
-    final firefighterIds = await idsIn('firefighters.json');
-    final vehicleIds = await idsIn('vehicles.json');
-    final equipmentIds = await idsIn('equipment.json');
-    return LocalListEntries(
-      equipment: [
-        if (equipmentIds != null)
-          for (final e in _db.getAllEquipment())
-            if (!equipmentIds.contains(e.id)) e.name,
-      ]..sort(),
-      firefighters: [
-        if (firefighterIds != null)
-          for (final f in _db.getAllFirefighters())
-            if (!firefighterIds.contains(f.id)) f.lastNameFirst,
-      ]..sort(),
-      vehicles: [
-        if (vehicleIds != null)
-          for (final v in _db.getAllVehicles())
-            if (!vehicleIds.contains(v.id)) v.name,
-      ]..sort(),
-    );
-  }
-
-  /// Jednostki założone na zalogowanym koncie, najnowsze pierwsze — do
-  /// ostrzeżenia przed zakładaniem kolejnej.
-  ///
-  /// Bez jednostek bez kodu zaproszenia (uszkodzony plik) — do takiej nie
-  /// dołączy nikt, więc nie ma jej co proponować.
-  Future<List<UnitCandidate>> ownUnits() async {
-    final units = [
-      for (final u in await _driveService.findOwnedUnits())
-        if ((u.inviteCode ?? '').isNotEmpty) u,
-    ];
-    return units
-      ..sort((a, b) => (b.createdAt ?? DateTime(2000))
-          .compareTo(a.createdAt ?? DateTime(2000)));
-  }
-
-  /// Wyszukanie i dołączenie bez pytania — tylko gdy kod wskazuje dokładnie
-  /// jedną jednostkę. Ekrany przed dołączeniem pokazują właściciela folderu
-  /// i proszą o potwierdzenie ([lookupUnit] i [joinFoundUnit]).
+  /// Wyszukanie i dołączenie bez pytania. Ekrany przed dołączeniem
+  /// pokazują zapraszającego i proszą o potwierdzenie ([lookupUnit]
+  /// i [joinFoundUnit]).
   Future<bool> joinUnit(String code) async {
     final lookup = await lookupUnit(code);
     if (lookup is! UnitFound) return false;
@@ -378,46 +391,72 @@ class SyncService {
     return true;
   }
 
-  // ── Dostęp do jednostki i uprawnienia ────────────────────────────────
-  //
-  // Samo podanie kodu zaproszenia nie wystarcza, żeby dołączyć: kolega
-  // musi mieć dostęp do folderu jednostki na Dysku, bo wyszukiwanie po
-  // kodzie przegląda wyłącznie pliki widoczne dla jego konta. Dlatego
-  // administrator najpierw udostępnia folder, a dopiero potem przekazuje
-  // kod.
-
-  /// Udostępnia folder jednostki koledze — po tym może dołączyć kodem.
-  ///
-  /// Google wysyła mu przy tym e-mail z kodem zaproszenia i instrukcją.
-  /// Wcześniej udostępnienie szło po cichu, a kod trzeba było przekazać
-  /// osobno, więc kolega nie wiedział, że w ogóle został zaproszony.
-  ///
-  /// Zwraca treść zaproszenia — ekran proponuje wysłać ją jeszcze SMS-em
-  /// albo komunikatorem, bo powiadomienie Google wygląda jak zwykłe
-  /// udostępnienie folderu i łatwo je przeoczyć (Dawid, 19.11.2026).
-  /// Z [sharedDevice] zaproszony od razu jest wspólnym urządzeniem
-  /// jednostki (rola `shared`, tylko na serwerze).
-  Future<String> inviteMember(String email, {bool sharedDevice = false}) async {
-    final folderId = _state.unitFolderId;
-    if (folderId == null) {
-      throw StateError('Brak połączenia z jednostką.');
+  /// Jednostki, do których należy zalogowane konto, najnowsze pierwsze —
+  /// do propozycji „dołącz zamiast zakładać kolejną”.
+  Future<List<UnitCandidate>> ownUnits() async {
+    final mine = await _fs
+        .collectionGroup('members')
+        .where('uid', isEqualTo: _uid)
+        .get()
+        .timeout(serverTimeout);
+    final units = <UnitCandidate>[];
+    for (final m in mine.docs) {
+      final unit = m.reference.parent.parent;
+      if (unit == null) continue;
+      final data = (await unit.get().timeout(serverTimeout)).data();
+      if (data == null) continue;
+      final created = data['createdAt'];
+      units.add(UnitCandidate(
+        unitId: unit.id,
+        unitName: _text(data['name']) ?? '',
+        ownerEmail: _text(data['ownerEmail']),
+        inviteCode: _text(data['inviteCode']),
+        createdAt: created is Timestamp ? created.toDate() : null,
+      ));
     }
-    final address = email.trim();
-    final message = inviteMessage(
+    return units
+      ..sort((a, b) => (b.createdAt ?? DateTime(2000))
+          .compareTo(a.createdAt ?? DateTime(2000)));
+  }
+
+  // ── Zaproszenia ────────────────────────────────────────────────────
+
+  /// Dopisuje adres do listy zaproszonych — dopiero z nim można dołączyć
+  /// kodem. Zwraca treść zaproszenia; kod wysyła zapraszający (SMS,
+  /// komunikator, e-mail).
+  ///
+  /// Z [sharedDevice] zaproszony od razu jest wspólnym urządzeniem
+  /// jednostki (rola `shared`).
+  Future<String> inviteMember(String email, {bool sharedDevice = false}) async {
+    final address = _normalizeEmail(email);
+    await _writeInvite(address, sharedDevice ? 'shared' : 'member');
+    if (sharedDevice) await _applyRoles();
+    return inviteMessage(
       unitName: _db.getConfig().fullName,
       code: _state.unitInviteCode ?? '',
       email: address,
     );
-    await _driveService.shareFolderWithUser(folderId, address,
-        message: message);
-    return message;
+  }
+
+  Future<void> _writeInvite(String address, String role) async {
+    await _unitRef().collection('invites').doc(address).set({
+      'email': address,
+      'role': role,
+      'unitName': _db.getConfig().fullName,
+      'invitedBy': _me,
+      // Imię zapraszającego w oknie dołączania — zaproszony nie odczyta
+      // jeszcze listy członków.
+      if ((authService.displayName ?? '').isNotEmpty)
+        'invitedByName': authService.displayName,
+      'invitedAt': FieldValue.serverTimestamp(),
+    }).timeout(serverTimeout);
+    _invites[address] = {'email': address, 'role': role};
   }
 
   /// Strona aplikacji — skąd ją pobrać; po publikacji prowadzi do Sklepu Play.
   static const String appPage = kWebsiteUrl;
 
-  /// Treść zaproszenia — Google dokleja ją do powiadomienia o udostępnieniu
-  /// folderu jednostki, a zapraszający może ją wysłać także sam.
+  /// Treść zaproszenia, którą zapraszający wysyła sam.
   @visibleForTesting
   static String inviteMessage({
     required String unitName,
@@ -431,241 +470,208 @@ class SyncService {
       'już masz: Ustawienia → Dołącz do jednostki kodem.\n\n'
       'O aplikacji: $appPage';
 
-  // ── Kto dołączył (feature/080) ────────────────────────────────────
-  //
-  // Uprawnienia do folderu mówią, kogo zaproszono. Kto naprawdę dołączył,
-  // wie tylko jego telefon — zapisuje więc w `members/` krótką notatkę
-  // o swoim koncie ([MemberNote]).
+  // ── Ślad w aplikacji (kto dołączył, feature/080) ───────────────────
 
-  /// Wersja aplikacji do notatki członka — ustawiana w `main()`, w testach
+  /// Wersja aplikacji do rekordu członka — ustawiana w `main()`, w testach
   /// wpisywana wprost.
   static String appVersion = '';
 
-  static const String _membersFolder = 'members';
-
-  /// Jak często telefon odświeża swoją notatkę. Przy każdej synchronizacji
-  /// (co 5 minut) byłby to zapis na Dysku co chwilę, a „ostatnio"
-  /// z dokładnością do kilku godzin wystarczy.
+  /// Jak często telefon odświeża „ostatnio” w swoim rekordzie. Przy każdej
+  /// synchronizacji (co 5 minut) byłby to zapis co chwilę, a dokładność do
+  /// kilku godzin wystarczy.
   static const Duration memberNoteInterval = Duration(hours: 6);
 
   static const String _memberNoteKey = 'memberNote';
 
-  /// Zapisuje notatkę tego konta — przy założeniu jednostki i dołączeniu
-  /// zawsze ([force]), przy synchronizacji najwyżej co [memberNoteInterval]
-  /// albo po zmianie wersji aplikacji. Błąd nie zatrzymuje synchronizacji.
-  Future<void> _writeMemberNote({bool force = false}) async {
-    final email = authService.userEmail?.trim().toLowerCase();
-    final unit = _state.unitFolderId;
-    if (email == null || email.isEmpty || unit == null) return;
+  Map<String, dynamic> _memberStamp() => {
+        'unit': _state.unitId,
+        'email': _me,
+        'at': DateTime.now().toIso8601String(),
+        'version': appVersion,
+      };
 
+  /// Ostatnia synchronizacja i wersja aplikacji w rekordzie członka —
+  /// najwyżej co [memberNoteInterval] albo po zmianie wersji. Błąd nie
+  /// zatrzymuje synchronizacji.
+  Future<void> _writeMemberNote() async {
+    final unit = _state.unitId;
+    if (unit == null || authService.uid == null) return;
     final saved = _db.settingsBox.get(_memberNoteKey);
     final last = saved is Map ? saved : const {};
-    final sameUnit = last['unit'] == unit && last['email'] == email;
     final lastAt = DateTime.tryParse('${last['at']}');
-    final now = DateTime.now();
-    if (!force &&
-        sameUnit &&
+    if (last['unit'] == unit &&
+        last['email'] == _me &&
         last['version'] == appVersion &&
         lastAt != null &&
-        now.difference(lastAt) < memberNoteInterval) {
+        DateTime.now().difference(lastAt) < memberNoteInterval) {
       return;
     }
-
     try {
-      final folders = await _membersFolders();
-      final folder = folders.firstOrNull ??
-          await _driveService.createSubfolder(unit, _membersFolder);
-      final name = MemberNote.fileName(email);
-      // Data dołączenia zostaje pierwsza — także po reinstalacji aplikacji.
-      var joinedAt = sameUnit ? DateTime.tryParse('${last['joinedAt']}') : null;
-      if (joinedAt == null) {
-        final existing = MemberNote.fromJson(
-            await _driveService.readJsonFileByName(folder, name));
-        joinedAt = existing?.joinedAt;
-      }
-      joinedAt ??= now;
-      await _driveService.writeJsonFile(folder, name, {
-        ...MemberNote(
-          email: email,
-          joinedAt: joinedAt,
-          lastSyncAt: now,
-          appVersion: appVersion,
-        ).toJson(),
-        'updatedAt': now.toIso8601String(),
-      });
-      await _db.settingsBox.put(_memberNoteKey, {
-        'unit': unit,
-        'email': email,
-        'at': now.toIso8601String(),
-        'version': appVersion,
-        'joinedAt': joinedAt.toIso8601String(),
-      });
+      await _unitRef().collection('members').doc(_uid).update({
+        'lastSyncAt': FieldValue.serverTimestamp(),
+        'appVersion': appVersion,
+      }).timeout(serverTimeout);
+      await _db.settingsBox.put(_memberNoteKey, _memberStamp());
     } catch (e) {
-      debugPrint('Notatka członka niezapisana: $e');
+      debugPrint('Ślad członka niezapisany: $e');
     }
   }
 
-  /// Foldery `members/` jednostki — zwykle jeden; przy dwóch założonych
-  /// naraz czytamy oba, a piszemy do pierwszego.
-  Future<List<String>> _membersFolders() async {
-    final folderId = _state.unitFolderId;
-    if (folderId == null) return const [];
-    return [
-      for (final f in await _driveService.listSubfolders(folderId))
-        if (f.name == _membersFolder && f.id != null) f.id!,
-    ];
-  }
+  /// „Wyloguj i usuń dane". Rekord członka zostaje na serwerze —
+  /// wylogowanie nie jest odejściem z jednostki (to robi usunięcie konta).
+  Future<void> removeOwnMemberNote() =>
+      _db.settingsBox.delete(_memberNoteKey);
 
-  /// Notatki członków — do listy „Członkowie jednostki", klucz to adres
-  /// małymi literami. Notatkę zmienioną przez kogoś innego niż jej właściciel
-  /// pomijamy (jak w fix/067): nikt nie „dołączy" za kolegę.
-  Future<Map<String, MemberNote>> memberNotes() async {
-    final notes = <String, MemberNote>{};
-    for (final folder in await _membersFolders()) {
-      for (final file in await _driveService.listJsonFiles(folder)) {
-        final note =
-            MemberNote.fromJson(await _driveService.readJsonFile(file.id!));
-        if (note == null) continue;
-        final key = _normalizeEmail(note.email);
-        final by = file.lastModifyingUser?.emailAddress;
-        if (by != null && _normalizeEmail(by) != key) continue;
-        final current = notes[key];
-        final at = note.lastSyncAt ?? DateTime(2000);
-        if (current == null ||
-            at.isAfter(current.lastSyncAt ?? DateTime(2000))) {
-          notes[key] = note;
-        }
-      }
-    }
-    return notes;
-  }
-
-  /// Usuwa notatkę tego konta — przy „Wyloguj i usuń dane". Bez sieci
-  /// zostaje na Dysku; lista członków i tak pokazuje tylko osoby z dostępem.
-  Future<void> removeOwnMemberNote() async {
-    final email = authService.userEmail;
-    if (email == null || _state.unitFolderId == null) return;
-    final name = MemberNote.fileName(email);
-    try {
-      for (final folder in await _membersFolders()) {
-        for (final file in await _driveService.listJsonFiles(folder)) {
-          if (file.name == name) await _driveService.deleteFile(file.id!);
-        }
-      }
-      await _db.settingsBox.delete(_memberNoteKey);
-    } catch (e) {
-      debugPrint('Notatka członka nieusunięta: $e');
-    }
-  }
-
-  // ── Konto Google ───────────────────────────────────────────────────
+  // ── Konto ──────────────────────────────────────────────────────────
 
   /// Logowanie z ekranu aplikacji.
   ///
-  /// Jednostka zapisana na telefonie wraca od razu. Wcześniej po zalogowaniu
-  /// z Ustawień zmieniał się tylko adres w pamięci, a ekran dalej pokazywał
-  /// „Zaloguj się" — bez adresu konta i bez wylogowania.
-  ///
-  /// Automatyczną synchronizację uruchamia potem [SyncStateNotifier], tak
-  /// jak po założeniu jednostki i dołączeniu do niej.
+  /// Jednostka zapisana na telefonie wraca od razu. Automatyczną
+  /// synchronizację uruchamia potem [SyncStateNotifier], tak jak po
+  /// założeniu jednostki i dołączeniu do niej.
   Future<bool> signIn() async {
     final ok = await authService.signIn();
     if (!ok) return false;
-    _driveService.resetClient();
     await restoreState();
     return true;
   }
 
-  /// Zmienia konto Google, zostając w tej samej jednostce.
+  /// Zmienia konto, zostając w tej samej jednostce.
   ///
   /// Zwraca `false`, gdy nie wybrano żadnego konta — aplikacja zostaje wtedy
-  /// wylogowana. Gdy nowe konto nie ma dostępu do folderu jednostki,
-  /// połączenie zostaje zapisane, a stan pokazuje, kogo trzeba zaprosić; po
-  /// powrocie na poprzednie konto wszystko działa jak wcześniej.
+  /// wylogowana. Gdy nowe konto nie należy do jednostki, połączenie zostaje
+  /// zapisane, a stan pokazuje, kogo trzeba zaprosić; po powrocie na
+  /// poprzednie konto wszystko działa jak wcześniej.
   Future<bool> switchAccount() async {
     stopAutoSync();
     final ok = await authService.switchAccount();
-    _driveService.resetClient();
     await restoreState();
     if (!ok) return false;
-
-    final folderId = _state.unitFolderId;
-    if (folderId != null && !await _driveService.isFolderAccessible(folderId)) {
-      _updateState(_state.copyWith(
-        status: SyncStatus.error,
-        errorMessage: 'Konto ${authService.userEmail} nie ma dostępu do tej '
-            'jednostki. Poproś administratora o zaproszenie na ten adres '
-            'albo wróć do poprzedniego konta.',
-        errorTime: DateTime.now(),
-      ));
+    final unitId = _state.unitId;
+    if (unitId != null) {
+      final member = await _unitRef(unitId)
+          .collection('members')
+          .doc(_uid)
+          .get()
+          .timeout(serverTimeout);
+      if (!member.exists) {
+        _updateState(_state.copyWith(
+          status: SyncStatus.error,
+          errorMessage: 'Konto ${authService.userEmail} nie należy do tej '
+              'jednostki. Poproś administratora o zaproszenie na ten adres '
+              'albo wróć do poprzedniego konta.',
+          errorTime: DateTime.now(),
+        ));
+      }
     }
     return true;
   }
 
-  /// Przenosi pracę w jednostce z konta, na którym ją założono — zwykle
-  /// wspólnego konta jednostki — na prywatne konto tej samej osoby, żeby
-  /// raporty podpisywały się nią, a nie jednostką.
-  ///
-  /// Kolejność ma znaczenie: udostępnić folder i nadać uprawnienia
-  /// administratora może tylko konto, które już ma dostęp, więc robimy to
-  /// na obecnym koncie, a dopiero potem je zmieniamy.
-  ///
-  /// Z [sharedAccount] konto jednostki od razu staje się wspólne (np. na
-  /// tablet w samochodzie, [SyncState.sharedFounder]) — w tym samym kroku,
-  /// w którym prywatne konto dostaje administratora, bo wcześniej nie byłoby
-  /// komu zarządzać jednostką.
-  Future<AccountSwitchResult> switchToPersonalAccount(
-    String email, {
-    bool sharedAccount = false,
-  }) async {
-    final folderId = _state.unitFolderId;
-    if (folderId == null) {
-      throw StateError('Brak połączenia z jednostką.');
-    }
-    final address = email.trim();
-    if (_normalizeEmail(address) == _normalizeEmail(_state.userEmail ?? '')) {
-      return AccountSwitchResult.sameAccount;
-    }
-    await _driveService.shareFolderWithUser(folderId, address);
-    await grantAdmin(address);
-    if (sharedAccount) await setSharedFounder(true);
-
-    if (!await switchAccount()) return AccountSwitchResult.cancelled;
-    if (_normalizeEmail(authService.userEmail ?? '') !=
-        _normalizeEmail(address)) {
-      return AccountSwitchResult.otherAccount;
-    }
-    return _state.status == SyncStatus.error
-        ? AccountSwitchResult.noAccess
-        : AccountSwitchResult.done;
-  }
+  // ── Członkowie i role ──────────────────────────────────────────────
 
   static String _normalizeEmail(String email) => email.trim().toLowerCase();
 
-  /// Osoby mające dostęp do folderu jednostki.
-  Future<List<UnitMemberAccess>> listMembers() async {
-    final folderId = _state.unitFolderId;
-    if (folderId == null) return const [];
-    return _driveService.listFolderMembers(folderId);
+  /// Członkowie z ostatniego odczytu: adres (małymi literami) → rekord.
+  final Map<String, Map<String, dynamic>> _members = {};
+
+  /// Zaproszeni z ostatniego odczytu (tylko administrator): adres → rekord.
+  final Map<String, Map<String, dynamic>> _invites = {};
+
+  DateTime? _membersReadAt;
+  String? _myRole;
+
+  /// Członkowie i zaproszeni (tych drugich widzi tylko administrator).
+  Future<List<UnitMember>> listMembers() async {
+    if (_state.unitId == null) return const [];
+    await _readMembers();
+    DateTime? at(Object? v) => v is Timestamp ? v.toDate() : null;
+    return [
+      for (final MapEntry(key: email, value: m) in _members.entries)
+        UnitMember(
+          email: email,
+          uid: _text(m['uid']),
+          isOwner: m['role'] == 'owner',
+          name: _text(m['displayName']) ?? '',
+          joinedAt: at(m['joinedAt']),
+          lastSyncAt: at(m['lastSyncAt']),
+          appVersion: _text(m['appVersion']) ?? '',
+        ),
+      for (final email in _invites.keys)
+        if (!_members.containsKey(email)) UnitMember(email: email),
+    ];
   }
 
-  /// Odbiera koledze dostęp do jednostki (i uprawnienia administratora).
-  Future<void> revokeMember(UnitMemberAccess member) async {
-    final folderId = _state.unitFolderId;
-    if (folderId == null) return;
-    // Przed odebraniem dostępu — inaczej kolega wypadłby z folderu, a jego
-    // uprawnienia administratora zostałyby na liście.
-    _ensureNotLastPersonalAdmin(member.email);
-    await _driveService.revokeFolderAccess(folderId, member.permissionId);
-    if (_isAdminEmail(member.email)) {
-      await revokeAdmin(member.email);
+  /// Odczyt członków (i zaproszonych, gdy wolno) — role do [SyncState].
+  Future<void> _readMembers() async {
+    final unit = _unitRef();
+    final members =
+        await unit.collection('members').get().timeout(serverTimeout);
+    _members
+      ..clear()
+      ..addAll({
+        for (final d in members.docs)
+          if (_text(d.data()['email']) case final email?)
+            _normalizeEmail(email): d.data(),
+      });
+    _invites.clear();
+    if (_state.isCurrentUserAdmin || _myRole == 'admin' || _myRole == 'owner') {
+      try {
+        final invites =
+            await unit.collection('invites').get().timeout(serverTimeout);
+        for (final d in invites.docs) {
+          _invites[d.id] = d.data();
+        }
+      } on FirebaseException catch (e) {
+        if (e.code != 'permission-denied') rethrow;
+      }
     }
+    _membersReadAt = DateTime.now();
+    await _applyRoles();
+  }
+
+  /// Administratorzy i wspólne urządzenia według serwera: członkowie
+  /// z rolą `admin` albo `shared` i tak samo zaproszeni.
+  Future<void> _applyRoles() async {
+    List<String> withRole(String role) => <String>{
+          for (final MapEntry(key: email, value: m) in _members.entries)
+            if (m['role'] == role) email,
+          for (final MapEntry(key: email, value: i) in _invites.entries)
+            if (i['role'] == role && !_members.containsKey(email)) email,
+        }.toList()
+          ..sort();
+    final shared = withRole('shared');
+    final admins = withRole('admin');
+    await _db.cacheSharedEmails(shared);
+    await _db.cacheAdminEmails(admins);
+    _updateState(_state.copyWith(sharedEmails: shared, adminEmails: admins));
+  }
+
+  /// Odbiera dostęp członkowi albo cofa zaproszenie.
+  Future<void> revokeMember(UnitMember member) async {
+    _ensureNotLastPersonalAdmin(member.email);
+    final email = _normalizeEmail(member.email);
+    final uid = member.uid;
+    if (uid == null) {
+      await _unitRef()
+          .collection('invites')
+          .doc(email)
+          .delete()
+          .timeout(serverTimeout);
+      _invites.remove(email);
+    } else {
+      await _unitRef()
+          .collection('members')
+          .doc(uid)
+          .delete()
+          .timeout(serverTimeout);
+      _members.remove(email);
+    }
+    await _applyRoles();
   }
 
   bool _isAdminEmail(String email) {
-    final normalized = email.trim().toLowerCase();
-    return _state.adminEmails
-        .any((e) => e.trim().toLowerCase() == normalized);
+    final normalized = _normalizeEmail(email);
+    return _state.adminEmails.any((e) => _normalizeEmail(e) == normalized);
   }
 
   /// Nadaje uprawnienia administratora.
@@ -681,25 +687,26 @@ class SyncService {
   Future<void> revokeAdmin(String email) async {
     if (_state.isFounder(email)) return;
     _ensureNotLastPersonalAdmin(email);
-    final normalized = email.trim().toLowerCase();
+    final normalized = _normalizeEmail(email);
     await _writeAdmins(_state.adminEmails
-        .where((e) => e.trim().toLowerCase() != normalized)
+        .where((e) => _normalizeEmail(e) != normalized)
         .toList());
   }
 
-  /// Przy wspólnym koncie jednostki ostatni administrator na własnym koncie
-  /// zostaje — bez niego uprawnienia wróciłyby po cichu na tablet.
+  /// Przy wspólnym koncie założyciela ostatni administrator na własnym
+  /// koncie zostaje — bez niego uprawnienia wróciłyby po cichu na tablet.
   void _ensureNotLastPersonalAdmin(String email) {
     if (!_state.sharedFounder || _state.isFounder(email)) return;
-    final normalized = email.trim().toLowerCase();
+    final normalized = _normalizeEmail(email);
     final others = _state.personalAdminEmails
-        .where((e) => e.trim().toLowerCase() != normalized);
+        .where((e) => _normalizeEmail(e) != normalized);
     if (_isAdminEmail(email) && others.isEmpty) {
       throw const LastPersonalAdminException();
     }
   }
 
-  /// Włącza albo wyłącza wspólne konto jednostki ([SyncState.sharedFounder]).
+  /// Włącza albo wyłącza wspólne konto założyciela
+  /// ([SyncState.sharedFounder]).
   ///
   /// Włączyć można tylko przy co najmniej jednym administratorze na własnym
   /// koncie — to on potem zarządza jednostką i tylko on może to cofnąć,
@@ -712,32 +719,64 @@ class SyncService {
   }
 
   /// Wspólne urządzenie jednostki, np. tablet w wozie
-  /// ([SyncState.isSharedDevice]). Założyciel — [setSharedFounder]; inne
-  /// konta tylko na serwerze (rola `shared`).
+  /// ([SyncState.isSharedDevice]): rola `shared` zamiast `member`/`admin`,
+  /// a u założyciela [setSharedFounder]. Ostatni administrator na własnym
+  /// koncie przy wspólnym koncie założyciela zostaje — jak przy odbieraniu
+  /// uprawnień.
   Future<void> setSharedDevice(String email, bool shared) async {
     if (_state.isFounder(email)) return setSharedFounder(shared);
-    throw UnsupportedError('Wspólne urządzenie inne niż konto założyciela '
-        'działa tylko na serwerze jednostek.');
+    if (_membersReadAt == null) await _readMembers();
+    final address = _normalizeEmail(email);
+    if (shared) _ensureNotLastPersonalAdmin(address);
+    await _setRole(address, shared ? 'shared' : 'member');
+    await _applyRoles();
   }
 
+  /// Role zmieniają się na serwerze rekord po rekordzie: nowym
+  /// administratorom `admin`, odebranym `member`; wspólne konto założyciela
+  /// w danych jednostki.
   Future<void> _writeAdmins(List<String> admins, {bool? sharedFounder}) async {
-    final folderId = _state.unitFolderId;
-    if (folderId == null) return;
+    if (_state.unitId == null) return;
+    if (_membersReadAt == null) await _readMembers();
     final shared = sharedFounder ?? _state.sharedFounder;
-    var configFolderId = await _driveService.findConfigFolder(folderId);
-    configFolderId ??= await _driveService.createSubfolder(folderId, 'config');
-    await _driveService.writeJsonFile(configFolderId, 'admins.json', {
-      'admins': admins,
-      if (shared) 'sharedFounder': true,
-      'updatedAt': DateTime.now().toIso8601String(),
-    });
-    await _db.cacheAdminEmails(admins);
+    final before = _state.adminEmails.map(_normalizeEmail).toSet();
+    final after = admins.map(_normalizeEmail).toSet();
+    for (final email in after.difference(before)) {
+      await _setRole(email, 'admin');
+    }
+    for (final email in before.difference(after)) {
+      await _setRole(email, 'member');
+    }
+    if (shared != _state.sharedFounder) {
+      await _unitRef()
+          .update({'sharedOwner': shared}).timeout(serverTimeout);
+    }
     await _db.cacheSharedFounder(shared);
-    await _db.setAdminsTrusted(true);
-    _updateState(_state.copyWith(adminEmails: admins, sharedFounder: shared));
+    _updateState(_state.copyWith(sharedFounder: shared));
+    await _applyRoles();
   }
 
-  /// Disconnect from the unit (keep local data).
+  Future<void> _setRole(String email, String role) async {
+    final member = _members[email];
+    if (member != null) {
+      await _unitRef()
+          .collection('members')
+          .doc(member['uid'] as String)
+          .update({'role': role}).timeout(serverTimeout);
+      member['role'] = role;
+      return;
+    }
+    // Zaproszony, który jeszcze nie dołączył — dołączy od razu z tą rolą.
+    if (_invites.containsKey(email)) {
+      await _writeInvite(email, role);
+      return;
+    }
+    throw StateError('$email nie jest członkiem jednostki.');
+  }
+
+  // ── Odłączenie i usunięcie danych ──────────────────────────────────
+
+  /// Odłącza telefon od jednostki; dane na telefonie zostają.
   Future<void> disconnectUnit() async {
     stopAutoSync();
     // copyWith, nie nowy obiekt: budowanie od zera gubiło pełną nazwę
@@ -745,8 +784,7 @@ class SyncService {
     await _db.saveConfig(_db.getConfig().copyWith(ownerEmail: ''));
     // Bez tego po restarcie aplikacja sama łączyła się z powrotem ze starą
     // jednostką — także po zalogowaniu innym kontem.
-    await _db.configBox.delete('driveSync');
-    await _db.cacheAdminEmails(const []);
+    await _db.settingsBox.delete(_unitKey);
     await _db.cacheSharedFounder(false);
     await _resetUnitState();
     _updateState(const SyncState());
@@ -755,7 +793,7 @@ class SyncService {
   /// Usuwa z telefonu dane jednostki — po wylogowaniu, na życzenie osoby,
   /// która odchodzi z jednostki albo oddaje telefon.
   ///
-  /// Dane zostają na Dysku jednostki; telefon traci tylko swoją kopię.
+  /// Dane zostają na serwerze jednostki; telefon traci tylko swoją kopię.
   Future<void> wipeLocalUnitData() async {
     stopAutoSync();
     await _resetUnitState();
@@ -763,36 +801,33 @@ class SyncService {
     _updateState(SyncState(userEmail: authService.userEmail));
   }
 
-  /// Zapomina wszystko, co dotyczyło plików poprzedniej jednostki — inaczej
-  /// zapis w nowej trafiałby do plików starej.
+  /// Zapomina wszystko, co dotyczyło poprzedniej jednostki — inaczej zapis
+  /// w nowej szedłby z wiedzą o starej.
   Future<void> _resetUnitState() async {
-    _remoteDocs.clear();
-    // Lista administratorów poprzedniej jednostki nie może decydować,
-    // czyje zmiany przyjmujemy w nowej (fix/067).
     await _db.cacheAdminEmails(const []);
-    await _db.setAdminsTrusted(false);
-    _remoteConfigHashes.clear();
+    await _db.cacheSharedEmails(const []);
     _remoteListIds.clear();
     _remoteUnitConfig = null;
-    _remoteSyncFormat = 1;
-    _reportsFolderId = null;
-    _yearFolderIds.clear();
-    _handoversFolderId = null;
-    _tripsFolderId = null;
-    _equipmentWorkFolderId = null;
-    await _db.settingsBox.delete(_fileCacheKey);
+    _onServer.clear();
+    _refused.clear();
+    _since.clear();
+    _members.clear();
+    _invites.clear();
+    _membersReadAt = null;
+    _myRole = null;
+    await _db.settingsBox.delete(_cacheKey);
+    _updateState(_state.copyWith(sharedEmails: const []));
   }
 
-  // ── Full sync ──────────────────────────────────────────────────
-  /// Run a full bidirectional sync.
-  /// Returns the number of duplicate report numbers detected after pull.
+  // ── Pełna synchronizacja ───────────────────────────────────────────
+
+  /// Pełna synchronizacja w obie strony. Zwraca liczbę powtórzonych
+  /// numerów wyjazdów po pobraniu.
   ///
   /// Kolejność: najpierw pobieramy, potem wysyłamy — i wysyłamy tylko to,
-  /// co różni się od Dysku. Rozstrzyga stempel `updatedAt` każdego rekordu
-  /// (także ratownika i pojazdu), a usunięcia jeżdżą jako znaczniki, więc
-  /// nie wracają przy następnej synchronizacji.
+  /// co różni się od serwera.
   Future<int> syncAll() async {
-    if (_isSyncing || !_state.isConnected || _state.unitFolderId == null) {
+    if (_isSyncing || !_state.isConnected || _state.unitId == null) {
       return 0;
     }
 
@@ -904,17 +939,16 @@ class SyncService {
     _updateState(_state.copyWith(renumberNotes: const []));
   }
 
-  /// Pull only reports from Drive (lightweight — used before creating a new report).
-  /// Returns true if pull succeeded.
+  /// Samo pobranie wyjazdów — przed nadaniem numeru w kreatorze. `true`,
+  /// gdy się udało.
   Future<bool> pullReportsOnly() async {
-    if (!_state.isConnected || _state.unitFolderId == null) return false;
+    if (!_state.isConnected || _state.unitId == null) return false;
     // Bez zasięgu kreator nie może czekać na ponowienia przy zapisie
     // wyjazdu — numer liczy się wtedy z tego, co jest na telefonie.
     if (!_isSyncing && !await _hasNetwork()) return false;
     // Pełna synchronizacja i tak pobiera raporty, a dwa przebiegi naraz
     // zapisywałyby te same rekordy z dwóch miejsc. Czekamy na jej koniec —
-    // kreator liczy po tym numer wyjazdu, a od wysyłki zaraz po zapisie
-    // synchronizacja trwa częściej niż kiedyś.
+    // kreator liczy po tym numer wyjazdu.
     if (_isSyncing) {
       await _currentPass;
       return true;
@@ -941,11 +975,8 @@ class SyncService {
     }
   }
 
-  /// Wyjazdy z telefonu, których obecnej wersji nie ma na Dysku jednostki —
-  /// jeszcze nie wyszły albo zmieniono je po wysłaniu.
-  ///
-  /// Ekran wyjazdu pisał „Zapisano na Google Drive" po każdej udanej
-  /// synchronizacji, także przy wyjeździe, który dopiero czekał na wysłanie.
+  /// Wyjazdy z telefonu, których obecnej wersji nie ma jeszcze na serwerze
+  /// — nie wyszły albo zmieniono je po wysłaniu.
   Set<String> reportsAwaitingUpload(Iterable<Report> reports) =>
       _awaitingUpload(SyncKind.report, {
         for (final r in reports) r.id: SyncJson.reportToJson(r),
@@ -958,28 +989,24 @@ class SyncService {
         for (final h in handovers) h.id: SyncJson.handoverToJson(h),
       });
 
-  /// Rekordy [kind], których obecnej treści nie ma w żadnym pliku na
-  /// Dysku jednostki (według pamięci plików z ostatniej synchronizacji).
   Set<String> _awaitingUpload(
-      String kind, Map<String, Map<String, dynamic>> current) {
-    final onDrive = <String>{
-      for (final e in _loadFileCache().values)
-        if (e['k'] == kind) '${e['id']}:${e['h']}',
-    };
-    return {
-      for (final MapEntry(key: id, value: json) in current.entries)
-        if (!onDrive.contains('$id:${SyncJson.contentHash(json)}')) id,
-    };
-  }
+          String kind, Map<String, Map<String, dynamic>> current) =>
+      {
+        for (final MapEntry(key: id, value: json) in current.entries)
+          if (_onServer['$kind:$id']?.h != _hash(json)) id,
+      };
 
-  /// Świeży token przed pracą z Dyskiem, a przy odmowie (401) jeszcze jedna
+  /// Świeży token przed pracą z serwerem, a przy odmowie jeszcze jedna
   /// próba z tokenem wymuszonym na nowo.
   Future<void> _withAuthRetry(Future<void> Function() body) async {
+    if (!authService.isSignedIn) {
+      throw StateError('Nie zalogowano na serwer.');
+    }
     await authService.refreshAuth();
     try {
       await body();
-    } on drive.DetailedApiRequestError catch (e) {
-      if (e.status != 401) rethrow;
+    } on FirebaseException catch (e) {
+      if (e.code != 'unauthenticated') rethrow;
       await authService.refreshAuth(force: true);
       await body();
     }
@@ -987,15 +1014,8 @@ class SyncService {
 
   // ── Stan jednego przebiegu ─────────────────────────────────────────
 
-  /// Pliki dokumentów na Dysku: "rodzaj:id" → plik, w którym leży rekord.
-  /// Budowane przy pobieraniu, używane przy wysyłce — dzięki temu wysyłka
-  /// nie szuka plików po nazwie i nie wysyła tego, co już tam jest.
-  final Map<String, _RemoteDoc> _remoteDocs = {};
-
-  /// Skróty treści plików konfiguracji na Dysku — do decyzji, czy wysyłać.
-  final Map<String, String> _remoteConfigHashes = {};
+  /// Dane jednostki z serwera z ostatniego pobrania.
   Map<String, dynamic>? _remoteUnitConfig;
-  int _remoteSyncFormat = 1;
 
   int _skippedFiles = 0;
 
@@ -1003,226 +1023,323 @@ class SyncService {
   int _sentChanges = 0;
   int _receivedChanges = 0;
 
-  /// Identyfikatory wpisów (także usuniętych) na listach ratowników
-  /// i pojazdów jednostki, z ostatniego pobrania.
+  /// Identyfikatory wpisów (także usuniętych) na listach ratowników,
+  /// pojazdów i sprzętu jednostki — z pełnego pobrania.
   final Map<String, Set<String>> _remoteListIds = {};
 
-  String? _reportsFolderId;
-  final Map<int, String> _yearFolderIds = {};
-  String? _handoversFolderId;
-  String? _tripsFolderId;
-  String? _equipmentWorkFolderId;
-
-  /// Wersja formatu danych na Dysku, którą ta aplikacja rozumie.
+  /// Wersja formatu danych jednostki (`syncFormat` w jednostce), którą ta
+  /// aplikacja rozumie. Jednostka z wyższą wersją (nowsza aplikacja
+  /// u kolegi) blokuje synchronizację z komunikatem „zaktualizuj”, zamiast
+  /// pozwolić staremu telefonowi nadpisać dane w formacie, którego nie
+  /// rozumie.
   ///
-  /// 2 — znaczniki usunięcia i stemple ratowników i pojazdów. Jednostka
-  /// z wyższą wersją (nowsza aplikacja u kolegi) blokuje synchronizację
-  /// z komunikatem „zaktualizuj", zamiast pozwolić staremu telefonowi
-  /// nadpisać dane w formacie, którego nie rozumie.
-  ///
-  /// 3 — znaczniki usunięcia bez treści rekordu (fix/062), a przy okazji
-  /// wspólne konto jednostki i „Wpisał" (feature/058). Starsza wersja trzyma
-  /// w telefonie pełne znaczniki i odsyłałaby je na Dysk w miejsce
-  /// odchudzonych — przy każdej synchronizacji, na zmianę z nową — oraz
-  /// gubiłaby „Wpisał" i ustawienie wspólnego konta.
+  /// 3 — znaczniki usunięcia bez treści rekordu (fix/062), wspólne konto
+  /// jednostki i „Wpisał" (feature/058).
   static const int syncFormat = 3;
 
-  // ── Pamięć plików Dysku ────────────────────────────────────────────
-  //
-  // Dla każdego pliku: chwila modyfikacji i skrót treści. Plik, który od
-  // poprzedniej synchronizacji się nie zmienił, nie jest czytany ponownie —
-  // wcześniej każdy telefon co 5 minut pobierał treść wszystkich plików.
+  // ── Pamięć tego, co jest na serwerze ───────────────────────────────
 
-  static const String _fileCacheKey = DatabaseService.driveFileCacheKey;
+  static const String _cacheKey = 'serverCache';
 
-  Map<String, Map<String, dynamic>> _loadFileCache() {
-    final raw = _db.settingsBox.get(_fileCacheKey);
-    if (raw is! String) return {};
+  /// „rodzaj:id” → skrót treści na serwerze i autor wpisu.
+  final Map<String, ({String h, String a})> _onServer = {};
+
+  /// „rodzaj:id” → skrót wersji z telefonu, której serwer nie przyjął —
+  /// nie ponawiamy jej, dopóki ktoś jej tu nie zmieni.
+  final Map<String, String> _refused = {};
+
+  /// Kolekcja → najpóźniejszy `serverAt` (ms) z ostatniego pobrania.
+  final Map<String, int> _since = {};
+
+  void _loadServerCache(String unitId) {
+    _onServer.clear();
+    _refused.clear();
+    _since.clear();
+    _membersReadAt = null;
+    final raw = _db.settingsBox.get(_cacheKey);
+    if (raw is! String) return;
     try {
-      return (jsonDecode(raw) as Map<String, dynamic>)
-          .map((k, v) => MapEntry(k, v as Map<String, dynamic>));
-    } catch (_) {
-      return {};
+      final json = jsonDecode(raw) as Map<String, dynamic>;
+      if (json['unit'] != unitId) return;
+      for (final e in (json['docs'] as Map).entries) {
+        final v = e.value as Map;
+        _onServer[e.key as String] = (h: v['h'] as String, a: v['a'] as String);
+      }
+      for (final e in (json['refused'] as Map? ?? const {}).entries) {
+        _refused[e.key as String] = e.value as String;
+      }
+      for (final e in (json['since'] as Map).entries) {
+        _since[e.key as String] = (e.value as num).toInt();
+      }
+    } catch (e) {
+      debugPrint('Pamięć serwera pominięta: $e');
+      _onServer.clear();
+      _refused.clear();
+      _since.clear();
     }
   }
 
-  Future<void> _saveFileCache(Map<String, Map<String, dynamic>> cache) =>
-      _db.settingsBox.put(_fileCacheKey, jsonEncode(cache));
+  Future<void> _saveServerCache() => _db.settingsBox.put(
+      _cacheKey,
+      jsonEncode({
+        'unit': _state.unitId,
+        'docs': {
+          for (final e in _onServer.entries) e.key: {'h': e.value.h, 'a': e.value.a},
+        },
+        'refused': _refused,
+        'since': _since,
+      }));
 
-  // ── Konfiguracja jednostki: pobranie i scalenie ────────────────────
+  /// Skrót niezależny od kolejności kluczy — serwer nie musi oddać pól
+  /// w tej kolejności, w jakiej je zapisaliśmy.
+  static String _hash(Object? json) =>
+      SyncJson.contentHash(_sorted(json) ?? const {});
 
-  Future<String> _configFolder() async {
-    final folderId = _state.unitFolderId!;
-    return await _driveService.findConfigFolder(folderId) ??
-        await _driveService.createSubfolder(folderId, 'config');
+  static Object? _sorted(Object? v) {
+    if (v is Map) {
+      final keys = v.keys.map((k) => '$k').toList()..sort();
+      return {for (final k in keys) k: _sorted(v[k])};
+    }
+    if (v is List) return [for (final e in v) _sorted(e)];
+    return v;
   }
 
-  /// Pobranie list jednostki, danych jednostki i listy administratorów.
+  String get _me => _normalizeEmail(authService.userEmail ?? '');
+
+  String get _uid {
+    final uid = authService.uid;
+    if (uid == null) throw StateError('Nie zalogowano na serwer.');
+    return uid;
+  }
+
+  DocumentReference<Map<String, dynamic>> _unitRef([String? id]) =>
+      _fs.collection('units').doc(id ?? _state.unitId);
+
+  // ── Stan zapisany na telefonie ─────────────────────────────────────
+
+  /// Jednostka, do której należy telefon: `{unit, code}` w `settings`.
+  static const String _unitKey = 'serverUnit';
+
+  Future<void> _saveUnit(String unitId, String code) =>
+      _db.settingsBox.put(_unitKey, {'unit': unitId, 'code': code});
+
+  ({String unitId, String code})? _savedUnit() {
+    final saved = _db.settingsBox.get(_unitKey);
+    if (saved is! Map || saved['unit'] is! String) return null;
+    return (unitId: saved['unit'] as String, code: '${saved['code'] ?? ''}');
+  }
+
+  /// Wersja testowa 2.0.0 trzymała jednostkę w polach konfiguracji
+  /// (identyfikator jako „prefiks nazwy”, kod jako „miejscowość”).
+  Future<void> _moveOldUnitKey() async {
+    final old = _db.configBox.get('serverSync');
+    if (old == null) return;
+    if (_savedUnit() == null) await _saveUnit(old.namePrefix, old.locality);
+    await _db.configBox.delete('serverSync');
+  }
+
+  /// Przywraca stan po uruchomieniu aplikacji.
+  Future<void> restoreState() async {
+    // Znaczniki usunięcia sprzed fix/062 — bez treści rekordów, zanim
+    // cokolwiek pójdzie na serwer. Za drugim razem nic nie zmienia.
+    await _db.slimStoredTombstones();
+    await _forgetDriveUnit();
+    await _moveOldUnitKey();
+    if (!authService.isSignedIn) {
+      _updateState(const SyncState());
+      return;
+    }
+    final saved = _savedUnit();
+    if (saved == null) {
+      _updateState(SyncState(
+        status: SyncStatus.disconnected,
+        userEmail: authService.userEmail,
+      ));
+      return;
+    }
+    _loadServerCache(saved.unitId);
+    final owner = _db.getConfig().ownerEmail;
+    _updateState(SyncState(
+      status: SyncStatus.idle,
+      userEmail: authService.userEmail,
+      unitId: saved.unitId,
+      unitInviteCode: saved.code,
+      // Uprawnienia z ostatniej synchronizacji — inaczej po restarcie
+      // aplikacji (albo bez zasięgu) nikt nie byłby administratorem.
+      founderEmail: owner.isEmpty ? null : owner,
+      adminEmails: _db.cachedAdminEmails,
+      sharedFounder: _db.cachedSharedFounder,
+      sharedEmails: _db.cachedSharedEmails,
+    ));
+  }
+
+  /// Telefon z wersji na Dysku (1.x): połączenie z folderem jednostki nie ma
+  /// już znaczenia. Dane na telefonie zostają — pójdą na serwer, gdy telefon
+  /// założy jednostkę albo do niej dołączy (Dawid, 27.11.2026: „najwyżej
+  /// przerzucę wszystko ręcznie").
+  Future<void> _forgetDriveUnit() async {
+    if (_db.configBox.get('driveSync') == null) return;
+    await _db.configBox.delete('driveSync');
+    await _db.settingsBox
+        .deleteAll(const ['driveFileCache', 'rejectedChanges', 'adminsTrusted']);
+    await _db.cacheAdminEmails(const []);
+    await _db.cacheSharedFounder(false);
+  }
+
+  // ── Pobieranie ─────────────────────────────────────────────────────
+
+  /// Dokumenty kolekcji zmienione od ostatniego pobrania (z zapasem
+  /// [sinceOverlap]); `null` w [_since] — wszystkie.
+  Future<List<Map<String, dynamic>>> _changed(String collection) async {
+    final since = _since[collection];
+    Query<Map<String, dynamic>> query = _unitRef().collection(collection);
+    if (since != null) {
+      query = query.where('serverAt',
+          isGreaterThan: Timestamp.fromMillisecondsSinceEpoch(
+              since - sinceOverlap.inMilliseconds));
+    }
+    final snap = await query.get().timeout(serverTimeout);
+    return [for (final d in snap.docs) d.data()];
+  }
+
+  /// Po przetworzeniu kolekcji: od kiedy pytać następnym razem.
+  void _advance(String collection, List<Map<String, dynamic>> docs) {
+    var max = _since[collection] ?? 0;
+    for (final d in docs) {
+      final at = d['serverAt'];
+      if (at is Timestamp && at.millisecondsSinceEpoch > max) {
+        max = at.millisecondsSinceEpoch;
+      }
+    }
+    _since[collection] = max;
+  }
+
+  static Map<String, dynamic> _content(Map<String, dynamic> doc) =>
+      Map<String, dynamic>.from(doc['data'] as Map);
+
+  void _remember(String kind, String id, String hash, String author) {
+    _onServer['$kind:$id'] = (h: hash, a: author);
+    _refused.remove('$kind:$id');
+  }
+
+  /// Dane jednostki, własna rola, listy i słownik.
   Future<void> _pullConfig() async {
-    final folderId = _state.unitFolderId!;
+    final unit = _unitRef();
+    final me =
+        await unit.collection('members').doc(_uid).get().timeout(serverTimeout);
+    if (!me.exists) throw UnitAccessRevokedException(_state.userEmail);
 
-    // Find config folder (try new structure, fallback to root)
-    final configFolderId = await _driveService.findConfigFolder(folderId);
-    final dataFolderId = configFolderId ?? folderId;
-
-    final configData = await _driveService.readJsonFileByName(
-      dataFolderId,
-      'unit_config.json',
-    );
-    _remoteUnitConfig = configData;
-    final format = configData?['syncFormat'];
-    _remoteSyncFormat = format is num ? format.toInt() : 1;
-    if (_remoteSyncFormat > syncFormat) throw SyncFormatTooNewException();
-
-    // Założyciel to właściciel folderu jednostki według Dysku — `createdBy`
-    // z pliku może zmienić każdy członek (fix/067). Bez odpowiedzi Dysku
-    // zostaje znany telefonowi, a dopiero bez niego — ten z pliku.
-    final owner = await _driveService.folderOwner(folderId);
-    final cachedFounder = _db.getConfig().ownerEmail;
-    final founder = owner ??
-        (cachedFounder.isEmpty ? null : cachedFounder) ??
-        _text(configData?['createdBy']);
-    if (configData != null) await _mergeUnitConfig(configData, founder);
-    if (founder != null) {
-      _updateState(_state.copyWith(founderEmail: founder));
+    final data = (await unit.get().timeout(serverTimeout)).data() ?? {};
+    final format = data['syncFormat'];
+    if (format is num && format.toInt() > syncFormat) {
+      throw SyncFormatTooNewException();
     }
 
-    // Najpierw administratorzy — od nich zależy, czyje zmiany list
-    // i wpisów przyjmujemy.
-    await _pullAdmins(dataFolderId);
-
-    for (final (kind, fileName, what) in const [
-      (SyncKind.firefighter, 'firefighters.json', 'Lista ratowników'),
-      (SyncKind.vehicle, 'vehicles.json', 'Lista pojazdów'),
-      (SyncKind.equipment, 'equipment.json', 'Lista sprzętu'),
-    ]) {
-      final file =
-          await _driveService.readJsonFileWithAuthor(dataFolderId, fileName);
-      // Listy prowadzi administrator ([_pushConfig]) — zmiana od kogoś
-      // innego to zmiana z pominięciem aplikacji.
-      if (file.exists && !_trustedForUnit(file.modifiedBy)) {
-        _remoteListIds.remove(kind);
-        // Skrót, którego nie ma żadna lista — telefon administratora wyśle
-        // wtedy swoją i przywróci ją na Dysku.
-        _remoteConfigHashes[fileName] = 'odrzucona';
-        await _rejected(what, file.modifiedBy!,
-            restored: _state.isCurrentUserAdmin);
-        continue;
-      }
-      _remoteConfigHashes[fileName] =
-          await _mergeList(kind, file.data?['data']);
-    }
-
-    // Pull threat types (new name: threat_types.json, fallback: threats.json)
-    var tData = await _driveService.readJsonFileByName(
-      dataFolderId,
-      'threat_types.json',
-    );
-    tData ??= await _driveService.readJsonFileByName(
-      dataFolderId,
-      'threats.json',
-    );
-    _remoteConfigHashes['threat_types.json'] =
-        await _mergeThreats(tData?['data']);
-  }
-
-  /// Lista administratorów jednostki z `config/admins.json`.
-  ///
-  /// Plik może zmienić każdy członek — Dysk nie zna ról z aplikacji.
-  /// Przyjmujemy więc zmianę tylko od właściciela folderu albo od kogoś,
-  /// kto już jest administratorem według listy znanej temu telefonowi
-  /// (fix/067). Inaczej członek dopisałby się sam przez drive.google.com.
-  /// Telefon świeżo w jednostce nie zna żadnej listy i bierze zastaną.
-  Future<void> _pullAdmins(String dataFolderId) async {
-    final file =
-        await _driveService.readJsonFileWithAuthor(dataFolderId, 'admins.json');
-    final known = _db.cachedAdminEmails;
-    final knownShared = _db.cachedSharedFounder;
-
-    if (!file.exists) {
-      // Pliku nie ma, póki nikt nie dostał uprawnień. Gdy zniknął, a telefon
-      // zna listę — zostaje znana (i administrator zapisze ją od nowa).
-      if (known.isNotEmpty && _state.isCurrentUserAdmin) {
-        await _writeAdmins(known, sharedFounder: knownShared);
-      } else {
-        await _db.setAdminsTrusted(true);
-      }
-      return;
-    }
-
-    // Zły typ zatrzymywał dawniej synchronizację całej jednostki, więc
-    // bierzemy tylko poprawne adresy.
-    final rawAdmins = file.data?['admins'];
-    if (rawAdmins != null && rawAdmins is! List) _skippedFiles++;
-    final admins = rawAdmins is List
-        ? [
-            for (final e in rawAdmins)
-              if (e is String && e.contains('@')) e,
-          ]
-        : const <String>[];
-    // Brak pola albo cokolwiek innego niż `true` — konto założyciela
-    // zostaje administratorem, jak przed wprowadzeniem wspólnego konta.
-    final sharedFounder = file.data?['sharedFounder'] == true;
-
-    final by = file.modifiedBy;
-    final unchanged = _sameEmails(admins, known) && sharedFounder == knownShared;
-    final trusted = unchanged ||
-        !_db.adminsTrusted ||
-        by == null ||
-        (_state.isFounder(by)) ||
-        known.any((e) => _normalizeEmail(e) == _normalizeEmail(by));
-    if (!trusted) {
-      // Zostaje lista znana telefonowi. Telefon administratora od razu
-      // zapisuje ją z powrotem — zmianę od niego przyjmą wszyscy.
-      final restore = _state.isCurrentUserAdmin;
-      await _rejected('Lista administratorów', by, restored: restore);
-      if (restore) await _writeAdmins(known, sharedFounder: knownShared);
-      return;
-    }
-
-    await _db.cacheAdminEmails(admins);
-    await _db.cacheSharedFounder(sharedFounder);
-    await _db.setAdminsTrusted(true);
+    final founder = _text(data['ownerEmail']);
+    _remoteUnitConfig = {
+      'unitName': data['name'],
+      'locality': data['locality'],
+      'unitStreet': data['unitStreet'],
+      'updatedAt': data['updatedAt'],
+    };
+    await _mergeUnitConfig(_remoteUnitConfig!, founder);
+    final shared = data['sharedOwner'] == true;
+    await _db.cacheSharedFounder(shared);
     _updateState(_state.copyWith(
-      adminEmails: admins,
-      sharedFounder: sharedFounder,
+      founderEmail: founder,
+      sharedFounder: shared,
+      unitInviteCode: _text(data['inviteCode']),
     ));
+
+    // Własna rola przy każdej synchronizacji, cudze co jakiś czas.
+    final role = _text(me.data()?['role']);
+    final roleChanged = role != _myRole;
+    _myRole = role;
+    final stale = _membersReadAt == null ||
+        DateTime.now().difference(_membersReadAt!) > membersInterval;
+    if (stale || roleChanged) {
+      await _readMembers();
+    } else {
+      _members[_me] = me.data()!;
+      await _applyRoles();
+    }
+
+    for (final kind in _listKinds) {
+      final collection = _collections[kind]!;
+      final full = _since[collection] == null;
+      final docs = await _changed(collection);
+      final ids = full ? (_remoteListIds[kind] = <String>{}) : null;
+      for (final doc in docs) {
+        try {
+          final entry = _content(doc);
+          final id = entry['id'] as String;
+          ids?.add(id);
+          final canonical = await _mergeListEntry(kind, entry);
+          _remember(kind, id, _hash(canonical), '');
+        } catch (e) {
+          debugPrint('Pominięty wpis z serwera ($kind): $e');
+          _skippedFiles++;
+        }
+      }
+      _advance(collection, docs);
+    }
+
+    final threats = await _changed(_threatsCollection);
+    final entries = <ThreatEntry>[];
+    for (final doc in threats) {
+      try {
+        final entry = _content(doc);
+        entries.add(SyncJson.threatFromJson(entry));
+        _remember(_threatKind, entry['category'] as String, _hash(entry), '');
+      } catch (e) {
+        debugPrint('Pominięty wpis słownika: $e');
+        _skippedFiles++;
+      }
+    }
+    if (entries.isNotEmpty) await _mergeThreats(entries);
+    _advance(_threatsCollection, threats);
+    await _saveServerCache();
   }
 
-  static bool _sameEmails(List<String> a, List<String> b) {
-    final x = a.map(_normalizeEmail).toSet();
-    final y = b.map(_normalizeEmail).toSet();
-    return x.length == y.length && x.containsAll(y);
+  /// Wyjazdy, przekazania, przejazdy i praca sprzętu zmienione od ostatniego
+  /// pobrania. [kinds] zawęża do wybranych rodzajów (szybkie pobranie
+  /// wyjazdów przed kreatorem).
+  Future<void> _pullDocuments({Set<String>? kinds}) async {
+    for (final kind in _docKinds) {
+      if (kinds != null && !kinds.contains(kind)) continue;
+      final collection = _collections[kind]!;
+      final docs = await _changed(collection);
+      for (final doc in docs) {
+        try {
+          final data = _content(doc);
+          await _applyRemoteDoc(kind, data);
+          _remember(
+            kind,
+            data['id'] as String,
+            _remoteHash(kind, data),
+            _text(doc['author']) ?? '',
+          );
+        } catch (e) {
+          debugPrint('Pominięty dokument z serwera ($kind): $e');
+          _skippedFiles++;
+        }
+      }
+      _advance(collection, docs);
+    }
+    await _saveServerCache();
   }
 
-  /// Czy zmianę list jednostki od [by] przyjmujemy: właściciel folderu,
-  /// administrator albo autor nieznany Dyskowi (nie ma czego sprawdzić).
-  bool _trustedForUnit(String? by) =>
-      by == null || _state.isFounder(by) || _state.isAdmin(by);
+  /// Skrót wersji z serwera w postaci, jaką zapisałby ten telefon.
+  String _remoteHash(String kind, Map<String, dynamic> data) =>
+      SyncJson.isTombstone(data) ? _hash(data) : _hash(_canonical(kind, data));
 
-  /// Administrator przeczytał ostrzeżenia o odrzuconych zmianach.
-  Future<void> clearRejectedChanges() async {
-    await _db.clearRejectedChanges();
-    _updateState(_state.copyWith(rejectedChanges: const []));
-  }
+  // ── Scalanie ───────────────────────────────────────────────────────
 
-  /// Zapamiętuje zmianę z Dysku, której telefon nie przyjął — do pokazania
-  /// administratorowi w „Członkowie jednostki".
-  Future<void> _rejected(String what, String by, {bool restored = false}) async {
-    debugPrint('Pominięta zmiana na Dysku: $what ($by)');
-    await _db.addRejectedChange(RejectedChange(
-      what: what,
-      by: by,
-      at: DateTime.now(),
-      restored: restored,
-    ));
-    _updateState(_state.copyWith(rejectedChanges: _db.rejectedChanges));
-  }
-
-  /// Tekst z pliku na Dysku albo `null`, gdy jest tam coś innego.
+  /// Tekst z serwera albo `null`, gdy jest tam coś innego.
   static String? _text(Object? value) => value is String ? value : null;
 
-  /// Dane jednostki z Dysku — chyba że na tym telefonie zmieniono je później.
+  /// Dane jednostki z serwera — chyba że na tym telefonie zmieniono je
+  /// później.
   Future<void> _mergeUnitConfig(
       Map<String, dynamic> configData, String? founderEmail) async {
     final config = _db.getConfig();
@@ -1231,15 +1348,13 @@ class SyncService {
     final localIsNewer = editedHere != null &&
         (remoteAt == null || editedHere.isAfter(remoteAt));
 
-    // Wartości złego typu traktujemy jak brak — plik może poprawić każdy
-    // członek jednostki, a sztywne rzutowanie przerywało synchronizację.
+    // Wartości złego typu traktujemy jak brak.
     final unitName = (_text(configData['unitName']) ?? '').trim();
-    // Adresu z Dysku nie wymuszamy na pustkę: starsze jednostki nie mają go
-    // jeszcze zapisanego, a nadpisanie skasowałoby to, co ktoś wpisał lokalnie.
+    // Adresu nie wymuszamy na pustkę — nadpisanie skasowałoby to, co ktoś
+    // wpisał lokalnie.
     final remoteLocality = (_text(configData['locality']) ?? '').trim();
     final remoteStreet = (_text(configData['unitStreet']) ?? '').trim();
-    // Założyciel ustalony z Dysku ([_pullConfig]); bez niego zostaje lokalny —
-    // inaczej zepsuty plik odbierałby założycielowi uprawnienia.
+    // Bez założyciela z serwera zostaje lokalny.
     final founder = founderEmail ?? config.ownerEmail;
 
     await _db.saveConfig(localIsNewer
@@ -1255,33 +1370,8 @@ class SyncService {
           ));
   }
 
-  /// Scala listę ratowników albo pojazdów z Dysku z lokalną — wpis po
-  /// wpisie, według stempli. Zwraca skrót treści listy na Dysku.
-  ///
-  /// Dawniej lista z Dysku zastępowała lokalną w całości, więc wygrywał
-  /// telefon, który wysłał ostatni — zmiana administratora mogła zostać
-  /// losowo cofnięta przez kolegę ze starszą kopią.
-  Future<String> _mergeList(String kind, Object? rawList) async {
-    final canonical = <Map<String, dynamic>>[];
-    // Tylko lista, którą udało się przeczytać, może zastąpić tę z telefonu —
-    // brak albo uszkodzenie pliku nie znaczy, że jednostka nie ma ratowników.
-    _remoteListIds.remove(kind);
-    if (rawList is List) {
-      final ids = _remoteListIds[kind] = {};
-      for (final item in rawList) {
-        try {
-          final entry = Map<String, dynamic>.from(item as Map);
-          ids.add(entry['id'] as String);
-          canonical.add(await _mergeListEntry(kind, entry));
-        } catch (e) {
-          debugPrint('Pominięty wpis ($kind): $e');
-          _skippedFiles++;
-        }
-      }
-    }
-    return _listHash(canonical);
-  }
-
+  /// Wpis listy ratowników, pojazdów albo sprzętu z serwera — według
+  /// stempli. Zwraca wpis w postaci, jaką zapisałby ten telefon.
   Future<Map<String, dynamic>> _mergeListEntry(
       String kind, Map<String, dynamic> entry) async {
     final id = entry['id'] as String;
@@ -1314,14 +1404,12 @@ class SyncService {
       return canonical; // usunięcie tutaj jest nowsze
     }
 
-    // Wpis bez stempla (sprzed tej wersji) po obu stronach: bierzemy Dysk,
-    // jak dawniej. Ze stemplem wygrywa nowszy.
+    // Wpis bez stempla po obu stronach: bierzemy serwer. Ze stemplem
+    // wygrywa nowszy.
     final takeRemote = !exists ||
         (remoteAt == null && localAt == null) ||
         (remoteAt != null && (localAt == null || remoteAt.isAfter(localAt)));
     if (takeRemote) {
-      // Wpisy bez stempli brane są z Dysku przy każdym przebiegu — zmianą
-      // są tylko wtedy, gdy faktycznie różnią się od tego, co już tu jest.
       final before = switch (kind) {
         SyncKind.firefighter => switch (_db.getFirefighter(id)) {
             final f? => SyncJson.firefighterToJson(f),
@@ -1358,19 +1446,7 @@ class SyncService {
 
   /// Słownik zagrożeń: suma zbiorów. Własnych podtypów nie da się usuwać,
   /// więc łączenie nie wskrzesza niczego, co ktoś skasował.
-  Future<String> _mergeThreats(Object? rawList) async {
-    final remote = <ThreatEntry>[];
-    if (rawList is List) {
-      for (final item in rawList) {
-        try {
-          remote.add(SyncJson.threatFromJson(
-              Map<String, dynamic>.from(item as Map)));
-        } catch (e) {
-          debugPrint('Pominięty wpis słownika: $e');
-          _skippedFiles++;
-        }
-      }
-    }
+  Future<void> _mergeThreats(List<ThreatEntry> remote) async {
     for (final t in remote) {
       final local =
           _db.getAllThreats().where((l) => l.category == t.category).firstOrNull;
@@ -1388,262 +1464,34 @@ class SyncService {
         isCustom: local.isCustom,
       ));
     }
-    if (remote.isNotEmpty) {
-      // Dane z Drive mogą pochodzić ze starszej wersji aplikacji —
-      // uzgodnij słownik ze stałymi listami kategorii.
-      await _db.ensureDefaultThreats();
-    }
-    return _threatsHash(remote);
+    // Uzgodnij słownik ze stałymi listami kategorii.
+    await _db.ensureDefaultThreats();
   }
 
-  // ── Konfiguracja jednostki: wysyłka ────────────────────────────────
-
-  Future<void> _pushConfig() async {
-    String? configFolderId;
-    Future<String> folder() async => configFolderId ??= await _configFolder();
-
-    Future<void> pushList(
-        String fileName, List<Map<String, dynamic>> entries) async {
-      if (_listHash(entries) == _remoteConfigHashes[fileName]) return;
-      await _driveService.writeJsonFile(await folder(), fileName, {
-        'updatedAt': DateTime.now().toIso8601String(),
-        'data': entries,
-      });
-      _remoteConfigHashes[fileName] = _listHash(entries);
-      _sentChanges++;
-    }
-
-    // Listy prowadzi administrator. Telefon bez uprawnień nie może ich
-    // zmienić z ekranu, ale wysyłał swoją kopię, gdy tylko różniła się od
-    // Dysku — np. z wpisami sprzed dołączenia do jednostki.
-    if (_state.isCurrentUserAdmin) {
-      await pushList('firefighters.json', [
-        ..._db.getAllFirefighters().map(SyncJson.firefighterToJson),
-        ..._db.tombstonesOf(SyncKind.firefighter),
-      ]);
-      await pushList('vehicles.json', [
-        ..._db.getAllVehicles().map(SyncJson.vehicleToJson),
-        ..._db.tombstonesOf(SyncKind.vehicle),
-      ]);
-      // W jednostce sprzed listy sprzętu pusta lista ma ten sam skrót co
-      // brak pliku — plik powstaje dopiero z pierwszym sprzętem.
-      await pushList('equipment.json', [
-        ..._db.getAllEquipment().map(SyncJson.equipmentToJson),
-        ..._db.tombstonesOf(SyncKind.equipment),
-      ]);
-    }
-
-    final threats = _db.getAllThreats();
-    if (_threatsHash(threats) != _remoteConfigHashes['threat_types.json']) {
-      await _driveService.writeJsonFile(await folder(), 'threat_types.json', {
-        'updatedAt': DateTime.now().toIso8601String(),
-        'data': threats.map(SyncJson.threatToJson).toList(),
-      });
-      _remoteConfigHashes['threat_types.json'] = _threatsHash(threats);
-      _sentChanges++;
-    }
-
-    final config = _db.getConfig();
-    final content = <String, dynamic>{
-      'unitName': config.fullName,
-      // Adres remizy jest wspólny dla całej jednostki — kolega, który
-      // dołącza kodem, ma dostać podpowiedź „Skąd” bez wpisywania jej u siebie.
-      'locality': config.locality,
-      'unitStreet': config.unitStreet,
-      'inviteCode': _state.unitInviteCode,
-      // Założyciela ustala pierwszy zapis — potem go nie nadpisujemy,
-      // bo to on jest stałym administratorem jednostki.
-      'createdBy': _state.founderEmail ?? _state.userEmail,
-      'syncFormat':
-          _remoteSyncFormat > syncFormat ? _remoteSyncFormat : syncFormat,
-    };
-    final remote = _remoteUnitConfig;
-    final unchanged = remote != null &&
-        content.entries.every((e) => remote[e.key] == e.value);
-    if (unchanged) return;
-    final written = {
-      ...content,
-      if (remote?['createdAt'] != null) 'createdAt': remote!['createdAt'],
-      'updatedAt':
-          (_db.unitConfigEditedAt ?? DateTime.now()).toIso8601String(),
-    };
-    await _driveService.writeJsonFile(
-        await folder(), 'unit_config.json', written);
-    _remoteUnitConfig = written;
-  }
-
-  // ── Dokumenty: pobranie ────────────────────────────────────────────
-
-  /// Pobranie raportów, przekazań mienia i przejazdów — nowszych niż lokalne.
-  ///
-  /// [kinds] zawęża do wybranych rodzajów (szybkie pobranie raportów przed
-  /// kreatorem).
-  Future<void> _pullDocuments({Set<String>? kinds}) async {
-    final folderId = _state.unitFolderId!;
-    bool wanted(String kind) => kinds == null || kinds.contains(kind);
-
-    final cache = _loadFileCache();
-    final seen = <String>{};
-    _remoteDocs.removeWhere(
-        (key, _) => wanted(key.substring(0, key.indexOf(':'))));
-
-    // Czytamy ze wszystkich folderów o danej nazwie, a piszemy do
-    // najstarszego — tego samego na każdym telefonie. Dwa telefony, które
-    // zapisują pierwszy wpis w tej samej chwili, mogą oba założyć folder;
-    // przy czytaniu tylko jednego wpisy z drugiego były dla kolegów
-    // niewidoczne.
-    final subfolders = await _driveService.listSubfolders(folderId);
-    List<String> named(String name) => [
-          for (final f in subfolders)
-            if (f.name == name) f.id!,
-        ];
-
-    if (wanted(SyncKind.report)) {
-      final reportsFolders = named('reports');
-      _reportsFolderId = reportsFolders.firstOrNull;
-      final years = <int, String>{};
-      for (final reportsFolderId in reportsFolders) {
-        for (final yearFolder
-            in await _driveService.listSubfolders(reportsFolderId)) {
-          final year = int.tryParse(yearFolder.name ?? '');
-          if (year != null) years.putIfAbsent(year, () => yearFolder.id!);
-          await _pullFolder(SyncKind.report, yearFolder.id!, cache, seen);
-        }
-        // Raporty ze starszej struktury — wprost w reports/.
-        await _pullFolder(SyncKind.report, reportsFolderId, cache, seen);
-      }
-      _yearFolderIds
-        ..clear()
-        ..addAll(years);
-    }
-
-    if (wanted(SyncKind.handover)) {
-      final handoversFolders = named('handovers');
-      _handoversFolderId = handoversFolders.firstOrNull;
-      for (final id in handoversFolders) {
-        await _pullFolder(SyncKind.handover, id, cache, seen);
-      }
-    }
-
-    if (wanted(SyncKind.trip)) {
-      final tripsFolders = named('trips');
-      _tripsFolderId = tripsFolders.firstOrNull;
-      for (final id in tripsFolders) {
-        await _pullFolder(SyncKind.trip, id, cache, seen);
-      }
-    }
-
-    // Osobny folder, a nie nowy format danych: wersje sprzed karty pracy
-    // sprzętu go nie znają i po prostu pomijają.
-    if (wanted(SyncKind.equipmentWork)) {
-      final workFolders = named(_equipmentWorkFolder);
-      _equipmentWorkFolderId = workFolders.firstOrNull;
-      for (final id in workFolders) {
-        await _pullFolder(SyncKind.equipmentWork, id, cache, seen);
-      }
-    }
-
-    // Pliki, których już nie ma na Dysku, nie są potrzebne w pamięci.
-    cache.removeWhere(
-        (fileId, e) => wanted(e['k'] as String? ?? '') && !seen.contains(fileId));
-    await _saveFileCache(cache);
-  }
-
-  Future<void> _pullFolder(
-    String kind,
-    String folderId,
-    Map<String, Map<String, dynamic>> cache,
-    Set<String> seen,
-  ) async {
-    for (final file in await _driveService.listJsonFiles(folderId)) {
-      final fileId = file.id!;
-      seen.add(fileId);
-      final modified = file.modifiedTime?.toIso8601String();
-
-      var entry = cache[fileId];
-      if (entry == null || entry['m'] != modified || entry['k'] != kind) {
-        final data = await _driveService.readJsonFile(fileId);
-        if (data == null) {
-          _skippedFiles++;
-          continue;
-        }
-        try {
-          final applied = await _applyRemoteDoc(kind, data,
-              by: file.lastModifyingUser?.emailAddress);
-          entry = {
-            'm': modified,
-            'k': kind,
-            'id': data['id'] as String,
-            'h': applied.hash,
-            'u': data['updatedAt'],
-            if (applied.keptLocal != null) 'x': applied.keptLocal,
-          };
-          cache[fileId] = entry;
-        } catch (e) {
-          // Jeden uszkodzony plik nie może zatrzymać synchronizacji całej
-          // jednostki — pomijamy go i idziemy dalej.
-          debugPrint('Pominięty plik $fileId ($kind): $e');
-          _skippedFiles++;
-          continue;
-        }
-      }
-
-      final key = '$kind:${entry['id']}';
-      final doc = _RemoteDoc(
-        fileId: fileId,
-        hash: entry['h'] as String,
-        updatedAt: DateTime.tryParse(entry['u'] as String? ?? ''),
-        keptLocalHash: entry['x'] as String?,
-      );
-      // Ten sam rekord w kilku plikach (duplikaty po zmianach nazw) —
-      // pracujemy na najnowszym.
-      final current = _remoteDocs[key];
-      if (current == null || doc.isNewerThan(current)) _remoteDocs[key] = doc;
-    }
-  }
-
-  /// Nakłada dokument z Dysku na bazę, jeśli jest nowszy. Zwraca skrót
-  /// treści pliku (po sprowadzeniu do postaci, jaką zapisałby ten telefon)
-  /// i — gdy zmianę odrzucono ([_mayChange]) — skrót wersji z telefonu,
-  /// której telefon nie wysyła z powrotem ([_RemoteDoc.keptLocalHash]).
-  ///
-  /// [by] — kto według Dysku zmienił plik ostatni.
-  Future<({String hash, String? keptLocal})> _applyRemoteDoc(
-    String kind,
-    Map<String, dynamic> data, {
-    String? by,
-  }) async {
+  /// Nakłada dokument z serwera na bazę, jeśli jest nowszy.
+  Future<void> _applyRemoteDoc(String kind, Map<String, dynamic> data) async {
     final id = data['id'] as String;
     final remoteAt = SyncJson.stampOf(data) ?? DateTime(2000);
 
     if (SyncJson.isTombstone(data)) {
-      final hash = SyncJson.contentHash(data);
       final localAt = _localStamp(kind, id);
       final tombAt = _tombstoneStamp(kind, id);
       final newerHere = localAt != null && localAt.isAfter(remoteAt);
       if (!newerHere &&
           (localAt != null || tombAt == null || tombAt.isBefore(remoteAt))) {
-        if (localAt != null && !_mayChange(kind, id, by, null)) {
-          return (hash: hash, keptLocal: await _keepLocal(kind, id, by!));
-        }
         await _db.applyRemoteDeletion(kind, id, data);
         if (localAt != null) _receivedChanges++;
       }
-      return (hash: hash, keptLocal: null);
+      return;
     }
 
-    final canonical = _canonical(kind, data);
-    final hash = SyncJson.contentHash(canonical);
     final tombAt = _tombstoneStamp(kind, id);
     if (tombAt != null && !remoteAt.isAfter(tombAt)) {
-      return (hash: hash, keptLocal: null); // usunięcie tutaj jest nowsze
+      return; // usunięcie tutaj jest nowsze
     }
 
     final localAt = _localStamp(kind, id);
     if (localAt == null || remoteAt.isAfter(localAt)) {
-      if (localAt != null && !_mayChange(kind, id, by, canonical)) {
-        return (hash: hash, keptLocal: await _keepLocal(kind, id, by!));
-      }
       _receivedChanges++;
       switch (kind) {
         case SyncKind.report:
@@ -1651,259 +1499,13 @@ class SyncService {
         case SyncKind.handover:
           await _db.addHandover(SyncJson.handoverFromJson(data));
         case SyncKind.trip:
-          final trip = SyncJson.tripFromJson(data);
-          final local = _db.getTrip(id);
-          if (local != null && !data.containsKey('overriddenFields')) {
-            keepLocalOverrides(trip, local);
-          }
-          await _db.addTrip(trip);
+          await _db.addTrip(SyncJson.tripFromJson(data));
         case SyncKind.equipmentWork:
           await _db.addEquipmentWork(SyncJson.equipmentWorkFromJson(data));
       }
       if (tombAt != null) await _db.removeTombstone(kind, id);
     }
-    return (hash: hash, keptLocal: null);
   }
-
-  // ── Kto zmienił plik na Dysku (fix/067) ────────────────────────────
-  //
-  // Każdy członek jednostki może na Dysku zmienić każdy plik w folderze.
-  // Uprawnień z aplikacji (autor, administrator) Dysk nie zna, ale podaje,
-  // kto zmienił plik ostatni — tego nie da się podrobić zapisem pliku.
-
-  /// Czy zmianę wpisu [id], który jest na tym telefonie, przyjmujemy od [by]:
-  /// gdy aplikacja pozwoliłaby mu ją zrobić. [remote] — nowa treść (`null`
-  /// przy usunięciu).
-  ///
-  /// Wyjątek: przejazd z raportu. Uzgadnianie z raportem biegnie na każdym
-  /// telefonie i wysyła godziny, cel, kierowcę — więc te pola może zmienić
-  /// każdy, a reszta przejazdu tylko autor i administrator.
-  bool _mayChange(
-      String kind, String id, String? by, Map<String, dynamic>? remote) {
-    if (by == null) return true; // Dysk nie podał autora — nie ma czego sprawdzić
-    final local = _localJson(kind, id);
-    if (local == null) return true;
-    if (_state.mayEditDocument(by, local['createdBy'] as String?)) return true;
-    return kind == SyncKind.trip &&
-        remote != null &&
-        local['reportId'] != null &&
-        _onlyReportFieldsDiffer(local, remote);
-  }
-
-  /// Pola przejazdu, które uzgadnianie z raportem zmienia na każdym telefonie
-  /// ([TripFromReport.applyReportFields]).
-  static const _reportLinkedTripFields = {
-    'date',
-    'departureTime',
-    'returnTime',
-    'routeTo',
-    'driverName',
-    'driverId',
-    'overriddenFields',
-    'updatedAt',
-  };
-
-  static bool _onlyReportFieldsDiffer(
-      Map<String, dynamic> a, Map<String, dynamic> b) {
-    final keys = {...a.keys, ...b.keys}.difference(_reportLinkedTripFields);
-    return keys.every((k) => jsonEncode(a[k]) == jsonEncode(b[k]));
-  }
-
-  Map<String, dynamic>? _localJson(String kind, String id) {
-    switch (kind) {
-      case SyncKind.report:
-        final r = _db.getReport(id);
-        return r == null ? null : SyncJson.reportToJson(r);
-      case SyncKind.handover:
-        final h = _db.getHandover(id);
-        return h == null ? null : SyncJson.handoverToJson(h);
-      case SyncKind.trip:
-        final t = _db.getTrip(id);
-        return t == null ? null : SyncJson.tripToJson(t);
-      case SyncKind.equipmentWork:
-        final w = _db.getEquipmentWork(id);
-        return w == null ? null : SyncJson.equipmentWorkToJson(w);
-    }
-    return null;
-  }
-
-  /// Odrzucona zmiana wpisu: telefon zostaje przy swojej wersji.
-  ///
-  /// Telefon administratora daje jej nowy stempel, więc wraca na Dysk i na
-  /// wszystkie telefony — zmianę od administratora przyjmuje każdy. Inny
-  /// telefon swojej wersji nie wysyła: telefon, który przyjął zmianę (np.
-  /// świeżo w jednostce), odsyłałby swoją i oba nadpisywałyby się w kółko.
-  /// Zwraca skrót wersji, której telefon ma nie wysyłać.
-  Future<String?> _keepLocal(String kind, String id, String by) async {
-    final what = _describe(kind, id);
-    if (_state.isCurrentUserAdmin) {
-      await _touchLocal(kind, id);
-      await _rejected(what, by, restored: true);
-      return null;
-    }
-    await _rejected(what, by);
-    final local = _localJson(kind, id);
-    return local == null ? null : SyncJson.contentHash(local);
-  }
-
-  Future<void> _touchLocal(String kind, String id) async {
-    final now = DateTime.now();
-    switch (kind) {
-      case SyncKind.report:
-        final r = _db.getReport(id);
-        if (r != null) await _db.updateReport(r..updatedAt = now);
-      case SyncKind.handover:
-        final h = _db.getHandover(id);
-        if (h != null) await _db.addHandover(h..updatedAt = now);
-      case SyncKind.trip:
-        final t = _db.getTrip(id);
-        if (t != null) await _db.addTrip(t..updatedAt = now);
-      case SyncKind.equipmentWork:
-        final w = _db.getEquipmentWork(id);
-        if (w != null) await _db.addEquipmentWork(w..updatedAt = now);
-    }
-  }
-
-  String _describe(String kind, String id) {
-    switch (kind) {
-      case SyncKind.report:
-        return 'Wyjazd ${_db.getReport(id)?.reportNumber ?? ''}'.trim();
-      case SyncKind.handover:
-        final h = _db.getHandover(id);
-        return h == null
-            ? 'Przekazanie mienia'
-            : 'Przekazanie mienia z ${TimeFormat.date(h.signDate)}';
-      case SyncKind.trip:
-        final t = _db.getTrip(id);
-        return t == null ? 'Przejazd' : 'Przejazd z ${TimeFormat.date(t.date)}';
-      case SyncKind.equipmentWork:
-        final w = _db.getEquipmentWork(id);
-        return w == null
-            ? 'Praca sprzętu'
-            : '${w.equipmentName}: praca z ${TimeFormat.date(w.date)}';
-    }
-    return kind;
-  }
-
-  // ── Dokumenty: wysyłka ─────────────────────────────────────────────
-
-  /// Wysyłka raportów, przekazań mienia i przejazdów — tylko tych, które
-  /// różnią się od Dysku, oraz znaczników usunięcia.
-  Future<void> _pushDocuments() async {
-    final folderId = _state.unitFolderId!;
-    final cache = _loadFileCache();
-
-    Future<String> yearFolder(int year) async {
-      _reportsFolderId ??= await _driveService.findReportsFolder(folderId) ??
-          await _driveService.createSubfolder(folderId, 'reports');
-      return _yearFolderIds[year] ??= await _driveService
-          .findOrCreateYearFolder(_reportsFolderId!, year);
-    }
-
-    Future<String> handoversFolder() async => _handoversFolderId ??=
-        await _driveService.findHandoversFolder(folderId) ??
-            await _driveService.createSubfolder(folderId, 'handovers');
-
-    Future<String> tripsFolder() async => _tripsFolderId ??=
-        await _findTripsFolder(folderId) ??
-            await _driveService.createSubfolder(folderId, 'trips');
-
-    for (final r in _db.getAllReports()) {
-      await _pushDoc(cache, SyncKind.report, r.id, SyncJson.reportToJson(r),
-          name: _buildReportFileName(r), folder: () => yearFolder(r.year));
-    }
-    for (final h in _db.getAllHandovers()) {
-      await _pushDoc(
-          cache, SyncKind.handover, h.id, SyncJson.handoverToJson(h),
-          name: _buildHandoverFileName(h), folder: handoversFolder);
-    }
-    for (final t in _db.getAllTrips()) {
-      await _pushDoc(cache, SyncKind.trip, t.id, SyncJson.tripToJson(t),
-          name: _buildTripFileName(t), folder: tripsFolder);
-    }
-
-    Future<String> equipmentWorkFolder() async => _equipmentWorkFolderId ??=
-        await _driveService.createSubfolder(folderId, _equipmentWorkFolder);
-
-    for (final w in _db.getAllEquipmentWork()) {
-      await _pushDoc(cache, SyncKind.equipmentWork, w.id,
-          SyncJson.equipmentWorkToJson(w),
-          name: _buildEquipmentWorkFileName(w), folder: equipmentWorkFolder);
-    }
-
-    // Znaczniki usunięcia nadpisują plik rekordu. Gdy pliku nie ma, rekord
-    // nigdy nie opuścił telefonu i nie ma czego usuwać z Dysku.
-    for (final kind in const [
-      SyncKind.report,
-      SyncKind.handover,
-      SyncKind.trip,
-      SyncKind.equipmentWork,
-    ]) {
-      for (final tomb in _db.tombstonesOf(kind)) {
-        final remote = _remoteDocs['$kind:${tomb['id']}'];
-        if (remote == null) continue;
-        await _pushDoc(cache, kind, tomb['id'] as String, tomb);
-      }
-    }
-
-    await _saveFileCache(cache);
-  }
-
-  /// Zapisuje rekord na Dysk, jeśli różni się od tego, co tam leży.
-  ///
-  /// Plik rozpoznajemy po identyfikatorze w treści (zebranym przy
-  /// pobieraniu), a nie po nazwie — reguły nazw zmieniały się między
-  /// wersjami i szukanie po nazwie dawało duplikaty.
-  Future<void> _pushDoc(
-    Map<String, Map<String, dynamic>> cache,
-    String kind,
-    String id,
-    Map<String, dynamic> json, {
-    String? name,
-    Future<String> Function()? folder,
-  }) async {
-    final key = '$kind:$id';
-    final hash = SyncJson.contentHash(json);
-    final remote = _remoteDocs[key];
-    if (remote != null && remote.hash == hash) return;
-    // Odrzucona zmiana na Dysku (fix/067): wersji z telefonu nie odsyłamy,
-    // dopóki ktoś jej tu nie zmieni — przywraca administrator.
-    if (remote != null && remote.keptLocalHash == hash) return;
-
-    final ({String id, DateTime? modifiedTime}) written;
-    if (remote != null) {
-      written = await _driveService.updateJsonFile(remote.fileId, json,
-          fileName: name);
-    } else {
-      if (folder == null || name == null) return;
-      written = await _driveService.createJsonFile(await folder(), name, json);
-    }
-    _sentChanges++;
-
-    cache[written.id] = {
-      'm': written.modifiedTime?.toIso8601String(),
-      'k': kind,
-      'id': id,
-      'h': hash,
-      'u': json['updatedAt'],
-    };
-    _remoteDocs[key] = _RemoteDoc(
-      fileId: written.id,
-      hash: hash,
-      updatedAt: SyncJson.stampOf(json),
-    );
-  }
-
-  /// Podfolder `trips/` z ewidencją przejazdów.
-  Future<String?> _findTripsFolder(String unitFolderId) async {
-    final subfolders = await _driveService.listSubfolders(unitFolderId);
-    for (final f in subfolders) {
-      if (f.name == 'trips') return f.id;
-    }
-    return null;
-  }
-
-  // ── Pomocnicze do scalania ─────────────────────────────────────────
 
   Map<String, dynamic> _canonical(String kind, Map<String, dynamic> data) =>
       switch (kind) {
@@ -1918,10 +1520,6 @@ class SyncService {
       };
 
   bool _existsLocally(String kind, String id) => switch (kind) {
-        SyncKind.report => _db.getReport(id) != null,
-        SyncKind.handover => _db.getHandover(id) != null,
-        SyncKind.trip => _db.getTrip(id) != null,
-        SyncKind.equipmentWork => _db.getEquipmentWork(id) != null,
         SyncKind.firefighter => _db.getFirefighter(id) != null,
         SyncKind.vehicle => _db.getVehicle(id) != null,
         SyncKind.equipment => _db.getEquipment(id) != null,
@@ -1946,28 +1544,191 @@ class SyncService {
     return tomb == null ? null : SyncJson.stampOf(tomb);
   }
 
-  /// Skrót listy niezależny od kolejności wpisów.
-  static String _listHash(List<Map<String, dynamic>> entries) {
-    final sorted = [...entries]
-      ..sort((a, b) => '${a['id']}'.compareTo('${b['id']}'));
-    return SyncJson.contentHash(sorted);
-  }
+  // ── Wysyłka ────────────────────────────────────────────────────────
 
-  /// Skrót słownika niezależny od kolejności kategorii i podtypów.
-  static String _threatsHash(List<ThreatEntry> threats) {
-    final canonical = [
-      for (final t in threats)
-        {
-          'category': t.category,
-          'subtypes': [...t.subtypes]..sort(),
-          'isCustom': t.isCustom,
+  /// Listy (administrator), słownik zagrożeń i dane jednostki.
+  Future<void> _pushConfig() async {
+    final writes = <_ServerWrite>[];
+
+    // Listy prowadzi administrator — serwer i tak nie przyjąłby ich od
+    // innych, a telefon bez uprawnień nie powinien nawet próbować.
+    if (_state.isCurrentUserAdmin) {
+      void list(String kind, Map<String, dynamic> json) =>
+          _consider(writes, kind, json, envelope: (json, deleted, _) => {
+                'data': json,
+                'deleted': deleted,
+                'serverAt': FieldValue.serverTimestamp(),
+                'by': _me,
+              });
+      for (final f in _db.getAllFirefighters()) {
+        list(SyncKind.firefighter, SyncJson.firefighterToJson(f));
+      }
+      for (final v in _db.getAllVehicles()) {
+        list(SyncKind.vehicle, SyncJson.vehicleToJson(v));
+      }
+      for (final e in _db.getAllEquipment()) {
+        list(SyncKind.equipment, SyncJson.equipmentToJson(e));
+      }
+      for (final kind in _listKinds) {
+        for (final tomb in _db.tombstonesOf(kind)) {
+          list(kind, tomb);
+        }
+      }
+    }
+
+    // Słownik zagrożeń uzupełnia każdy członek.
+    for (final t in _db.getAllThreats()) {
+      final json = SyncJson.threatToJson(t);
+      final hash = _hash(json);
+      final key = '$_threatKind:${t.category}';
+      if (_onServer[key]?.h == hash || _refused[key] == hash) continue;
+      writes.add(_ServerWrite(
+        collection: _threatsCollection,
+        kind: _threatKind,
+        id: t.category,
+        hash: hash,
+        author: '',
+        value: {
+          'data': json,
+          'serverAt': FieldValue.serverTimestamp(),
+          'by': _me,
         },
-    ]..sort((a, b) =>
-        (a['category'] as String).compareTo(b['category'] as String));
-    return SyncJson.contentHash(canonical);
+      ));
+    }
+    await _commit(writes);
+
+    // Dane jednostki zmienia administrator.
+    if (_state.isCurrentUserAdmin) {
+      final config = _db.getConfig();
+      final remote = _remoteUnitConfig;
+      final changed = remote == null ||
+          remote['unitName'] != config.fullName ||
+          (remote['locality'] ?? '') != config.locality ||
+          (remote['unitStreet'] ?? '') != config.unitStreet;
+      if (changed && config.fullName.trim().isNotEmpty) {
+        final updatedAt =
+            (_db.unitConfigEditedAt ?? DateTime.now()).toIso8601String();
+        await _unitRef().update({
+          'name': config.fullName,
+          'locality': config.locality,
+          'unitStreet': config.unitStreet,
+          'updatedAt': updatedAt,
+        }).timeout(serverTimeout);
+        _remoteUnitConfig = {
+          'unitName': config.fullName,
+          'locality': config.locality,
+          'unitStreet': config.unitStreet,
+          'updatedAt': updatedAt,
+        };
+      }
+    }
   }
 
-  // ── Pobranie całości (dołączenie do jednostki) ─────────────────────
+  /// Wyjazdy, przekazania, przejazdy i praca sprzętu — tylko te, które
+  /// różnią się od serwera, oraz znaczniki usunięcia.
+  Future<void> _pushDocuments() async {
+    final writes = <_ServerWrite>[];
+    void doc(String kind, Map<String, dynamic> json) =>
+        _consider(writes, kind, json, envelope: (json, deleted, author) => {
+              'data': json,
+              'author': author,
+              'deleted': deleted,
+              'serverAt': FieldValue.serverTimestamp(),
+              'by': _me,
+            });
+    for (final r in _db.getAllReports()) {
+      doc(SyncKind.report, SyncJson.reportToJson(r));
+    }
+    for (final h in _db.getAllHandovers()) {
+      doc(SyncKind.handover, SyncJson.handoverToJson(h));
+    }
+    for (final t in _db.getAllTrips()) {
+      doc(SyncKind.trip, SyncJson.tripToJson(t));
+    }
+    for (final w in _db.getAllEquipmentWork()) {
+      doc(SyncKind.equipmentWork, SyncJson.equipmentWorkToJson(w));
+    }
+    for (final kind in _docKinds) {
+      for (final tomb in _db.tombstonesOf(kind)) {
+        doc(kind, tomb);
+      }
+    }
+    await _commit(writes);
+  }
+
+  /// Dokłada zapis, jeśli wersja z telefonu różni się od serwera.
+  /// Znacznik usunięcia tylko dla rekordu, który był na serwerze.
+  void _consider(
+    List<_ServerWrite> writes,
+    String kind,
+    Map<String, dynamic> json, {
+    required Map<String, dynamic> Function(
+            Map<String, dynamic> json, bool deleted, String author)
+        envelope,
+  }) {
+    final id = json['id'];
+    if (id is! String) return;
+    final key = '$kind:$id';
+    final hash = _hash(json);
+    final known = _onServer[key];
+    if (known?.h == hash || _refused[key] == hash) return;
+    final deleted = SyncJson.isTombstone(json);
+    if (deleted && known == null) return;
+    // Autor wpisu jest na serwerze na zawsze — znacznik usunięcia nie ma
+    // już treści, więc bierzemy go z tego, co serwer ma.
+    final author =
+        deleted ? (known?.a ?? '') : (_text(json['createdBy']) ?? '');
+    writes.add(_ServerWrite(
+      collection: _collections[kind]!,
+      kind: kind,
+      id: id,
+      hash: hash,
+      author: author,
+      value: envelope(json, deleted, author),
+    ));
+  }
+
+  /// Zapis paczkami. Gdy serwer odmówi paczki, zapisujemy po jednym —
+  /// jeden wpis bez uprawnień nie może zatrzymać pozostałych.
+  Future<void> _commit(List<_ServerWrite> writes) async {
+    for (var i = 0; i < writes.length; i += _batchSize) {
+      final chunk = writes.sublist(i, min(i + _batchSize, writes.length));
+      final batch = _fs.batch();
+      for (final w in chunk) {
+        batch.set(_unitRef().collection(w.collection).doc(w.id), w.value);
+      }
+      try {
+        await batch.commit().timeout(serverTimeout);
+        chunk.forEach(_accepted);
+      } on FirebaseException catch (e) {
+        if (e.code != 'permission-denied') rethrow;
+        for (final w in chunk) {
+          try {
+            await _unitRef()
+                .collection(w.collection)
+                .doc(w.id)
+                .set(w.value)
+                .timeout(serverTimeout);
+            _accepted(w);
+          } on FirebaseException catch (e) {
+            if (e.code != 'permission-denied') rethrow;
+            // Np. przejazd kolegi uzupełniony tu o „Skąd” — serwer zostaje
+            // przy swojej wersji, a telefon nie ponawia tej samej.
+            debugPrint('Serwer nie przyjął ${w.kind}:${w.id}');
+            _refused['${w.kind}:${w.id}'] = w.hash;
+          }
+        }
+      }
+      await _saveServerCache();
+    }
+  }
+
+  void _accepted(_ServerWrite w) {
+    _remember(w.kind, w.id, w.hash, w.author);
+    _sentChanges++;
+  }
+
+  // ── Pobranie i wysłanie całości ────────────────────────────────────
 
   Future<void> _pullAllData() async {
     await authService.refreshAuth();
@@ -1990,68 +1751,13 @@ class SyncService {
     await _db.backfillTripsFromReports(
       stationAddress: _db.getConfig().stationAddress,
     );
-    // Raport mógł przyjechać z Dysku nowszy niż powiązany z nim przejazd —
-    // np. kolega dopisał godzinę powrotu u siebie.
+    // Raport mógł przyjechać nowszy niż powiązany z nim przejazd — np.
+    // kolega dopisał godzinę powrotu u siebie.
     await _db.reconcileTripsWithReports();
     await _db.fillMissingRouteFrom(_db.getConfig().stationAddress);
   }
 
-  // ── Restore state on app start ─────────────────────────────────────
-
-  /// Try to restore sync state from saved config.
-  Future<void> restoreState() async {
-    // Znaczniki usunięcia sprzed fix/062 — bez treści rekordów, zanim
-    // cokolwiek pójdzie na Dysk. Za drugim razem nic nie zmienia.
-    await _db.slimStoredTombstones();
-
-    if (!authService.isSignedIn) {
-      _updateState(const SyncState());
-      return;
-    }
-
-    // Read stored Drive folder ID from Hive (we store it in configBox)
-    final driveConfig = _db.configBox.get('driveSync');
-    if (driveConfig == null) {
-      _updateState(
-        SyncState(
-          status: SyncStatus.disconnected,
-          userEmail: authService.userEmail,
-        ),
-      );
-      return;
-    }
-
-    // driveConfig stores folderId in namePrefix, inviteCode in locality
-    _updateState(
-      SyncState(
-        status: SyncStatus.idle,
-        userEmail: authService.userEmail,
-        unitFolderId: driveConfig.namePrefix, // we repurpose this field
-        unitInviteCode: driveConfig.locality,
-        // Uprawnienia z ostatniej synchronizacji — inaczej po restarcie
-        // aplikacji (albo bez zasięgu) nikt nie byłby administratorem.
-        founderEmail: _db.getConfig().ownerEmail.isEmpty
-            ? null
-            : _db.getConfig().ownerEmail,
-        adminEmails: _db.cachedAdminEmails,
-        sharedFounder: _db.cachedSharedFounder,
-        rejectedChanges: _db.rejectedChanges,
-      ),
-    );
-  }
-
-  // ── Helpers ────────────────────────────────────────────────────────
-
-  Future<void> _saveDriveConfig(String folderId, String inviteCode) async {
-    // Store Drive sync info using a separate config key
-    await _db.configBox.put(
-      'driveSync',
-      UnitConfig(
-        namePrefix: folderId, // repurpose: stores folder ID
-        locality: inviteCode, // repurpose: stores invite code
-      ),
-    );
-  }
+  // ── Pomocnicze ─────────────────────────────────────────────────────
 
   void _updateState(SyncState newState) {
     _state = newState;
@@ -2063,77 +1769,44 @@ class SyncService {
     final random = Random.secure();
     return List.generate(6, (_) => chars[random.nextInt(chars.length)]).join();
   }
+}
 
-  /// Nazwa pliku raportu: 0001_2026_Pozar.json
-  String _buildReportFileName(Report report) {
-    final number = report.reportNumber.replaceAll('/', '_');
-    return '${number}_${FileNames.sanitize(report.threatCategory)}.json';
-  }
+/// Jeden zapis do bazy z tym, co trzeba zapamiętać po jego przyjęciu.
+class _ServerWrite {
+  final String collection;
+  final String kind;
+  final String id;
+  final String hash;
+  final String author;
+  final Map<String, dynamic> value;
 
-  /// Nazwa pliku przekazania mienia: 2026-07-20_Kielno_`id-prefix`.json
-  String _buildHandoverFileName(PropertyHandover handover) {
-    final dateStr = FileNames.date(handover.eventDate);
-    final locality = FileNames.sanitize(handover.eventLocation);
-    final idPrefix = handover.id.length >= 8
-        ? handover.id.substring(0, 8)
-        : handover.id;
-    return '${dateStr}_${locality}_$idPrefix.json';
-  }
-
-  /// Nazwa pliku przejazdu: 2026-08-10_GBA_`skrót id`.json
-  ///
-  /// Data i pojazd w nazwie, żeby zawartość folderu dała się przejrzeć na
-  /// Dysku bez otwierania każdego pliku — kartę czyta się po miesiącach.
-  /// Skrót z całego identyfikatora: 8 pierwszych znaków bywało wspólne
-  /// dla miesięcy ręcznych wpisów (`trip_<milisekundy>`).
-  String _buildTripFileName(VehicleTrip t) {
-    final name = _db.getVehicle(t.vehicleId)?.name ?? t.vehicleId;
-    return '${FileNames.date(t.date)}_${FileNames.sanitize(name)}'
-        '_${FileNames.shortHash(t.id)}.json';
-  }
-
-  /// Podfolder z pracą sprzętu poza przejazdami (rozruchy kontrolne).
-  static const String _equipmentWorkFolder = 'equipment_work';
-
-  String _buildEquipmentWorkFileName(EquipmentWork w) {
-    final name = _db.getEquipment(w.equipmentId)?.name ?? w.equipmentName;
-    return '${FileNames.date(w.date)}_${FileNames.sanitize(name)}'
-        '_${FileNames.shortHash(w.id)}.json';
-  }
-
-  /// Plik z Dysku zapisany przez starszą wersję aplikacji nie zna ręcznych
-  /// poprawek przejazdu ([VehicleTrip.overriddenFields]). Stara wersja
-  /// potrafi je też cofnąć swoim uzgadnianiem i wysłać jako nowszą.
-  /// Poprawione pola i ich ochronę bierzemy wtedy z telefonu.
-  @visibleForTesting
-  static void keepLocalOverrides(VehicleTrip remote, VehicleTrip local) {
-    final flags = local.overriddenFields;
-    if (flags.isEmpty) return;
-    if (flags.contains(ReportLinkedField.departure)) {
-      remote
-        ..date = local.date
-        ..departureTime = local.departureTime;
-    }
-    if (flags.contains(ReportLinkedField.returnTime)) {
-      remote.returnTime = local.returnTime;
-    }
-    if (flags.contains(ReportLinkedField.routeTo)) {
-      remote.routeTo = local.routeTo;
-    }
-    if (flags.contains(ReportLinkedField.driver)) {
-      remote
-        ..driverId = local.driverId
-        ..driverName = local.driverName;
-    }
-    remote.overriddenFields = List.of(flags);
-  }
+  const _ServerWrite({
+    required this.collection,
+    required this.kind,
+    required this.id,
+    required this.hash,
+    required this.author,
+    required this.value,
+  });
 }
 
 /// Jednostka zapisała dane w formacie nowszym, niż ta wersja aplikacji
 /// rozumie.
 class SyncFormatTooNewException implements Exception {}
 
-/// Zmiana zostawiłaby jednostkę ze wspólnym kontem bez żadnego
+/// Zalogowane konto nie jest już członkiem jednostki — administrator
+/// odebrał dostęp albo konto zmieniono na inne.
+class UnitAccessRevokedException implements Exception {
+  final String? email;
+  const UnitAccessRevokedException(this.email);
+
+  @override
+  String toString() =>
+      'Konto ${email ?? ''} nie ma już dostępu do jednostki — administrator '
+      'odebrał dostęp albo zalogowano inne konto. Dane na telefonie zostają.';
+}
+
+/// Zmiana zostawiłaby jednostkę ze wspólnym kontem założyciela bez żadnego
 /// administratora na własnym koncie ([SyncService.setSharedFounder],
 /// [SyncService.revokeAdmin], [SyncService.revokeMember]).
 class LastPersonalAdminException implements Exception {
@@ -2151,19 +1824,12 @@ sealed class UnitLookup {
   const UnitLookup();
 }
 
-/// Żaden folder widoczny dla konta nie ma tego kodu.
+/// Żadna jednostka nie ma tego kodu.
 class UnitNotFound extends UnitLookup {
   const UnitNotFound();
 }
 
-/// Kod pasuje do kilku folderów — kopia folderu albo próba podszycia się.
-class UnitAmbiguous extends UnitLookup {
-  final int count;
-  const UnitAmbiguous(this.count);
-}
-
-/// Kod pasuje do jednostki na serwerze, ale tego adresu nie ma na liście
-/// zaproszonych (feature/081).
+/// Kod pasuje do jednostki, ale tego adresu nie ma na liście zaproszonych.
 class UnitNotInvited extends UnitLookup {
   final String email;
   const UnitNotInvited(this.email);
@@ -2172,46 +1838,4 @@ class UnitNotInvited extends UnitLookup {
 class UnitFound extends UnitLookup {
   final UnitCandidate unit;
   const UnitFound(this.unit);
-}
-
-/// Wynik [SyncService.switchToPersonalAccount].
-enum AccountSwitchResult {
-  /// Zalogowano na podane konto i ma ono dostęp do jednostki.
-  done,
-
-  /// Podano adres konta, na którym już jesteśmy.
-  sameAccount,
-
-  /// Nie wybrano konta — aplikacja została wylogowana.
-  cancelled,
-
-  /// Wybrano inne konto niż podane; ono nie dostało dostępu.
-  otherAccount,
-
-  /// Podane konto nadal nie widzi folderu jednostki.
-  noAccess,
-}
-
-/// Plik dokumentu na Dysku, zebrany przy pobieraniu.
-class _RemoteDoc {
-  final String fileId;
-  final String hash;
-  final DateTime? updatedAt;
-
-  /// Skrót treści z telefonu, przy której odrzucono ten plik (fix/067) —
-  /// dopóki się nie zmieni, telefon nie nadpisuje pliku swoją wersją.
-  final String? keptLocalHash;
-
-  const _RemoteDoc({
-    required this.fileId,
-    required this.hash,
-    required this.updatedAt,
-    this.keptLocalHash,
-  });
-
-  bool isNewerThan(_RemoteDoc other) {
-    final a = updatedAt, b = other.updatedAt;
-    if (a == null) return false;
-    return b == null || a.isAfter(b);
-  }
 }

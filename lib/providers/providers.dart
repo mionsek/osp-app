@@ -1,37 +1,27 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/models.dart';
 import '../models/sync_state.dart';
+import '../services/auth_service.dart';
 import '../services/database_service.dart';
-import '../services/google_auth_service.dart';
-import '../services/google_drive_service.dart';
-import '../services/server_auth_service.dart';
 import '../services/sync_service.dart';
 
 final databaseServiceProvider = Provider<DatabaseService>((ref) {
   return DatabaseService();
 });
 
-// --- Google / Sync ---
+// --- Konto i synchronizacja ---
 
 /// Logowanie do serwera jednostek — konto Google tylko z adresem e-mail
 /// i imieniem, bez dostępu do Dysku (feature/081).
-final googleAuthServiceProvider = Provider<GoogleAuthService>((ref) {
-  return ServerAuthService();
-});
-
-final googleDriveServiceProvider = Provider<GoogleDriveService>((ref) {
-  return GoogleDriveService(ref.watch(googleAuthServiceProvider));
+final authServiceProvider = Provider<AuthService>((ref) {
+  return AuthService();
 });
 
 final syncServiceProvider = Provider<SyncService>((ref) {
-  final db = ref.watch(databaseServiceProvider);
-  final auth = ref.watch(googleAuthServiceProvider);
-  final drive = ref.watch(googleDriveServiceProvider);
-  // Tylko serwer jednostek (Dawid, 27.11.2026: „przerzucamy się na
-  // Firebase i tyle"). Synchronizacja z Dyskiem zostaje w kodzie jako
-  // podstawa scalania, ale aplikacja jej nie używa.
-  final SyncService service =
-      ServerSyncService(db, auth as ServerAuthService, drive);
+  final service = SyncService(
+    ref.watch(databaseServiceProvider),
+    ref.watch(authServiceProvider),
+  );
   ref.onDispose(service.dispose);
   service.onDataPulled = () {
     ref.read(reportsProvider.notifier).refresh();
@@ -54,24 +44,24 @@ final syncStateProvider = StateNotifierProvider<SyncStateNotifier, SyncState>((
   return SyncStateNotifier(syncService);
 });
 
-/// Zapis na telefonie, który ma od razu pójść na Dysk jednostki.
+/// Zapis na telefonie, który ma od razu pójść na serwer jednostki.
 void Function() _sendSoon(Ref ref) =>
     () => ref.read(syncServiceProvider).notifyLocalChange();
 
-/// Wyjazdy, których obecnej wersji nie ma jeszcze na Dysku jednostki.
+/// Wyjazdy, których obecnej wersji nie ma jeszcze na serwerze jednostki.
 /// Bez połączenia z jednostką — pusty: nie ma dokąd wysyłać.
 final reportsAwaitingUploadProvider = Provider<Set<String>>((ref) {
   final sync = ref.watch(syncStateProvider);
   final reports = ref.watch(reportsProvider);
-  if (!sync.isConnected || sync.unitFolderId == null) return const {};
+  if (!sync.isConnected || sync.unitId == null) return const {};
   return ref.read(syncServiceProvider).reportsAwaitingUpload(reports);
 });
 
-/// Przekazania mienia, których obecnej wersji nie ma jeszcze na Dysku.
+/// Przekazania mienia, których obecnej wersji nie ma jeszcze na serwerze.
 final handoversAwaitingUploadProvider = Provider<Set<String>>((ref) {
   final sync = ref.watch(syncStateProvider);
   final handovers = ref.watch(handoversProvider);
-  if (!sync.isConnected || sync.unitFolderId == null) return const {};
+  if (!sync.isConnected || sync.unitId == null) return const {};
   return ref.read(syncServiceProvider).handoversAwaitingUpload(handovers);
 });
 
@@ -122,7 +112,7 @@ class SyncStateNotifier extends StateNotifier<SyncState> {
   /// nie ponawiamy co 5 minut tego samego błędu.
   void _afterAccountChange() {
     state = _syncService.state;
-    if (state.status == SyncStatus.idle && state.unitFolderId != null) {
+    if (state.status == SyncStatus.idle && state.unitId != null) {
       _syncService.startAutoSync();
       syncNow();
     }
@@ -139,7 +129,7 @@ class SyncStateNotifier extends StateNotifier<SyncState> {
   }
 
   /// Wyszukanie jednostki po kodzie — przed dołączeniem ekran pokazuje,
-  /// czyj to folder.
+  /// kto zaprosił.
   Future<UnitLookup> lookupUnit(String code) => _syncService.lookupUnit(code);
 
   Future<void> joinFoundUnit(UnitCandidate unit, String code) async {
@@ -147,11 +137,6 @@ class SyncStateNotifier extends StateNotifier<SyncState> {
     state = _syncService.state;
     _syncService.startAutoSync();
   }
-
-  /// Ratownicy i pojazdy z telefonu spoza list jednostki — przed dołączeniem
-  /// ekran ostrzega, że zastąpi je lista jednostki.
-  Future<LocalListEntries> localOnlyListEntries(String unitFolderId) =>
-      _syncService.localOnlyListEntries(unitFolderId);
 
   /// Jednostki już założone na zalogowanym koncie.
   Future<List<UnitCandidate>> ownUnits() => _syncService.ownUnits();
@@ -163,7 +148,7 @@ class SyncStateNotifier extends StateNotifier<SyncState> {
     return duplicates;
   }
 
-  /// Pulls only reports from Drive (lightweight, used before creating a new report).
+  /// Samo pobranie wyjazdów — przed nadaniem numeru w kreatorze.
   Future<void> pullReportsOnly() async {
     await _syncService.pullReportsOnly();
   }
@@ -192,7 +177,6 @@ class SyncStateNotifier extends StateNotifier<SyncState> {
   /// Wylogowanie razem z usunięciem danych jednostki z telefonu. Ekran
   /// najpierw synchronizuje, żeby zmiany z tego telefonu nie przepadły.
   Future<void> signOutAndWipe() async {
-    // Przed wylogowaniem — potem nie ma już dostępu do Dysku (feature/080).
     await _syncService.removeOwnMemberNote();
     await signOut();
     await _syncService.wipeLocalUnitData();
@@ -219,7 +203,7 @@ class UnitConfigNotifier extends StateNotifier<UnitConfig> {
 
   Future<void> save(UnitConfig config) async {
     // Porównanie z zapisaną konfiguracją, nie ze stanem ekranu: po dołączeniu
-    // do jednostki zapis ma już dane z Dysku i nie jest to edycja.
+    // do jednostki zapis ma już dane z serwera i nie jest to edycja.
     final before = _db.getConfig();
     final edited = before.fullName != config.fullName ||
         before.locality != config.locality ||
@@ -227,7 +211,7 @@ class UnitConfigNotifier extends StateNotifier<UnitConfig> {
     if (edited) await _db.markUnitConfigEdited();
     await _db.saveConfig(config);
     state = config;
-    // Drukarka i ustawienia telefonu nie idą na Dysk.
+    // Drukarka i ustawienia telefonu nie idą na serwer.
     if (edited) _onChanged();
   }
 

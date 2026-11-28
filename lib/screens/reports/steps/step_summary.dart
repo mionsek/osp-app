@@ -22,7 +22,7 @@ class StepSummary extends ConsumerWidget {
   final VoidCallback onSave;
   final VoidCallback onBack;
 
-  /// Zapis w toku (sprawdzanie numeru na Dysku) — przycisk nieaktywny, żeby
+  /// Zapis w toku (sprawdzanie numeru na serwerze) — przycisk nieaktywny, żeby
   /// drugie stuknięcie nie dodało drugiego wyjazdu.
   final bool saving;
 

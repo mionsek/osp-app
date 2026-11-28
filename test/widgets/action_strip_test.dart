@@ -37,14 +37,14 @@ void main() {
   const author = SyncState(
     status: SyncStatus.idle,
     userEmail: 'wojtek@gmail.com',
-    unitFolderId: 'folder',
+    unitId: 'folder',
     unitInviteCode: 'URZEAZ',
     founderEmail: 'ospkielno@gmail.com',
   );
   const colleague = SyncState(
     status: SyncStatus.idle,
     userEmail: 'ania@gmail.com',
-    unitFolderId: 'folder',
+    unitId: 'folder',
     unitInviteCode: 'URZEAZ',
     founderEmail: 'ospkielno@gmail.com',
   );

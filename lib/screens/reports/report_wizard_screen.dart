@@ -48,7 +48,7 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
     return true;
   }
 
-  /// Najdłużej tyle czekamy przy zapisie na wyjazdy z Dysku. Przy słabym
+  /// Najdłużej tyle czekamy przy zapisie na wyjazdy z serwera. Przy słabym
   /// zasięgu zapis nie może wisieć — wyjazd musi się zapisać na telefonie.
   /// Całkiem bez sieci pobranie wraca od razu.
   static const _numberCheckTimeout = Duration(seconds: 6);
@@ -107,17 +107,17 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
     if (_isEditing) {
       _loadExistingReport();
     } else {
-      // Ustaw tymczasowy numer lokalny — zostanie nadpisany po pull z Drive
+      // Tymczasowy numer z telefonu — po pobraniu wyjazdów z serwera
       _reportNumber = ref.read(reportsProvider.notifier).getNextNumber();
       _autoNumber = _reportNumber;
       final config = ref.read(unitConfigProvider);
       _addressLocality = config.locality;
-      // Pull raportów z Drive, żeby numer był oparty na aktualnych danych
+      // liczy się na nowo z aktualnych danych.
       _pullAndRefreshNumber();
     }
   }
 
-  /// Pobiera raporty z Drive i aktualizuje numer, jeśli zmienił się max.
+  /// Pobiera wyjazdy z serwera i aktualizuje numer, jeśli zmienił się max.
   Future<void> _pullAndRefreshNumber() async {
     await ref.read(syncStateProvider.notifier).pullReportsOnly();
     if (!mounted) return;
@@ -135,7 +135,7 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
   /// Numer liczy się z wyjazdów znanych telefonowi w chwili otwarcia
   /// kreatora. W teście 1.7.4 dwa telefony dodały wyjazd w tych samych
   /// minutach i oba nadały 0002/2026 — żaden nie widział jeszcze wyjazdu
-  /// drugiego. Dlatego nowy wyjazd przed zapisem pobiera wyjazdy z Dysku
+  /// drugiego. Dlatego nowy wyjazd przed zapisem pobiera wyjazdy z serwera
   /// jeszcze raz.
   ///
   /// Numer nadany przez aplikację przesuwamy na pierwszy wolny, wpisany
@@ -429,7 +429,7 @@ class _ReportWizardScreenState extends ConsumerState<ReportWizardScreen> {
 
     if (mounted) {
       final syncState = ref.read(syncStateProvider);
-      final inUnit = syncState.isConnected && syncState.unitFolderId != null;
+      final inUnit = syncState.isConnected && syncState.unitId != null;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(numberNote ??

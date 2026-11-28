@@ -51,7 +51,7 @@ void main() {
   const tablet = SyncState(
     status: SyncStatus.idle,
     userEmail: 'ospkielno@gmail.com',
-    unitFolderId: 'folder',
+    unitId: 'folder',
     founderEmail: 'ospkielno@gmail.com',
     adminEmails: ['dawid@gmail.com'],
     sharedFounder: true,
@@ -61,7 +61,7 @@ void main() {
   const dawid = SyncState(
     status: SyncStatus.idle,
     userEmail: 'dawid@gmail.com',
-    unitFolderId: 'folder',
+    unitId: 'folder',
     founderEmail: 'ospkielno@gmail.com',
     adminEmails: ['dawid@gmail.com'],
     sharedFounder: true,

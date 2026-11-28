@@ -171,22 +171,16 @@ class InfoScreen extends StatelessWidget {
                 'poprawić je na komputerze.\n\n'
                 'Aplikacja prowadzi też ewidencję ratowników (z terminami '
                 'badań lekarskich), pojazdów i sprzętu, liczy roczne statystyki '
-                'i potrafi synchronizować dane między telefonami całej '
-                'jednostki przez Dysk Google.\n\n'
-                'Jest darmowa, nie wyświetla reklam i nie zbiera danych — '
-                'wszystko, co wpiszesz, zostaje na Twoim telefonie i na '
-                'Dysku Google Twojej jednostki.\n\n'
-                'Przy logowaniu Google prosi o dostęp do Dysku. Jest '
-                'potrzebny, bo wspólny folder jednostki zakłada jedna osoba, '
-                'a wyjazdy dopisują inne, a Google nie ma uprawnienia „tylko '
-                'ten folder". Aplikacja korzysta wyłącznie z folderu '
-                'OSP_App_…; dostęp można cofnąć w każdej chwili na '
-                'myaccount.google.com/permissions. Kto woli, może do OSP '
-                'używać osobnego konta Gmail.\n\n'
+                'i synchronizuje dane między urządzeniami całej jednostki.\n\n'
+                'Jest darmowa i nie wyświetla reklam. Dane jednostki są na '
+                'Twoim telefonie i na serwerze aplikacji (Google Firebase, '
+                'w Warszawie) — widzą je tylko członkowie jednostki.\n\n'
+                'Konto Google służy tylko do logowania: aplikacja dostaje '
+                'adres e-mail i imię, bez dostępu do Dysku i poczty.\n\n'
                 'Dane z aplikacji nie trafiają do kopii zapasowej telefonu na '
                 'Twoim koncie Google. Kto odchodzi z jednostki albo oddaje '
                 'telefon, usunie je w Ustawieniach: „Wyloguj" → „Wyloguj '
-                'i usuń dane" — na Dysku jednostki zostają.',
+                'i usuń dane" — na serwerze jednostki zostają.',
                 style: TextStyle(height: 1.5),
               ),
               const SizedBox(height: 24),
@@ -300,8 +294,9 @@ class InfoScreen extends StatelessWidget {
                 icon: Icons.cloud_sync,
                 title: 'Synchronizacja',
                 description:
-                    'Zaloguj się kontem Google, aby synchronizować '
-                    'dane między urządzeniami przez Google Drive.',
+                    'Zaloguj się kontem Google i dołącz do jednostki — '
+                    'wyjazdy, przekazania i ewidencja trafiają na wszystkie '
+                    'jej urządzenia.',
               ),
               const _HowToItem(
                 icon: Icons.tablet_android,

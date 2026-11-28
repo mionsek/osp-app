@@ -586,7 +586,8 @@ void main() {
       ));
       await db.cacheAdminEmails(['jan@gmail.com']);
       await db.markUnitConfigEdited();
-      await db.settingsBox.put(DatabaseService.driveFileCacheKey, '{}');
+      await db.settingsBox.put('serverCache', '{}');
+      await db.settingsBox.put('serverUnit', {'unit': 'u1', 'code': 'ABC234'});
       // Klucz, którego jeszcze nie ma w aplikacji — nowy klucz z danymi
       // jednostki ma zniknąć bez dopisywania go do żadnej listy.
       await db.settingsBox.put('kluczZPrzyszlejWersji', 'dane jednostki');
@@ -617,8 +618,9 @@ void main() {
       expect(db.tombstoneOf('vehicle', 'v2'), isNull);
       expect(db.cachedAdminEmails, isEmpty);
       expect(db.unitConfigEditedAt, isNull);
-      expect(db.settingsBox.containsKey(DatabaseService.driveFileCacheKey),
-          isFalse);
+      expect(db.settingsBox.containsKey('serverCache'), isFalse);
+      expect(db.settingsBox.containsKey('serverUnit'), isFalse,
+          reason: 'bez tego telefon łączyłby się z jednostką sam');
       expect(db.settingsBox.containsKey('kluczZPrzyszlejWersji'), isFalse);
       expect(db.configBox.get('driveSync'), isNull,
           reason: 'bez tego telefon łączyłby się z jednostką sam');

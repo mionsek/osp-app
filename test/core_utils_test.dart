@@ -129,18 +129,6 @@ void main() {
         expect(out, isNotEmpty);
       }
     });
-
-    test('stara regula zachowana do odnajdywania plikow na Dysku', () {
-      // Potrzebna wyłącznie po to, żeby znaleźć plik zapisany starszą wersją
-      // aplikacji i zmienić mu nazwę — inaczej synchronizacja utworzyłaby obok
-      // drugi plik z tą samą treścią.
-      expect(FileNames.sanitizeLegacy('Żukowo'), 'ukowo');
-      expect(FileNames.sanitizeLegacy('Miejscowe Zagrożenie'),
-          'Miejscowe_Zagro_enie');
-      // Nazwy bez polskich znaków wychodzą tak samo w obu regułach, więc
-      // dla nich migracja nie ma czego szukać.
-      expect(FileNames.sanitizeLegacy('Kielno'), FileNames.sanitize('Kielno'));
-    });
   });
 
   group('FileNames — daty w nazwach', () {
@@ -189,22 +177,6 @@ void main() {
           DateTime(2026, 8, 11, 8, 0));
       expect(OvernightReturn.adjust(d, DateTime(2026, 8, 10, 8, 1)),
           DateTime(2026, 8, 10, 8, 1));
-    });
-  });
-
-  group('FileNames.shortHash', () {
-    test('wzorcowe wartosci FNV-1a - identyczne na kazdym telefonie', () {
-      expect(FileNames.shortHash(''), '811c9dc5');
-      expect(FileNames.shortHash('a'), 'e40c292c');
-    });
-
-    test('rozroznia przejazdy o wspolnym prefiksie id', () {
-      // Stara nazwa pliku brala 8 pierwszych znakow: oba dawaly „trip_179",
-      // wiec dwa przejazdy wozu z jednego dnia trafialy do jednego pliku.
-      const a = 'trip_1790000000000_1';
-      const b = 'trip_1790000360000_7';
-      expect(FileNames.shortHash(a), isNot(FileNames.shortHash(b)));
-      expect(FileNames.shortHash(a), hasLength(8));
     });
   });
 

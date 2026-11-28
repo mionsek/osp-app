@@ -158,7 +158,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   /// Inne konto Google przed założeniem jednostki albo dołączeniem.
   ///
   /// Anulowanie wyboru wylogowuje, więc wracamy wtedy do strony logowania —
-  /// inaczej „Utwórz jednostkę" po cichu założyłoby ją bez Dysku.
+  /// inaczej „Utwórz jednostkę" po cichu założyłoby ją tylko na telefonie.
   Future<void> _changeAccount() async {
     final ok = await ref.read(syncStateProvider.notifier).switchAccount();
     if (!mounted) return;
@@ -221,9 +221,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           physics: const NeverScrollableScrollPhysics(),
           children: [
             _buildWelcomePage(),
-            _isCreateMode
-                ? _buildAccountChoicePage()
-                : _buildJoinSignInPage(),
+            _buildSignInPage(),
             _isCreateMode
                 ? _buildCreatePage(isSignedIn)
                 : _buildJoinPage(),
@@ -334,91 +332,16 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     );
   }
 
-  Widget _buildAccountChoicePage() {
+  /// Logowanie przed założeniem jednostki i przed dołączeniem — jedna
+  /// strona. Wcześniej zakładanie miało dwie karty kont („jednostki” /
+  /// „swoje”), które i tak otwierały to samo logowanie Google.
+  Widget _buildSignInPage() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const SizedBox(height: 24),
-          Text(
-            'Wybierz konto Google',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.blue[50],
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Text(
-              'Konto Google służy tylko do logowania — aplikacja dostaje '
-              'adres e-mail i imię, bez dostępu do Dysku i poczty. Dane '
-              'jednostki są na serwerze aplikacji i widzą je tylko jej '
-              'członkowie.',
-              style: TextStyle(fontSize: 13),
-              textAlign: TextAlign.center,
-            ),
-          ),
-          const SizedBox(height: 24),
-          // Tablet w wozie — konto jednostki, telefon — swoje (Dawid,
-          // 27.11.2026). Podświetlona karta pasuje do tego urządzenia.
-          _ChoiceCard(
-            icon: Icons.tablet_android,
-            title: 'Konto jednostki',
-            subtitle: 'Na tablet lub telefon jednostki, np. w wozie — '
-                'np. ospkielno@gmail.com.\n'
-                'Jednostka zostaje przy tym koncie, także gdy zmieni się '
-                'zarząd.',
-            onTap: _isSigningIn ? () {} : _handleGoogleSignIn,
-            badge: isTabletLayout(context) ? 'zalecane' : null,
-          ),
-          const SizedBox(height: 16),
-          _ChoiceCard(
-            icon: Icons.smartphone,
-            title: 'Swoje konto',
-            subtitle: 'Na swój telefon — np. jan.kowalski@gmail.com.\n'
-                'Wyjazdy podpisują się Tobą.',
-            onTap: _isSigningIn ? () {} : _handleGoogleSignIn,
-            badge: isTabletLayout(context) ? null : 'zalecane',
-          ),
-          if (_isSigningIn) ...[
-            const SizedBox(height: 24),
-            const Center(child: CircularProgressIndicator()),
-            const SizedBox(height: 8),
-            Text(
-              'Logowanie...',
-              style: TextStyle(color: Colors.grey[600]),
-              textAlign: TextAlign.center,
-            ),
-          ],
-          const SizedBox(height: 24),
-          TextButton(
-            onPressed: () => _goToPage(2),
-            child: const Text('Kontynuuj bez logowania (tryb offline)'),
-          ),
-          const SizedBox(height: 8),
-          TextButton.icon(
-            onPressed: () => _goToPage(0),
-            icon: const Icon(Icons.arrow_back),
-            label: const Text('Wróć'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildJoinSignInPage() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const SizedBox(height: 48),
+          const SizedBox(height: 32),
           const Icon(
             Icons.login,
             size: 64,
@@ -434,15 +357,31 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           ),
           const SizedBox(height: 16),
           Text(
-            'Zaloguj się kontem Google, aby dołączyć '
-            'do istniejącej jednostki.',
+            _isCreateMode
+                ? 'Zaloguj się kontem Google, aby założyć jednostkę. '
+                    'Aplikacja dostaje tylko adres e-mail i imię — bez '
+                    'dostępu do Dysku i poczty.'
+                : 'Zaloguj się kontem Google, aby dołączyć do istniejącej '
+                    'jednostki. Aplikacja dostaje tylko adres e-mail '
+                    'i imię — bez dostępu do Dysku i poczty.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Colors.grey[600],
                 ),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 16),
+          // Tablet w wozie — konto jednostki, telefon — swoje (Dawid,
+          // 27.11.2026).
           AccountForDeviceHint(tablet: isTabletLayout(context)),
+          if (_isCreateMode) ...[
+            const SizedBox(height: 12),
+            Text(
+              'Kto zakłada jednostkę, zostaje jej stałym administratorem. '
+              'Założona kontem jednostki zostaje przy jednostce, także gdy '
+              'zmieni się zarząd.',
+              style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+            ),
+          ],
           const SizedBox(height: 24),
           ElevatedButton.icon(
             onPressed: _isSigningIn ? null : _handleGoogleSignIn,
@@ -459,7 +398,14 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               minimumSize: const Size(double.infinity, 56),
             ),
           ),
-          const SizedBox(height: 24),
+          if (_isCreateMode) ...[
+            const SizedBox(height: 16),
+            TextButton(
+              onPressed: () => _goToPage(2),
+              child: const Text('Kontynuuj bez logowania (tryb offline)'),
+            ),
+          ],
+          const SizedBox(height: 8),
           TextButton.icon(
             onPressed: () => _goToPage(0),
             icon: const Icon(Icons.arrow_back),
@@ -740,14 +686,12 @@ class _ChoiceCard extends StatelessWidget {
   final String title;
   final String subtitle;
   final VoidCallback onTap;
-  final String? badge;
 
   const _ChoiceCard({
     required this.icon,
     required this.title,
     required this.subtitle,
     required this.onTap,
-    this.badge,
   });
 
   @override
@@ -767,32 +711,12 @@ class _ChoiceCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            title,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
-                          ),
-                        ),
-                        if (badge != null)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: OspTheme.success,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              badge!,
-                              style: const TextStyle(
-                                  color: Colors.white, fontSize: 11),
-                            ),
-                          ),
-                      ],
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(

@@ -2,13 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 
-import '../../providers/providers.dart';
-import '../../models/member_note.dart';
-import '../../models/sync_state.dart' show RejectedChange;
-import '../../core/utils/time_format.dart';
-import '../../services/google_drive_service.dart';
-import '../../services/sync_service.dart' show LastPersonalAdminException;
 import '../../core/theme/osp_theme.dart';
+import '../../core/utils/time_format.dart';
+import '../../models/unit_member.dart';
+import '../../providers/providers.dart';
+import '../../services/sync_service.dart' show LastPersonalAdminException;
 import '../../widgets/shared_account_guide.dart';
 
 /// Zarządzanie dostępem do jednostki: kto może z niej korzystać i kto ma
@@ -34,8 +32,7 @@ class UnitMembersSection extends ConsumerStatefulWidget {
 }
 
 class _UnitMembersSectionState extends ConsumerState<UnitMembersSection> {
-  List<UnitMemberAccess>? _members;
-  Map<String, MemberNote> _notes = const {};
+  List<UnitMember>? _members;
   bool _loading = false;
   String? _error;
 
@@ -45,20 +42,8 @@ class _UnitMembersSectionState extends ConsumerState<UnitMembersSection> {
       _error = null;
     });
     try {
-      final sync = ref.read(syncServiceProvider);
-      final members = await sync.listMembers();
-      // Notatki „kto dołączył" (feature/080) — ich brak nie może zablokować
-      // samej listy uprawnień.
-      var notes = const <String, MemberNote>{};
-      try {
-        notes = await sync.memberNotes();
-      } catch (_) {}
-      if (mounted) {
-        setState(() {
-          _members = members;
-          _notes = notes;
-        });
-      }
+      final members = await ref.read(syncServiceProvider).listMembers();
+      if (mounted) setState(() => _members = members);
     } catch (e) {
       if (mounted) setState(() => _error = 'Nie udało się pobrać listy: $e');
     } finally {
@@ -96,10 +81,10 @@ class _UnitMembersSectionState extends ConsumerState<UnitMembersSection> {
     }
   }
 
-  /// Powiadomienie Google o udostępnieniu wygląda jak każde inne z Dysku
-  /// i bywa w Spamie — zaproszony Dawid zobaczył folder, a e-maila
-  /// z zaproszeniem nie rozpoznał (19.11.2026). Dlatego od razu propozycja
-  /// wysłania tej samej treści SMS-em albo komunikatorem.
+  /// Kod wysyła zapraszający — od razu propozycja wysłania treści
+  /// zaproszenia SMS-em, komunikatorem albo e-mailem. (Na Dysku Google
+  /// wysyłał powiadomienie, które zaproszony Dawid wziął 19.11.2026 za
+  /// zwykłe udostępnienie folderu.)
   Future<void> _offerToSend(String email, String message) async {
     final code = ref.read(syncStateProvider).unitInviteCode ?? '';
     final send = await showDialog<bool>(
@@ -128,7 +113,7 @@ class _UnitMembersSectionState extends ConsumerState<UnitMembersSection> {
     if (send == true) await UnitMembersSection.shareText(message);
   }
 
-  Future<void> _toggleAdmin(UnitMemberAccess member, bool makeAdmin) async {
+  Future<void> _toggleAdmin(UnitMember member, bool makeAdmin) async {
     final sync = ref.read(syncServiceProvider);
     try {
       if (makeAdmin) {
@@ -147,9 +132,9 @@ class _UnitMembersSectionState extends ConsumerState<UnitMembersSection> {
   /// Wspólne urządzenie jednostki, np. tablet w wozie zalogowany kontem
   /// jednostki ([SyncState.isSharedDevice]) — dowolne konto, nie tylko
   /// założyciela (Dawid, 27.11.2026).
-  Future<void> _toggleShared(UnitMemberAccess member, bool shared) async {
+  Future<void> _toggleShared(UnitMember member, bool shared) async {
     final syncState = ref.read(syncStateProvider);
-    final who = member.name.trim().isEmpty ? member.email : member.name.trim();
+    final who = member.label;
     final founder = syncState.isFounder(member.email);
     final onThisAccount = (syncState.userEmail ?? '').trim().toLowerCase() ==
         member.email.trim().toLowerCase();
@@ -200,14 +185,13 @@ class _UnitMembersSectionState extends ConsumerState<UnitMembersSection> {
     }
   }
 
-  Future<void> _revoke(UnitMemberAccess member) async {
+  Future<void> _revoke(UnitMember member) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Odbierz dostęp'),
         content: Text(
-          '${member.name.trim().isEmpty ? member.email : member.name.trim()} '
-          'straci dostęp do danych jednostki. '
+          '${member.label} straci dostęp do danych jednostki. '
           'Dane już pobrane na jego telefon pozostaną tam, ale nie będzie '
           'ich dalej synchronizować.',
         ),
@@ -253,14 +237,6 @@ class _UnitMembersSectionState extends ConsumerState<UnitMembersSection> {
           style: TextStyle(fontSize: 12, color: Colors.grey[600]),
         ),
         const SizedBox(height: 12),
-        if (syncState.rejectedChanges.isNotEmpty) ...[
-          RejectedChangesCard(
-            changes: syncState.rejectedChanges,
-            onClear: () =>
-                ref.read(syncServiceProvider).clearRejectedChanges(),
-          ),
-          const SizedBox(height: 12),
-        ],
         if (_error != null) ...[
           Text(_error!,
               style: const TextStyle(color: Colors.red, fontSize: 12)),
@@ -304,7 +280,6 @@ class _UnitMembersSectionState extends ConsumerState<UnitMembersSection> {
               isAdmin: syncState.isAdmin(m.email),
               isMe: (syncState.userEmail ?? '').trim().toLowerCase() ==
                   m.email.trim().toLowerCase(),
-              note: _notes[m.email.trim().toLowerCase()],
               onToggleAdmin: (v) => _toggleAdmin(m, v),
               onToggleShared: (v) => _toggleShared(m, v),
               onRevoke: () => _revoke(m),
@@ -322,7 +297,7 @@ class _UnitMembersSectionState extends ConsumerState<UnitMembersSection> {
 
 /// Ile osób dołączyło i ile zaproszeń czeka — nad listą członków.
 @visibleForTesting
-String membersSummary(List<UnitMemberAccess> members) {
+String membersSummary(List<UnitMember> members) {
   final waiting = members.where((m) => m.invited).length;
   final joined = members.length - waiting;
   return 'W jednostce: $joined'
@@ -332,7 +307,7 @@ String membersSummary(List<UnitMemberAccess> members) {
 enum _MemberAction { admin, shared, revoke }
 
 class _MemberTile extends StatelessWidget {
-  final UnitMemberAccess member;
+  final UnitMember member;
   final bool isFounder;
 
   /// Wspólne urządzenie jednostki ([SyncState.isSharedDevice]).
@@ -340,9 +315,6 @@ class _MemberTile extends StatelessWidget {
   final bool isAdmin;
   final bool isMe;
 
-  /// Notatka z telefonu tej osoby — `null`, gdy jeszcze nie dołączyła albo
-  /// ma wersję sprzed feature/080.
-  final MemberNote? note;
   final ValueChanged<bool> onToggleAdmin;
   final ValueChanged<bool> onToggleShared;
   final VoidCallback onRevoke;
@@ -353,7 +325,6 @@ class _MemberTile extends StatelessWidget {
     this.sharedDevice = false,
     required this.isAdmin,
     required this.isMe,
-    this.note,
     required this.onToggleAdmin,
     required this.onToggleShared,
     required this.onRevoke,
@@ -377,7 +348,7 @@ class _MemberTile extends StatelessWidget {
     // inaczej jednostka mogłaby zostać bez nikogo, kto może nią zarządzać.
     final locked = isFounder || member.isOwner;
     // Imię z konta Google (zapisane przy dołączeniu), a pod nim adres.
-    final name = member.name.trim();
+    final named = member.label != member.email;
     final me = isMe ? '  (Ty)' : '';
 
     return Card(
@@ -391,11 +362,11 @@ class _MemberTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    (name.isEmpty ? member.email : name) + me,
+                    member.label + me,
                     style: const TextStyle(fontWeight: FontWeight.w500),
                     overflow: TextOverflow.ellipsis,
                   ),
-                  if (name.isNotEmpty)
+                  if (named)
                     Text(
                       member.email,
                       style: TextStyle(fontSize: 12, color: Colors.grey[700]),
@@ -408,12 +379,10 @@ class _MemberTile extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    member.invited
-                        ? 'Zaproszony — jeszcze nie dołączył'
-                        : memberStatus(note, DateTime.now()),
+                    memberStatus(member, DateTime.now()),
                     style: TextStyle(
                       fontSize: 12,
-                      color: note == null
+                      color: member.invited
                           ? OspTheme.attention
                           : Colors.grey[700],
                     ),
@@ -452,77 +421,6 @@ class _MemberTile extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-/// Zmiany na Dysku, których telefon nie przyjął (fix/067): ktoś zmienił
-/// pliki jednostki na drive.google.com, choć w aplikacji nie mógłby.
-class RejectedChangesCard extends StatelessWidget {
-  final List<RejectedChange> changes;
-  final VoidCallback onClear;
-
-  const RejectedChangesCard({
-    super.key,
-    required this.changes,
-    required this.onClear,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: OspTheme.attention.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: OspTheme.attention.withValues(alpha: 0.5)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.gpp_maybe, color: OspTheme.attention, size: 20),
-              SizedBox(width: 8),
-              Expanded(
-                child: Text('Zmiany z pominięciem aplikacji',
-                    style: TextStyle(fontWeight: FontWeight.w600)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            'Ktoś zmienił pliki jednostki bezpośrednio na Dysku Google, '
-            'choć w aplikacji nie ma do tego uprawnień. Telefony tych zmian '
-            'nie przyjęły.',
-            style: TextStyle(fontSize: 13),
-          ),
-          const SizedBox(height: 8),
-          for (final c in changes)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Text(
-                '• ${c.what} — ${c.by}, ${TimeFormat.date(c.at)} '
-                '${TimeFormat.hhmm(c.at)}'
-                '${c.restored ? ' · przywrócone' : ''}',
-                style: const TextStyle(fontSize: 13),
-              ),
-            ),
-          const SizedBox(height: 4),
-          Text(
-            'Jeśli to nie pomyłka, odbierz tej osobie dostęp na liście '
-            'poniżej.',
-            style: TextStyle(fontSize: 12, color: Colors.grey[700]),
-          ),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton(
-              onPressed: onClear,
-              child: const Text('Rozumiem, wyczyść'),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -606,21 +504,16 @@ class _InviteDialogState extends State<_InviteDialog> {
   }
 }
 
-/// Czy i kiedy osoba z dostępem naprawdę dołączyła (feature/080), np.
+/// Czy i kiedy osoba dołączyła (feature/080), np.
 /// „W aplikacji od 25.11.2026 · ostatnio dziś 14:05 · wersja 1.9.20".
-///
-/// Bez notatki nie da się odróżnić „nie przyjęła zaproszenia" od „ma wersję
-/// sprzed tej funkcji" — napis mówi o obu, bez zgadywania.
 @visibleForTesting
-String memberStatus(MemberNote? note, DateTime now) {
-  if (note == null) {
-    return 'Brak śladu w aplikacji — zaproszenie nieprzyjęte albo starsza '
-        'wersja aplikacji';
-  }
+String memberStatus(UnitMember member, DateTime now) {
+  if (member.invited) return 'Zaproszony — jeszcze nie dołączył';
   final parts = <String>[
-    if (note.joinedAt != null) 'W aplikacji od ${TimeFormat.date(note.joinedAt!)}',
-    if (note.lastSyncAt != null) 'ostatnio ${_when(note.lastSyncAt!, now)}',
-    if (note.appVersion.isNotEmpty) 'wersja ${note.appVersion}',
+    if (member.joinedAt != null)
+      'W aplikacji od ${TimeFormat.date(member.joinedAt!)}',
+    if (member.lastSyncAt != null) 'ostatnio ${_when(member.lastSyncAt!, now)}',
+    if (member.appVersion.isNotEmpty) 'wersja ${member.appVersion}',
   ];
   return parts.isEmpty ? 'W aplikacji' : parts.join(' · ');
 }

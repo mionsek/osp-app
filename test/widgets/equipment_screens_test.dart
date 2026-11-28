@@ -30,7 +30,7 @@ void main() {
   const member = SyncState(
     status: SyncStatus.idle,
     userEmail: 'wojtek@gmail.com',
-    unitFolderId: 'folder',
+    unitId: 'folder',
     founderEmail: 'ospkielno@gmail.com',
   );
 

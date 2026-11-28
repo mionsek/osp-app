@@ -7,7 +7,7 @@ import 'package:osp_app/models/models.dart';
 import 'package:osp_app/models/sync_state.dart';
 import 'package:osp_app/providers/providers.dart';
 import 'package:osp_app/screens/settings/unit_members_section.dart';
-import 'package:osp_app/services/google_drive_service.dart';
+import 'package:osp_app/models/unit_member.dart';
 import 'package:osp_app/widgets/upload_status.dart';
 
 import '../helpers/test_app.dart';
@@ -23,15 +23,11 @@ void main() {
   const connected = SyncState(
     status: SyncStatus.idle,
     userEmail: 'dawid@gmail.com',
-    unitFolderId: 'unit1',
+    unitId: 'unit1',
     founderEmail: 'dawid@gmail.com',
   );
 
-  FakeSyncService serverSync() {
-    final sync = fakeSync();
-    when(() => sync.onServer).thenReturn(true);
-    return sync;
-  }
+  FakeSyncService serverSync() => fakeSync();
 
   testWidgets('pasek wysyłki mówi o serwerze jednostki', (tester) async {
     final sync = serverSync();
@@ -64,23 +60,17 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
 
     final sync = serverSync();
-    when(() => sync.listMembers()).thenAnswer((_) async => const [
-          UnitMemberAccess(
-              permissionId: 'm:u1', email: 'dawid@gmail.com', isOwner: true),
-          UnitMemberAccess(
-              permissionId: 'i:jan@gmail.com',
-              email: 'jan@gmail.com',
-              isOwner: false,
-              invited: true),
-        ]);
-    when(() => sync.memberNotes()).thenAnswer((_) async => {
-          'dawid@gmail.com': MemberNote(
+    when(() => sync.listMembers()).thenAnswer((_) async => [
+          UnitMember(
             email: 'dawid@gmail.com',
+            uid: 'u1',
+            isOwner: true,
             joinedAt: DateTime(2026, 11, 27, 9),
             lastSyncAt: DateTime(2026, 11, 20, 8),
             appVersion: '2.0.0',
           ),
-        });
+          const UnitMember(email: 'jan@gmail.com'),
+        ]);
 
     await tester.pumpWidget(testApp(
       const Scaffold(body: SingleChildScrollView(child: UnitMembersSection())),

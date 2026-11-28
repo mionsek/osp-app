@@ -2,21 +2,15 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
-import 'google_auth_service.dart';
-
-/// Logowanie do serwera jednostek — Firebase Auth (feature/081).
+/// Logowanie do serwera jednostek — Firebase Auth kontem Google
+/// (feature/081).
 ///
-/// W odróżnieniu od [GoogleAuthService] konto Google prosi **tylko o adres
-/// e-mail i imię** — bez dostępu do Dysku, więc bez ekranu „aplikacja chce
-/// wyświetlać, edytować, tworzyć i usuwać wszystkie pliki na Dysku” i bez
-/// limitu 100 kont dla niezweryfikowanej aplikacji (PLAN_BAZA_DANYCH.md).
-/// Dziedziczy po [GoogleAuthService] tylko po to, żeby reszta aplikacji
-/// widziała jedno konto; żadna metoda z dostępem do Dysku nie jest używana.
-///
-/// Aplikacja nie prosi o Dysk wcale — jednostki są tylko na serwerze
-/// (Dawid, 27.11.2026: bez migracji z Dysku).
-class ServerAuthService extends GoogleAuthService {
-  ServerAuthService({
+/// Konto Google prosi **tylko o adres e-mail i imię** — bez dostępu do Dysku,
+/// więc bez ekranu „aplikacja chce wyświetlać, edytować, tworzyć i usuwać
+/// wszystkie pliki na Dysku” i bez limitu 100 kont dla niezweryfikowanej
+/// aplikacji (PLAN_BAZA_DANYCH.md).
+class AuthService {
+  AuthService({
     FirebaseAuth? auth,
     GoogleSignIn? google,
   })  : _authOverride = auth,
@@ -43,21 +37,17 @@ class ServerAuthService extends GoogleAuthService {
   /// Identyfikator konta na serwerze — klucz rekordu członka jednostki.
   String? get uid => _user?.uid;
 
-  @override
   bool get isSignedIn => _user != null;
 
-  @override
   String? get userEmail => _user?.email;
 
-  @override
+  /// Imię i nazwisko z konta Google — do pokazania obok adresu.
   String? get displayName => _user?.displayName;
 
   /// Firebase pamięta zalogowanie sam — bez okna wyboru konta.
-  @override
   Future<bool> trySilentSignIn() async => isSignedIn;
 
   /// Logowanie kontem Google: tylko e-mail i imię.
-  @override
   Future<bool> signIn() async {
     try {
       final account = await _google.signIn();
@@ -74,7 +64,6 @@ class ServerAuthService extends GoogleAuthService {
     }
   }
 
-  @override
   Future<void> signOut() async {
     await _auth.signOut();
     try {
@@ -82,7 +71,11 @@ class ServerAuthService extends GoogleAuthService {
     } catch (_) {}
   }
 
-  @override
+  /// Pokazuje wybór konta Google od nowa.
+  ///
+  /// [signIn] przy zalogowanym koncie oddaje to samo konto bez pytania, więc
+  /// żeby wybrać inne, trzeba się najpierw wylogować. Anulowanie wyboru
+  /// zostawia aplikację wylogowaną.
   Future<bool> switchAccount() async {
     await signOut();
     return signIn();
@@ -90,7 +83,6 @@ class ServerAuthService extends GoogleAuthService {
 
   /// Świeży token serwera (żyje godzinę; SDK odświeża go samo, [force]
   /// wymusza nowy po odmowie).
-  @override
   Future<void> refreshAuth({bool force = false}) async {
     await _user?.getIdToken(force);
   }

@@ -32,7 +32,7 @@ void main() {
   const viewer = SyncState(
     status: SyncStatus.idle,
     userEmail: 'dawid@gmail.com',
-    unitFolderId: 'folder',
+    unitId: 'folder',
     founderEmail: 'ospkielno@gmail.com',
   );
 

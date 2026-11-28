@@ -29,7 +29,7 @@ class Vehicle extends HiveObject {
 
   /// Typ pojazdu w nomenklaturze pożarniczej, np. „GCBA", „SLRt" (na starych
   /// drukach rubryka „Rodzaj"). Pole nazywa się `kind` od pierwszej wersji —
-  /// zmiana nazwy zmieniłaby format na Dysku.
+  /// zmiana nazwy zmieniłaby format danych jednostki.
   @HiveField(5, defaultValue: '')
   String kind;
 

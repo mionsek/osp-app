@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/theme/osp_theme.dart';
 import '../core/utils/time_format.dart';
 import '../providers/providers.dart';
-import '../services/google_drive_service.dart';
+import '../models/unit_member.dart';
 import '../services/sync_service.dart';
 
 // Okna wspólne dla wprowadzenia i Ustawień: kod zaproszenia i dołączenie
@@ -34,10 +34,10 @@ String joinNotInvitedMessage(String email) =>
     'na które przyszło zaproszenie.';
 
 /// Po dołączeniu do jednostki: zamyka wprowadzenie i odświeża listy danymi
-/// pobranymi z Dysku.
+/// pobranymi z serwera.
 Future<void> finishJoiningUnit(WidgetRef ref) async {
   final db = ref.read(databaseServiceProvider);
-  // copyWith, a nie nowy obiekt — konfiguracja pobrana z Dysku zawiera
+  // copyWith, a nie nowy obiekt — konfiguracja pobrana z serwera zawiera
   // m.in. pełną nazwę jednostki, której nie wolno zgubić.
   await ref.read(unitConfigProvider.notifier).save(db.getConfig().copyWith(
         onboardingCompleted: true,
@@ -65,14 +65,8 @@ void refreshLocalDataProviders(WidgetRef ref) {
 /// oba puste — ktoś zrezygnował w oknie potwierdzenia.
 typedef JoinAttempt = ({bool joined, String? error});
 
-/// Szuka jednostki po kodzie, pokazuje, czyj to folder, i dołącza dopiero
-/// po potwierdzeniu.
-///
-/// Kod krąży po czatach, a obcy, który go zna, może udostępnić ofierze
-/// własny folder z tym samym kodem — telefon wysłałby wtedy dane jednostki
-/// do niego. Właściciel folderu pochodzi z Dysku i tego nie da się podrobić,
-/// dlatego widać go przed dołączeniem. Gdy kod pasuje do kilku folderów,
-/// nie zgadujemy, który jest prawdziwy.
+/// Szuka jednostki po kodzie, pokazuje, kto zaprosił, i dołącza dopiero
+/// po potwierdzeniu — po kodzie z cudzej wiadomości łatwo trafić nie tam.
 Future<JoinAttempt> joinUnitWithConfirmation(
   BuildContext context,
   WidgetRef ref,
@@ -90,19 +84,10 @@ Future<JoinAttempt> joinUnitWithConfirmation(
       );
     case UnitNotInvited(:final email):
       return (joined: false, error: joinNotInvitedMessage(email));
-    case UnitAmbiguous():
-      return (
-        joined: false,
-        error: 'Ten kod pasuje do więcej niż jednej jednostki widocznej dla '
-            'tego konta — to może być kopia folderu albo próba podszycia '
-            'się. Nie dołączam. Poproś administratora o nowe zaproszenie.',
-      );
     case UnitFound(:final unit):
-      final localOnly = await notifier.localOnlyListEntries(unit.folderId);
-      if (!context.mounted) return (joined: false, error: null);
       final confirmed = await showDialog<bool>(
         context: context,
-        builder: (ctx) => _ConfirmUnitDialog(unit: unit, localOnly: localOnly),
+        builder: (ctx) => _ConfirmUnitDialog(unit: unit),
       );
       if (confirmed != true || !context.mounted) {
         return (joined: false, error: null);
@@ -115,9 +100,8 @@ Future<JoinAttempt> joinUnitWithConfirmation(
 
 class _ConfirmUnitDialog extends StatelessWidget {
   final UnitCandidate unit;
-  final LocalListEntries localOnly;
 
-  const _ConfirmUnitDialog({required this.unit, required this.localOnly});
+  const _ConfirmUnitDialog({required this.unit});
 
   @override
   Widget build(BuildContext context) {
@@ -132,9 +116,7 @@ class _ConfirmUnitDialog extends StatelessWidget {
             Text('Jednostka', style: TextStyle(color: Colors.grey[600])),
             Text(name, style: const TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: 12),
-            Text(
-                unit.onServer ? 'Zaproszenie od' : 'Właściciel folderu na Dysku',
-                style: TextStyle(color: Colors.grey[600])),
+            Text('Zaproszenie od', style: TextStyle(color: Colors.grey[600])),
             // Imię z konta Google zapraszającego (serwer), adres pod nim.
             if ((unit.ownerName ?? '').isNotEmpty) ...[
               Text(
@@ -149,22 +131,13 @@ class _ConfirmUnitDialog extends StatelessWidget {
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
             const SizedBox(height: 16),
-            Text(
-              unit.onServer
-                  ? 'Dołącz tylko, jeśli znasz tę osobę — zwykle to '
-                      'administrator jednostki. Po dołączeniu wyjazdy, '
-                      'przekazania i przejazdy z tego telefonu trafią do '
-                      'tej jednostki.'
-                  : 'Dołącz tylko, jeśli znasz to konto — zwykle to konto '
-                      'jednostki albo jej administratora. Po dołączeniu '
-                      'wyjazdy, przekazania i przejazdy z tego telefonu '
-                      'trafią do tego folderu.',
-              style: const TextStyle(fontSize: 13),
+            const Text(
+              'Dołącz tylko, jeśli znasz tę osobę — zwykle to administrator '
+              'jednostki. Po dołączeniu wyjazdy, przekazania i przejazdy '
+              'z tego telefonu trafią do tej jednostki, a ratownicy, pojazdy '
+              'i sprzęt będą z list jednostki.',
+              style: TextStyle(fontSize: 13),
             ),
-            if (!localOnly.isEmpty) ...[
-              const SizedBox(height: 12),
-              _ListReplacementNotice(localOnly),
-            ],
           ],
         ),
       ),
@@ -182,69 +155,14 @@ class _ConfirmUnitDialog extends StatelessWidget {
   }
 }
 
-/// Ostrzeżenie przed dołączeniem: ratownicy i pojazdy z telefonu, których
-/// jednostka nie ma, znikną z niego — obowiązuje lista jednostki.
-class _ListReplacementNotice extends StatelessWidget {
-  final LocalListEntries entries;
-
-  const _ListReplacementNotice(this.entries);
-
-  static String _names(List<String> names) {
-    const shown = 5;
-    if (names.length <= shown) return names.join(', ');
-    return '${names.take(shown).join(', ')} i ${names.length - shown} innych';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: OspTheme.attentionSurface,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Ratownicy, pojazdy i sprzęt spoza tej jednostki zostaną '
-            'usunięci z telefonu — obowiązuje lista jednostki, którą '
-            'prowadzi administrator:',
-            style: TextStyle(fontSize: 13),
-          ),
-          if (entries.firefighters.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Text('Ratownicy: ${_names(entries.firefighters)}',
-                style: const TextStyle(
-                    fontSize: 13, fontWeight: FontWeight.w600)),
-          ],
-          if (entries.vehicles.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Text('Pojazdy: ${_names(entries.vehicles)}',
-                style: const TextStyle(
-                    fontSize: 13, fontWeight: FontWeight.w600)),
-          ],
-          if (entries.equipment.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Text('Sprzęt: ${_names(entries.equipment)}',
-                style: const TextStyle(
-                    fontSize: 13, fontWeight: FontWeight.w600)),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
 /// Co zrobić, gdy na koncie jest już jednostka, a ktoś zakłada kolejną.
 enum CreateUnitChoice { create, joined, cancelled }
 
-/// Przed założeniem jednostki sprawdza, czy na zalogowanym koncie już jakaś
-/// jest, i proponuje dołączenie do niej.
+/// Przed założeniem jednostki sprawdza, czy zalogowane konto już do jakiejś
+/// należy, i proponuje dołączenie do niej.
 ///
-/// Każde „Utwórz jednostkę" zakłada nowy folder, więc po kilku próbach na
-/// Dysku konta jednostki leżały cztery identyczne `OSP_App_…` i nie było
-/// wiadomo, który jest prawdziwy.
+/// Na Dysku po kilku próbach „Utwórz jednostkę" leżały cztery identyczne
+/// jednostki i nie było wiadomo, która jest prawdziwa.
 Future<CreateUnitChoice> confirmCreateOrJoinOwnUnit(
   BuildContext context,
   WidgetRef ref,
@@ -264,31 +182,6 @@ Future<CreateUnitChoice> confirmCreateOrJoinOwnUnit(
   if (picked == null || !context.mounted) return CreateUnitChoice.cancelled;
   final unit = picked.unit;
   if (unit == null) return CreateUnitChoice.create;
-
-  final localOnly = await notifier.localOnlyListEntries(unit.folderId);
-  if (!context.mounted) return CreateUnitChoice.cancelled;
-  if (!localOnly.isEmpty) {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Dołączyć do tej jednostki?'),
-        content: SingleChildScrollView(child: _ListReplacementNotice(localOnly)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Anuluj'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Dołącz'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !context.mounted) {
-      return CreateUnitChoice.cancelled;
-    }
-  }
 
   await notifier.joinFoundUnit(unit, unit.inviteCode!);
   await finishJoiningUnit(ref);
@@ -318,7 +211,6 @@ class _OwnUnitsDialogState extends State<_OwnUnitsDialog> {
   @override
   Widget build(BuildContext context) {
     final many = widget.units.length > 1;
-    final onServer = widget.units.first.onServer;
     return AlertDialog(
       title: Text(many
           ? 'Na tym koncie są już jednostki'
@@ -329,16 +221,10 @@ class _OwnUnitsDialogState extends State<_OwnUnitsDialog> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              onServer
-                  ? 'Konto ${widget.email} należy już do '
-                      '${many ? 'jednostek' : 'jednostki'}. Dołącz zamiast '
-                      'zakładać kolejną — inaczej będą dwie jednostki o tej '
-                      'samej nazwie i łatwo o pomyłkę, w której są dane.'
-                  : 'Na Dysku konta ${widget.email} '
-                      '${many ? 'są już jednostki' : 'jest już jednostka'}. '
-                      'Dołącz do niej zamiast zakładać kolejną — inaczej '
-                      'przybędzie folder o tej samej nazwie i łatwo '
-                      'o pomyłkę, w którym są dane.',
+              'Konto ${widget.email} należy już do '
+              '${many ? 'jednostek' : 'jednostki'}. Dołącz zamiast zakładać '
+              'kolejną — inaczej będą dwie jednostki o tej samej nazwie '
+              'i łatwo o pomyłkę, w której są dane.',
               style: const TextStyle(fontSize: 13),
             ),
             const SizedBox(height: 12),

@@ -6,14 +6,14 @@ import 'package:mocktail/mocktail.dart';
 import 'package:osp_app/models/sync_state.dart';
 import 'package:osp_app/providers/providers.dart';
 import 'package:osp_app/screens/settings/settings_screen.dart';
-import 'package:osp_app/services/google_auth_service.dart';
-import 'package:osp_app/services/google_drive_service.dart';
+import 'package:osp_app/services/auth_service.dart';
+import 'package:osp_app/models/unit_member.dart';
 import 'package:osp_app/services/sync_service.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../helpers/test_app.dart';
 
-class _MockAuth extends Mock implements GoogleAuthService {}
+class _MockAuth extends Mock implements AuthService {}
 
 /// Sekcja konta Google w Ustawieniach.
 ///
@@ -26,7 +26,7 @@ void main() {
   late FakeSyncService sync;
 
   setUpAll(() => registerFallbackValue(
-      const UnitCandidate(folderId: '', unitName: '')));
+      const UnitCandidate(unitId: '', unitName: '')));
 
   setUp(() async {
     tempDir = await setUpTestHive();
@@ -44,7 +44,7 @@ void main() {
   const founderInUnit = SyncState(
     status: SyncStatus.idle,
     userEmail: 'ospkielno@gmail.com',
-    unitFolderId: 'folder',
+    unitId: 'folder',
     unitInviteCode: 'ABC234',
     founderEmail: 'ospkielno@gmail.com',
   );
@@ -114,7 +114,7 @@ void main() {
       const SyncState(
         status: SyncStatus.idle,
         userEmail: 'jan@gmail.com',
-        unitFolderId: 'folder',
+        unitId: 'folder',
         unitInviteCode: 'ABC234',
         founderEmail: 'ospkielno@gmail.com',
       ),
@@ -133,7 +133,7 @@ void main() {
       const SyncState(
         status: SyncStatus.idle,
         userEmail: 'ospkielno@gmail.com',
-        unitFolderId: 'folder',
+        unitId: 'folder',
         unitInviteCode: 'ABC234',
         founderEmail: 'ospkielno@gmail.com',
         adminEmails: ['dawid@gmail.com'],
@@ -154,22 +154,17 @@ void main() {
       const SyncState(
         status: SyncStatus.idle,
         userEmail: 'dawid@gmail.com',
-        unitFolderId: 'folder',
+        unitId: 'folder',
         unitInviteCode: 'ABC234',
         founderEmail: 'ospkielno@gmail.com',
         adminEmails: ['dawid@gmail.com'],
       ),
     );
     when(() => sync.listMembers()).thenAnswer((_) async => const [
-          UnitMemberAccess(
-              permissionId: 'm:a', email: 'ospkielno@gmail.com', isOwner: true),
-          UnitMemberAccess(
-              permissionId: 'm:d',
-              email: 'dawid@gmail.com',
-              isOwner: false,
-              name: 'Dawid Mionskowski'),
+          UnitMember(email: 'ospkielno@gmail.com', uid: 'a', isOwner: true),
+          UnitMember(
+              email: 'dawid@gmail.com', uid: 'd', name: 'Dawid Mionskowski'),
         ]);
-    when(() => sync.memberNotes()).thenAnswer((_) async => const {});
     when(() => sync.setSharedDevice(any(), any())).thenAnswer((_) async {});
 
     await tester.ensureVisible(find.text('Pokaż członków'));
@@ -205,7 +200,7 @@ void main() {
       const SyncState(
         status: SyncStatus.idle,
         userEmail: 'ospkielno@gmail.com',
-        unitFolderId: 'folder',
+        unitId: 'folder',
         unitInviteCode: 'ABC234',
         founderEmail: 'dawid@gmail.com',
         sharedEmails: ['ospkielno@gmail.com'],
@@ -238,7 +233,7 @@ void main() {
       const SyncState(
         status: SyncStatus.idle,
         userEmail: 'dawid@gmail.com',
-        unitFolderId: 'folder',
+        unitId: 'folder',
         unitInviteCode: 'ABC234',
         founderEmail: 'ospkielno@gmail.com',
         adminEmails: ['dawid@gmail.com'],
@@ -253,7 +248,7 @@ void main() {
       const SyncState(
         status: SyncStatus.idle,
         userEmail: 'ospkielno@gmail.com',
-        unitFolderId: 'folder',
+        unitId: 'folder',
         unitInviteCode: 'ABC234',
         founderEmail: 'ospkielno@gmail.com',
         adminEmails: ['dawid@gmail.com'],
@@ -280,35 +275,24 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
   }
 
-  testWidgets('kod pasujący do kilku jednostek: odmowa bez dołączania',
-      (tester) async {
-    await pumpSettings(tester, const SyncState(userEmail: 'jan@gmail.com'));
-    when(() => sync.lookupUnit(any()))
-        .thenAnswer((_) async => const UnitAmbiguous(2));
-
-    await submitCode(tester, 'ABC234');
-
-    expect(find.textContaining('więcej niż jednej jednostki'), findsOneWidget);
-    verifyNever(() => sync.joinFoundUnit(any(), any()));
-  });
-
   testWidgets(
-      'przed dołączeniem widać właściciela folderu, a rezygnacja niczego '
-      'nie zmienia', (tester) async {
+      'przed dołączeniem widać, kto zaprosił, a rezygnacja niczego nie '
+      'zmienia', (tester) async {
     await pumpSettings(tester, const SyncState(userEmail: 'jan@gmail.com'));
     when(() => sync.lookupUnit(any())).thenAnswer((_) async => const UnitFound(
           UnitCandidate(
-            folderId: 'wabik',
+            unitId: 'wabik',
             unitName: 'OSP Kielno',
             ownerEmail: 'obcy@gmail.com',
+            ownerName: 'Jan Obcy',
           ),
         ));
-    when(() => sync.localOnlyListEntries(any()))
-        .thenAnswer((_) async => const LocalListEntries());
 
     await submitCode(tester, 'ABC234');
 
     expect(find.text('Dołączyć do tej jednostki?'), findsOneWidget);
+    expect(find.text('Zaproszenie od'), findsOneWidget);
+    expect(find.text('Jan Obcy'), findsOneWidget);
     expect(find.text('obcy@gmail.com'), findsOneWidget);
     expect(find.text('OSP Kielno'), findsOneWidget);
 
@@ -326,7 +310,7 @@ void main() {
     when(() => sync.state).thenReturn(SyncState(
       status: SyncStatus.idle,
       userEmail: 'ospkielno@gmail.com',
-      unitFolderId: 'folder',
+      unitId: 'folder',
       unitInviteCode: 'ABC234',
       founderEmail: 'ospkielno@gmail.com',
       lastSyncTime: DateTime.now(),
@@ -351,7 +335,7 @@ void main() {
       SyncState(
         status: SyncStatus.error,
         userEmail: 'ospkielno@gmail.com',
-        unitFolderId: 'folder',
+        unitId: 'folder',
         unitInviteCode: 'ABC234',
         founderEmail: 'ospkielno@gmail.com',
         errorMessage: 'Połączenie z internetem zostało przerwane.',
@@ -380,7 +364,7 @@ void main() {
     when(() => sync.state).thenReturn(SyncState(
       status: SyncStatus.error,
       userEmail: 'ospkielno@gmail.com',
-      unitFolderId: 'folder',
+      unitId: 'folder',
       errorMessage: 'Połączenie z internetem zostało przerwane.',
       errorTime: DateTime.now(),
     ));
@@ -402,13 +386,13 @@ void main() {
   });
 
   testWidgets(
-      'zakładanie jednostki, gdy na koncie już jest — propozycja dołączenia '
-      'zamiast kolejnego folderu', (tester) async {
+      'zakładanie jednostki, gdy konto już do jakiejś należy — propozycja '
+      'dołączenia zamiast kolejnej', (tester) async {
     await pumpSettings(
         tester, const SyncState(userEmail: 'ospkielno@gmail.com'));
     when(() => sync.ownUnits()).thenAnswer((_) async => [
           UnitCandidate(
-            folderId: 'stara',
+            unitId: 'stara',
             unitName: 'Ochotnicza Straż Pożarna w Kielnie',
             ownerEmail: 'ospkielno@gmail.com',
             inviteCode: 'URZEAZ',

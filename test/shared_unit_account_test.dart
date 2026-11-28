@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -6,12 +5,10 @@ import 'package:hive/hive.dart';
 import 'package:osp_app/models/models.dart';
 import 'package:osp_app/models/sync_state.dart';
 import 'package:osp_app/services/database_service.dart';
-import 'package:osp_app/services/google_drive_service.dart';
 import 'package:osp_app/services/sync_json.dart';
 import 'package:osp_app/services/sync_service.dart';
 
-import 'helpers/fake_drive.dart';
-import 'helpers/phone_db.dart';
+import 'helpers/server_phones.dart';
 
 /// Wspólne konto jednostki — np. tablet w samochodzie zalogowany kontem,
 /// na którym założono jednostkę.
@@ -30,7 +27,7 @@ void main() {
         SyncState(
           status: SyncStatus.idle,
           userEmail: me,
-          unitFolderId: 'folder',
+          unitId: 'folder',
           founderEmail: 'ospkielno@gmail.com',
           adminEmails: admins,
           sharedFounder: shared,
@@ -79,16 +76,15 @@ void main() {
     });
   });
 
-  group('SyncService — przełącznik na Dysku', () {
+  group('SyncService — wspólne konto założyciela na serwerze', () {
     late Directory root;
-    late FakeDrive drive;
-    final db = DatabaseService();
+    late ServerPhones phones;
 
     setUpAll(DatabaseService.registerAdapters);
 
     setUp(() async {
       root = await Directory.systemTemp.createTemp('osp_shared_account');
-      drive = FakeDrive();
+      phones = ServerPhones(root);
     });
 
     tearDown(() async {
@@ -96,31 +92,26 @@ void main() {
       if (root.existsSync()) root.deleteSync(recursive: true);
     });
 
-    Future<SyncService> phone(String name) async {
-      await openPhoneDb(root, name);
-      drive.account = '$name@gmail.com';
-      final sync = SyncService(db, FakeAuth('$name@gmail.com'), drive);
-      await sync.restoreState();
-      return sync;
-    }
+    Future<SyncService> phone(String name) => phones.phone(name);
 
-    Map<String, dynamic> adminsFile() => jsonDecode(drive.files.values
-        .firstWhere((f) => f.name == 'admins.json')
-        .content!) as Map<String, dynamic>;
+    late String code;
+
+    Future<Map<String, dynamic>> unitDoc() async =>
+        (await phones.doc('units/${await phones.unitIdOf(code)}'))!;
 
     /// Jednostka na koncie ospkielno, Dawid administratorem na swoim koncie.
-    Future<String> unitWithAdmin() async {
+    Future<void> unitWithAdmin() async {
       final a = await phone('ospkielno');
-      final code = await a.createUnit('OSP Kielno');
+      code = await phones.create(a, 'OSP Kielno');
+      await a.inviteMember('dawid@gmail.com');
       await a.grantAdmin('dawid@gmail.com');
       final d = await phone('dawid');
       expect(await d.joinUnit(code), isTrue);
-      return code;
     }
 
     test('bez administratora na własnym koncie nie da się włączyć', () async {
       final a = await phone('ospkielno');
-      await a.createUnit('OSP Kielno');
+      await phones.create(a, 'OSP Kielno');
 
       await expectLater(
           a.setSharedFounder(true), throwsA(isA<LastPersonalAdminException>()));
@@ -132,9 +123,10 @@ void main() {
         'restarcie bez zasięgu; kolega widzi to po synchronizacji', () async {
       await unitWithAdmin();
       var tablet = await phone('ospkielno');
+      await tablet.syncAll();
       await tablet.setSharedFounder(true);
 
-      expect(adminsFile()['sharedFounder'], isTrue);
+      expect((await unitDoc())['sharedOwner'], isTrue);
       expect(tablet.state.isCurrentUserAdmin, isFalse);
       expect(tablet.state.isSharedAccount, isTrue);
 
@@ -153,12 +145,14 @@ void main() {
     test('wyłączyć może administrator na własnym koncie — tablet wraca do '
         'uprawnień po synchronizacji', () async {
       await unitWithAdmin();
-      await (await phone('ospkielno')).setSharedFounder(true);
+      final t = await phone('ospkielno');
+      await t.syncAll();
+      await t.setSharedFounder(true);
 
       final d = await phone('dawid');
       await d.syncAll();
       await d.setSharedFounder(false);
-      expect(adminsFile().containsKey('sharedFounder'), isFalse);
+      expect((await unitDoc())['sharedOwner'], isFalse);
 
       final tablet = await phone('ospkielno');
       await tablet.syncAll();
@@ -176,29 +170,25 @@ void main() {
       await expectLater(d.revokeAdmin('dawid@gmail.com'),
           throwsA(isA<LastPersonalAdminException>()));
       await expectLater(
-        d.revokeMember(const UnitMemberAccess(
-          permissionId: 'p-dawid',
-          email: 'dawid@gmail.com',
-          isOwner: false,
-        )),
+        d.revokeMember(
+            const UnitMember(email: 'dawid@gmail.com', uid: 'dawid')),
         throwsA(isA<LastPersonalAdminException>()),
       );
       expect(d.state.adminEmails, ['dawid@gmail.com']);
 
       // Z drugim administratorem pierwszy może oddać uprawnienia.
+      await d.inviteMember('prezes@gmail.com');
       await d.grantAdmin('prezes@gmail.com');
       await d.revokeAdmin('dawid@gmail.com');
       expect(d.state.adminEmails, ['prezes@gmail.com']);
     });
 
-    test('nieznana wartość w pliku to zwykły założyciel z uprawnieniami',
+    test('nieznana wartość na serwerze to zwykły założyciel z uprawnieniami',
         () async {
       await unitWithAdmin();
-      final config = drive.files.values
-          .firstWhere((f) => f.name == 'admins.json')
-          .parent!;
-      drive.putRaw(config, 'admins.json',
-          '{"admins":["dawid@gmail.com"],"sharedFounder":"tak"}');
+      await phones.fs
+          .doc('units/${await phones.unitIdOf(code)}')
+          .update({'sharedOwner': 'tak'});
 
       final tablet = await phone('ospkielno');
       await tablet.syncAll();
@@ -207,7 +197,7 @@ void main() {
     });
   });
 
-  group('„Kto wpisuje?" w plikach na Dysku', () {
+  group('„Kto wpisuje?" w zapisie wpisu', () {
     Report report({String? enteredById}) => Report(
           id: 'r1',
           reportNumber: '0017/2026',
@@ -233,7 +223,7 @@ void main() {
           enteredById: enteredById,
         );
 
-    test('wyjazd i przekazanie z tabletu niosą ratownika przez Dysk', () {
+    test('wyjazd i przekazanie z tabletu niosą ratownika na serwer', () {
       final r = SyncJson.reportFromJson(
           SyncJson.reportToJson(report(enteredById: 'ff2')));
       final h = SyncJson.handoverFromJson(
@@ -243,7 +233,7 @@ void main() {
     });
 
     test('wpisy z prywatnych kont — plik bez nowego pola, jak dotąd', () {
-      // Inaczej każdy stary wpis wyglądałby na zmieniony i jechał na Dysk.
+      // Inaczej każdy stary wpis wyglądałby na zmieniony i jechał na serwer.
       expect(SyncJson.reportToJson(report()).containsKey('enteredById'),
           isFalse);
       expect(SyncJson.handoverToJson(handover()).containsKey('enteredById'),

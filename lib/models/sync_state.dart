@@ -1,4 +1,4 @@
-/// Represents the current state of Google Drive synchronization.
+/// Stan synchronizacji z serwerem jednostki.
 enum SyncStatus {
   disconnected, // Not signed in / no unit linked
   idle, // Signed in, no sync in progress
@@ -15,19 +15,18 @@ class SyncState {
   /// udanej synchronizacji, a bez godziny stary wyglądał jak świeży.
   final DateTime? errorTime;
 
-  /// Ile zmian ostatnia synchronizacja wysłała na Dysk i ile z niego
+  /// Ile zmian ostatnia synchronizacja wysłała na serwer i ile z niego
   /// pobrała — do potwierdzenia po ręcznym „Synchronizuj teraz".
   final int lastSyncSent;
   final int lastSyncReceived;
 
   final String? userEmail;
-  final String? unitFolderId;
+  final String? unitId;
   final String? unitInviteCode;
   /// Numery wyjazdów, dla których wykryto duplikaty po ostatnim sync.
   final List<String> duplicateReportNumbers;
 
-  /// Adres założyciela jednostki — właściciela folderu jednostki według
-  /// Dysku (fix/067), a gdy Dysk go nie poda, `createdBy` z `unit_config.json`.
+  /// Adres założyciela jednostki (`ownerEmail` jednostki na serwerze).
   /// Zawsze ma uprawnienia administratora i nie da się mu ich odebrać —
   /// inaczej jednostka mogłaby zostać bez żadnego administratora.
   final String? founderEmail;
@@ -49,8 +48,8 @@ class SyncState {
   /// „Kto wpisuje?".
   final List<String> sharedEmails;
 
-  /// Pliki z Dysku pominięte przy ostatniej synchronizacji, bo nie dało się
-  /// ich odczytać. Dawniej jeden taki plik przerywał całą synchronizację.
+  /// Wpisy z serwera pominięte przy ostatniej synchronizacji, bo nie dało
+  /// się ich odczytać. Dawniej jeden taki wpis przerywał całą synchronizację.
   final int skippedFiles;
 
   /// Wyjazdy, którym synchronizacja nadała nowy numer (powtórzony numer
@@ -58,10 +57,6 @@ class SyncState {
   /// synchronizacja bez zmian numerów ich nie kasuje.
   final List<String> renumberNotes;
 
-  /// Zmiany na Dysku, których ten telefon nie przyjął: zrobione z pominięciem
-  /// aplikacji przez kogoś, komu aplikacja by na nie nie pozwoliła (fix/067).
-  /// Najnowsze pierwsze — do pokazania administratorowi.
-  final List<RejectedChange> rejectedChanges;
 
   const SyncState({
     this.status = SyncStatus.disconnected,
@@ -71,7 +66,7 @@ class SyncState {
     this.lastSyncSent = 0,
     this.lastSyncReceived = 0,
     this.userEmail,
-    this.unitFolderId,
+    this.unitId,
     this.unitInviteCode,
     this.duplicateReportNumbers = const [],
     this.founderEmail,
@@ -80,7 +75,6 @@ class SyncState {
     this.sharedEmails = const [],
     this.skippedFiles = 0,
     this.renumberNotes = const [],
-    this.rejectedChanges = const [],
   });
 
   SyncState copyWith({
@@ -91,7 +85,7 @@ class SyncState {
     int? lastSyncSent,
     int? lastSyncReceived,
     String? userEmail,
-    String? unitFolderId,
+    String? unitId,
     String? unitInviteCode,
     List<String>? duplicateReportNumbers,
     String? founderEmail,
@@ -100,7 +94,6 @@ class SyncState {
     List<String>? sharedEmails,
     int? skippedFiles,
     List<String>? renumberNotes,
-    List<RejectedChange>? rejectedChanges,
     bool clearError = false,
   }) {
     return SyncState(
@@ -111,7 +104,7 @@ class SyncState {
       lastSyncSent: lastSyncSent ?? this.lastSyncSent,
       lastSyncReceived: lastSyncReceived ?? this.lastSyncReceived,
       userEmail: userEmail ?? this.userEmail,
-      unitFolderId: unitFolderId ?? this.unitFolderId,
+      unitId: unitId ?? this.unitId,
       unitInviteCode: unitInviteCode ?? this.unitInviteCode,
       duplicateReportNumbers:
           duplicateReportNumbers ?? this.duplicateReportNumbers,
@@ -121,7 +114,6 @@ class SyncState {
       sharedEmails: sharedEmails ?? this.sharedEmails,
       skippedFiles: skippedFiles ?? this.skippedFiles,
       renumberNotes: renumberNotes ?? this.renumberNotes,
-      rejectedChanges: rejectedChanges ?? this.rejectedChanges,
     );
   }
 
@@ -136,7 +128,7 @@ class SyncState {
   /// Praca bez jednostki (tryb offline) oznacza własne, lokalne dane —
   /// wtedy nie ma kogo pytać o zgodę i wszystko jest dozwolone.
   bool get isCurrentUserAdmin {
-    if (!isConnected || unitFolderId == null) return true;
+    if (!isConnected || unitId == null) return true;
     final me = userEmail;
     if (me == null || me.isEmpty) return false;
     return isAdmin(me);
@@ -166,7 +158,7 @@ class SyncState {
   bool get isSharedAccount {
     final me = userEmail;
     return isConnected &&
-        unitFolderId != null &&
+        unitId != null &&
         me != null &&
         isSharedDevice(me);
   }
@@ -196,62 +188,10 @@ class SyncState {
     return isAuthor(author);
   }
 
-  /// Czy [editor] mógłby w aplikacji zmienić albo usunąć dokument
-  /// utworzony przez [createdBy] — ta sama zasada co [canEditDocument],
-  /// tylko dla dowolnego konta. Synchronizacja sprawdza nią, kto zmienił
-  /// plik na Dysku (fix/067).
-  bool mayEditDocument(String editor, String? createdBy) {
-    if (isAdmin(editor)) return true;
-    final author = createdBy?.trim() ?? '';
-    return author.isEmpty || _normalize(author) == _normalize(editor);
-  }
-
   /// Czy [createdBy] to zalogowane konto.
   bool isAuthor(String createdBy) {
     final me = userEmail;
     if (me == null || me.trim().isEmpty) return false;
     return _normalize(createdBy) == _normalize(me);
-  }
-}
-
-/// Zmiana na Dysku jednostki, której telefon nie przyjął (fix/067).
-///
-/// Każdy członek jednostki może na Dysku zmienić każdy plik w folderze —
-/// uprawnienia z aplikacji (autor, administrator) Dysk nie zna. Telefon
-/// sprawdza więc, kto według Google zmienił plik ostatni, i zmianę od kogoś
-/// bez uprawnień pomija. Administrator dostaje o tym wiadomość, a jego
-/// telefon przywraca poprzednią wersję ([restored]).
-class RejectedChange {
-  /// Co zmieniono, np. „Lista administratorów", „Wyjazd 0007/2026".
-  final String what;
-
-  /// Kto według Dysku.
-  final String by;
-  final DateTime at;
-
-  /// Telefon administratora przywrócił poprzednią wersję na Dysku.
-  final bool restored;
-
-  const RejectedChange({
-    required this.what,
-    required this.by,
-    required this.at,
-    this.restored = false,
-  });
-
-  Map<String, dynamic> toJson() => {
-        'what': what,
-        'by': by,
-        'at': at.toIso8601String(),
-        if (restored) 'restored': true,
-      };
-
-  static RejectedChange? fromJson(Object? json) {
-    if (json is! Map) return null;
-    final what = json['what'], by = json['by'];
-    final at = DateTime.tryParse('${json['at']}');
-    if (what is! String || by is! String || at == null) return null;
-    return RejectedChange(
-        what: what, by: by, at: at, restored: json['restored'] == true);
   }
 }

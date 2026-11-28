@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:osp_app/models/models.dart';
@@ -9,29 +10,25 @@ import 'package:osp_app/services/database_service.dart';
 import 'package:osp_app/services/sync_json.dart';
 import 'package:osp_app/services/sync_service.dart';
 
-import 'helpers/fake_drive.dart';
-import 'helpers/phone_db.dart';
+import 'helpers/server_phones.dart';
 
-/// Synchronizacja „dwa telefony, jeden Dysk".
+/// Scalanie „dwa telefony, jeden serwer": usunięcia, stemple, starsze kopie.
 ///
-/// Każdy telefon ma własny katalog bazy Hive, a Dysk jest wspólny, w pamięci.
-/// Przełączenie telefonu zamyka bazę jednego i otwiera bazę drugiego — tak,
-/// jakby kolega uruchomił aplikację u siebie. Tego scenariusza nie dało się
-/// dotąd sprawdzić bez dwóch telefonów z różnymi kontami Google, a właśnie
-/// w nim siedziały błędy: usunięte wpisy wracały, a starsza kopia listy
-/// nadpisywała nowszą.
+/// Każdy telefon ma własną bazę Hive, serwer jest wspólny, w pamięci. Właśnie
+/// w tych scenariuszach siedziały dawniej błędy: usunięte wpisy wracały,
+/// a starsza kopia listy nadpisywała nowszą. Przeniesione z testów na Dysku
+/// (chore/082) — scalanie zostało, zmienił się tylko transport.
 void main() {
   late Directory root;
-  late FakeDrive drive;
+  late ServerPhones phones;
   final db = DatabaseService();
+  late String code;
 
-  setUpAll(() {
-    DatabaseService.registerAdapters();
-  });
+  setUpAll(DatabaseService.registerAdapters);
 
   setUp(() async {
     root = await Directory.systemTemp.createTemp('osp_two_phones');
-    drive = FakeDrive();
+    phones = ServerPhones(root);
   });
 
   tearDown(() async {
@@ -39,16 +36,10 @@ void main() {
     if (root.existsSync()) root.deleteSync(recursive: true);
   });
 
-  /// Przełącza „telefon" i zwraca jego usługę synchronizacji.
-  Future<SyncService> phone(String name) async {
-    await openPhoneDb(root, name);
-    // Zapisy na Dysku od konta tego telefonu — sprawdzanie autora zmian
-    // (fix/067) nie może odrzucać zwykłej pracy kilku telefonów.
-    drive.account = '$name@osp.pl';
-    final sync = SyncService(db, FakeAuth('$name@osp.pl'), drive);
-    await sync.restoreState();
-    return sync;
-  }
+  Future<SyncService> phone(String name) => phones.phone(name);
+
+  /// Telefon A zakłada jednostkę, telefon B do niej dołącza.
+  Future<void> twoPhones() async => code = await phones.unitWith('a', 'b');
 
   Report report(String id, {DateTime? updatedAt}) => Report(
         id: id,
@@ -74,49 +65,41 @@ void main() {
         updatedAt: at,
       );
 
-  /// Telefon A zakłada jednostkę, telefon B do niej dołącza.
-  Future<void> twoPhones({void Function()? seedA}) async {
-    final a = await phone('a');
-    seedA?.call();
-    final code = await a.createUnit('OSP Test');
-    final b = await phone('b');
-    expect(await b.joinUnit(code), isTrue);
-  }
+  Future<String> unitPath() async => 'units/${await phones.unitIdOf(code)}';
+
+  /// Zmiana zrobiona na serwerze z pominięciem telefonów — z czasem serwera,
+  /// żeby telefony ją pobrały.
+  Future<void> putOnServer(String path, Map<String, dynamic> value) =>
+      phones.fs.doc(path).set({...value, 'serverAt': FieldValue.serverTimestamp()});
 
   group('usunięcie bez danych osobowych (fix/062)', () {
     const slimKeys = {'id', 'updatedAt', 'deleted', 'deletedAt'};
 
-    FakeFile fileOf(String id) => drive.files.values.firstWhere((f) {
-          if (f.isFolder || f.content == null) return false;
-          final json = jsonDecode(f.content!);
-          return json is Map && json['id'] == id;
-        });
+    Future<Set<String>> keysOnServer(String id) async =>
+        ((await phones.doc('${await unitPath()}/reports/$id'))!['data'] as Map)
+            .keys
+            .cast<String>()
+            .toSet();
 
-    Set<String> keysOnDrive(String id) =>
-        (jsonDecode(fileOf(id).content!) as Map<String, dynamic>).keys.toSet();
-
-    bool driveMentions(String text) =>
-        drive.files.values.any((f) => f.content?.contains(text) ?? false);
-
-    test('usunięty raport i ratownik: na Dysku zostaje sam znacznik, bez '
+    test('usunięty raport i ratownik: na serwerze zostaje sam znacznik, bez '
         'nazwiska i adresu', () async {
       await twoPhones();
       final a = await phone('a');
       await db.addReport(report('r1'));
       await db.addFirefighter(ff('f1', 'Kowalski', at: DateTime(2026, 8, 1)));
       await a.syncAll();
-      expect(driveMentions('Kowalski'), isTrue);
-      expect(driveMentions('Kielno'), isTrue);
+      expect(phones.mentions('Kowalski'), isTrue);
+      expect(phones.mentions('Kielno'), isTrue);
 
       await db.deleteReport('r1');
       await db.deleteFirefighter('f1');
       await a.syncAll();
 
-      expect(keysOnDrive('r1'), slimKeys);
-      expect(driveMentions('Kowalski'), isFalse,
-          reason: 'nazwisko zniknęło z listy ratowników na Dysku');
-      expect(driveMentions('Kielno'), isFalse,
-          reason: 'adres zniknął z pliku wyjazdu');
+      expect(await keysOnServer('r1'), slimKeys);
+      expect(phones.mentions('Kowalski'), isFalse,
+          reason: 'nazwisko zniknęło z listy ratowników na serwerze');
+      expect(phones.mentions('Kielno'), isFalse,
+          reason: 'adres zniknął z wyjazdu');
 
       final b = await phone('b');
       await b.syncAll();
@@ -125,14 +108,13 @@ void main() {
     });
 
     test('stary pełny znacznik w telefonie: po aktualizacji odchudzony '
-        'i wysłany na Dysk w miejsce pełnego', () async {
+        'i wysłany na serwer', () async {
       await twoPhones();
       var a = await phone('a');
       await db.addReport(report('r1'));
       await a.syncAll();
 
-      // Tak usuwała wersja sprzed fix/062: pełna treść z dopiskiem `deleted`,
-      // w telefonie i na Dysku.
+      // Tak usuwała wersja sprzed fix/062: pełna treść z dopiskiem `deleted`.
       final deletedAt = DateTime(2026, 9, 1).toIso8601String();
       final full = {
         ...SyncJson.reportToJson(db.getReport('r1')!),
@@ -143,21 +125,18 @@ void main() {
       await db.reportsBox.delete('r1');
       await db.settingsBox.put(
           'syncTombstones', {'${SyncKind.report}:r1': jsonEncode(full)});
-      fileOf('r1')
-        ..content = jsonEncode(full)
-        ..modified = DateTime.utc(2030);
 
       a = await phone('a'); // start nowej wersji
       expect(db.tombstoneOf(SyncKind.report, 'r1')!.keys.toSet(), slimKeys);
       await a.syncAll();
 
-      expect(keysOnDrive('r1'), slimKeys);
-      expect(driveMentions('Kielno'), isFalse);
+      expect(await keysOnServer('r1'), slimKeys);
+      expect(phones.mentions('Kielno'), isFalse);
       expect(db.getReport('r1'), isNull);
     });
 
-    test('pełny znacznik z Dysku (ze starszej wersji): w telefonie bez '
-        'treści, a na Dysku zastąpiony odchudzonym', () async {
+    test('pełny znacznik z serwera (ze starszej wersji): w telefonie bez '
+        'treści, a na serwerze zastąpiony odchudzonym', () async {
       await twoPhones();
       final a = await phone('a');
       await db.addReport(report('r1'));
@@ -166,27 +145,30 @@ void main() {
       await b.syncAll();
       expect(db.getReport('r1'), isNotNull);
 
-      final file = fileOf('r1');
+      final path = '${await unitPath()}/reports/r1';
+      final stored = (await phones.doc(path))!;
       final deletedAt = DateTime(2026, 9, 1).toIso8601String();
-      file
-        ..content = jsonEncode({
-          ...jsonDecode(file.content!) as Map<String, dynamic>,
+      await putOnServer(path, {
+        ...stored,
+        'deleted': true,
+        'data': {
+          ...(stored['data'] as Map).cast<String, dynamic>(),
           'updatedAt': deletedAt,
           'deleted': true,
           'deletedAt': deletedAt,
-        })
-        ..modified = DateTime.utc(2030);
+        },
+      });
 
       await b.syncAll();
 
       expect(db.getReport('r1'), isNull);
       expect(db.tombstoneOf(SyncKind.report, 'r1')!.keys.toSet(), slimKeys);
-      expect(keysOnDrive('r1'), slimKeys);
-      expect(driveMentions('Kielno'), isFalse);
+      expect(await keysOnServer('r1'), slimKeys);
+      expect(phones.mentions('Kielno'), isFalse);
     });
   });
 
-  test('usuniety raport nie wraca z Dysku', () async {
+  test('usunięty raport nie wraca z serwera', () async {
     await twoPhones();
     var a = await phone('a');
     await db.addReport(report('r1'));
@@ -209,7 +191,7 @@ void main() {
     expect(db.getReport('r1'), isNull, reason: 'A nie odesłało go do B');
   });
 
-  test('edycja po usunieciu na innym telefonie przywraca rekord', () async {
+  test('edycja po usunięciu na innym telefonie przywraca rekord', () async {
     await twoPhones();
     var a = await phone('a');
     await db.addReport(report('r1'));
@@ -231,8 +213,8 @@ void main() {
     expect(db.getReport('r1'), isNotNull);
   });
 
-  test('usuniety ratownik nie wraca z listy kolegi', () async {
-    await twoPhones(seedA: () {});
+  test('usunięty ratownik nie wraca z listy kolegi', () async {
+    await twoPhones();
     var a = await phone('a');
     await db.addFirefighter(ff('f1', 'Kowalski', at: DateTime(2026, 8, 1)));
     await a.syncAll();
@@ -279,7 +261,7 @@ void main() {
     a = await phone('a');
     await a.syncAll();
     expect(db.getFirefighter('f1')!.lastName, 'Kowalski',
-        reason: 'B nie nadpisał Dysku starszą kopią');
+        reason: 'B nie nadpisał serwera starszą kopią');
   });
 
   test('stempel ratownika i pojazdu przetrwa ponowne uruchomienie', () async {
@@ -295,49 +277,27 @@ void main() {
     expect(db.getVehicle('v1')!.updatedAt, DateTime(2026, 8, 21));
   });
 
-  test('synchronizacja bez zmian niczego nie wysyla ani nie czyta', () async {
-    await twoPhones();
-    final a = await phone('a');
-    await db.addReport(report('r1'));
-    await db.addFirefighter(ff('f1', 'Kowalski', at: DateTime(2026, 8, 1)));
-    await a.syncAll();
-    await a.syncAll();
-
-    drive.resetCounters();
-    await a.syncAll();
-    expect(drive.writes, 0, reason: 'nic się nie zmieniło');
-
-    // Czytane są tylko małe pliki konfiguracji (dane jednostki, ratownicy,
-    // pojazdy, sprzęt, słownik) — dokumenty, których nikt nie zmienił, już
-    // nie.
-    await db.addReport(report('r2')..reportNumber = '0002/2026');
-    await db.addReport(report('r3')..reportNumber = '0003/2026');
-    await a.syncAll();
-    drive.resetCounters();
-    await a.syncAll();
-    expect(drive.reads, 5);
-  });
-
-  test('zmiana jednego raportu wysyla tylko ten raport', () async {
+  test('zmiana jednego raportu wysyła tylko ten raport', () async {
     await twoPhones();
     final a = await phone('a');
     await db.addReport(report('r1'));
     await db.addReport(report('r2')..reportNumber = '0002/2026');
     await a.syncAll();
 
-    drive.resetCounters();
     await db.updateReport(
-        (report('r2', updatedAt: DateTime(2026, 8, 11)))..reportNumber = '0002/2026');
+        report('r2', updatedAt: DateTime(2026, 8, 11))..reportNumber = '0002/2026');
     await a.syncAll();
-    expect(drive.writes, 1);
+    expect(a.state.lastSyncSent, 1);
   });
 
-  test('uszkodzony plik nie zatrzymuje synchronizacji', () async {
+  test('uszkodzony dokument na serwerze nie zatrzymuje synchronizacji',
+      () async {
     await twoPhones();
-    var a = await phone('a');
+    final a = await phone('a');
     await db.addReport(report('r1'));
     await a.syncAll();
-    drive.putRaw(drive.folderIdByName('handovers')!, 'zepsuty.json', '{nie json');
+    await putOnServer(
+        '${await unitPath()}/handovers/zepsuty', {'data': 'to nie mapa'});
 
     final b = await phone('b');
     await b.syncAll();
@@ -346,37 +306,50 @@ void main() {
     expect(db.getReport('r1'), isNotNull, reason: 'reszta dotarła');
   });
 
-  test('zmiana danych jednostki nie jest nadpisana przed wysłaniem', () async {
+  test('złe typy w danych jednostki nie zatrzymują synchronizacji', () async {
     await twoPhones();
-    final b = await phone('b');
-    await db.saveConfig(db.getConfig().copyWith(unitStreet: 'Oliwska 12'));
-    await db.markUnitConfigEdited();
-    await b.syncAll();
-    expect(db.getConfig().unitStreet, 'Oliwska 12');
+    await phones.fs.doc(await unitPath()).update({
+      'name': 42,
+      'locality': ['Kielno'],
+      'ownerEmail': 7,
+    });
 
-    await phone('a').then((a) => a.syncAll());
-    expect(db.getConfig().unitStreet, 'Oliwska 12', reason: 'dotarło do A');
+    final b = await phone('b');
+    await b.syncAll();
+    expect(b.state.status, SyncStatus.idle);
+    expect(db.getConfig().fullName, 'OSP Test', reason: 'zła nazwa pominięta');
+    expect(b.state.founderEmail, 'a@gmail.com',
+        reason: 'założyciel znany telefonowi zostaje');
   });
 
-  test('nowszy format danych blokuje synchronizacje starej wersji', () async {
+  test('zmiana danych jednostki nie jest nadpisana przed wysłaniem', () async {
     await twoPhones();
-    final config = drive.files.values
-        .firstWhere((f) => f.name == 'unit_config.json');
-    config.content = config.content!.replaceFirst(
-        '"syncFormat":${SyncService.syncFormat}', '"syncFormat":99');
-    expect(config.content, contains('"syncFormat":99'));
+    final a = await phone('a');
+    await db.saveConfig(db.getConfig().copyWith(unitStreet: 'Oliwska 12'));
+    await db.markUnitConfigEdited();
+    await a.syncAll();
+    expect(db.getConfig().unitStreet, 'Oliwska 12');
+
+    final b = await phone('b');
+    await b.syncAll();
+    expect(db.getConfig().unitStreet, 'Oliwska 12', reason: 'dotarło do B');
+  });
+
+  test('nowszy format danych blokuje synchronizację starej wersji', () async {
+    await twoPhones();
+    await phones.fs.doc(await unitPath()).update({'syncFormat': 99});
 
     final a = await phone('a');
     await db.addReport(report('r1'));
-    drive.resetCounters();
     await a.syncAll();
 
     expect(a.state.status, SyncStatus.error);
     expect(a.state.errorMessage, contains('Zaktualizuj'));
-    expect(drive.writes, 0, reason: 'stara wersja niczego nie nadpisuje');
+    expect(await phones.docs(code, 'reports'), isEmpty,
+        reason: 'stara wersja niczego nie nadpisuje');
   });
 
-  test('przejazd usuniety recznie nie wraca z uzupelniania ewidencji',
+  test('przejazd usunięty ręcznie nie wraca z uzupełniania ewidencji',
       () async {
     await twoPhones();
     var a = await phone('a');
@@ -385,7 +358,7 @@ void main() {
     await db.backfillTripsFromReports(stationAddress: 'Kielno');
     await a.syncAll();
 
-    var b = await phone('b');
+    final b = await phone('b');
     await b.syncAll();
     final tripId = db.getAllTrips().single.id;
     await db.deleteTrip(tripId);
@@ -397,22 +370,4 @@ void main() {
     await db.backfillTripsFromReports(stationAddress: 'Kielno');
     expect(db.getTrip(tripId), isNull, reason: 'znacznik blokuje odtworzenie');
   });
-
-  test('ten sam rekord w dwoch plikach: bierzemy nowszy', () async {
-    await twoPhones();
-    final a = await phone('a');
-    await db.addReport(report('r1', updatedAt: DateTime(2026, 8, 10)));
-    await a.syncAll();
-
-    // Stara wersja aplikacji zostawiła obok drugi plik z nowszą treścią.
-    final newer = SyncJson.reportToJson(
-        report('r1', updatedAt: DateTime(2026, 8, 15))..addressStreet = 'Nowa 1');
-    final yearFolder = drive.folderIdByName('2026')!;
-    drive.putRaw(yearFolder, 'duplikat.json', jsonEncode(newer));
-
-    final b = await phone('b');
-    await b.syncAll();
-    expect(db.getReport('r1')!.addressStreet, 'Nowa 1');
-  });
 }
-

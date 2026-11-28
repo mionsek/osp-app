@@ -1,70 +1,29 @@
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:osp_app/models/models.dart';
 import 'package:osp_app/models/sync_state.dart';
 import 'package:osp_app/services/database_service.dart';
-import 'package:osp_app/services/google_drive_service.dart';
-import 'package:osp_app/services/server_auth_service.dart';
 import 'package:osp_app/services/sync_service.dart';
 
-import 'helpers/fake_drive.dart';
 import 'helpers/phone_db.dart';
+import 'helpers/server_phones.dart';
 
-/// Konto na serwerze w testach — bez Firebase i bez okna wyboru konta.
-class FakeServerAuth implements ServerAuthService {
-  @override
-  String? userEmail;
-
-  @override
-  String? uid;
-
-  /// Konto, które „wybierze” użytkownik przy zmianie konta.
-  ({String uid, String email})? nextAccount;
-
-  FakeServerAuth(this.uid, this.userEmail, [this.displayName]);
-
-  @override
-  bool get isSignedIn => uid != null;
-
-  /// Imię i nazwisko z konta Google.
-  @override
-  String? displayName;
-
-  @override
-  Future<bool> signIn() async {
-    uid = nextAccount?.uid;
-    userEmail = nextAccount?.email;
-    return isSignedIn;
-  }
-
-  @override
-  Future<bool> switchAccount() => signIn();
-
-  @override
-  Future<void> refreshAuth({bool force = false}) async {}
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-/// Synchronizacja z serwerem jednostek (feature/081): te same scenariusze
-/// co „dwa telefony, jeden Dysk”, tylko na bazie w pamięci. Zasady
-/// bezpieczeństwa serwera sprawdzają osobne testy na emulatorze
-/// (`firebase/test`).
+/// Synchronizacja z serwerem jednostek (feature/081): zakładanie,
+/// zaproszenia, dołączanie, role. Zasady bezpieczeństwa serwera sprawdzają
+/// osobne testy na emulatorze (`firebase/test`).
 void main() {
   late Directory root;
-  late FakeFirebaseFirestore fs;
+  late ServerPhones phones;
   final db = DatabaseService();
 
   setUpAll(DatabaseService.registerAdapters);
 
   setUp(() async {
     root = await Directory.systemTemp.createTemp('osp_server');
-    fs = FakeFirebaseFirestore();
+    phones = ServerPhones(root);
     SyncService.appVersion = '2.0.0';
   });
 
@@ -73,17 +32,9 @@ void main() {
     if (root.existsSync()) root.deleteSync(recursive: true);
   });
 
-  /// Telefon [name] z kontem `<name>@gmail.com` (albo [account]).
-  Future<ServerSyncService> phone(String name,
-      {String? account, String? uid, String? displayName}) async {
-    await openPhoneDb(root, name);
-    final email = account ?? '$name@gmail.com';
-    final auth =
-        FakeServerAuth(uid ?? email.split('@').first, email, displayName);
-    final sync = ServerSyncService(db, auth, FakeDrive(), firestore: fs);
-    await sync.restoreState();
-    return sync;
-  }
+  Future<SyncService> phone(String name,
+          {String? account, String? uid, String? displayName}) =>
+      phones.phone(name, account: account, uid: uid, displayName: displayName);
 
   Report report(String id, {String createdBy = '', DateTime? at}) => Report(
         id: id,
@@ -108,18 +59,11 @@ void main() {
         updatedAt: at ?? DateTime(2026, 11, 1),
       );
 
-  /// Jak ekran wprowadzenia i Ustawienia: nazwa trafia najpierw do
-  /// ustawień telefonu, potem zakłada się jednostkę.
-  Future<String> create(ServerSyncService sync) async {
-    await db.saveConfig(db.getConfig().copyWith(unitFullName: 'OSP Test'));
-    return sync.createUnit('OSP Test');
-  }
+  Future<String> create(SyncService sync) => phones.create(sync);
 
-  Future<Map<String, dynamic>?> serverDoc(String path) async =>
-      (await fs.doc(path).get()).data();
+  Future<Map<String, dynamic>?> serverDoc(String path) => phones.doc(path);
 
-  Future<String> unitIdOf(String code) async =>
-      (await serverDoc('inviteCodes/$code'))!['unitId'] as String;
+  Future<String> unitIdOf(String code) => phones.unitIdOf(code);
 
   /// a zakłada jednostkę z jednym wyjazdem i ratownikiem, zaprasza b,
   /// b dołącza.
@@ -161,16 +105,15 @@ void main() {
       expect(r1['serverAt'], isA<Timestamp>());
       expect(await serverDoc('units/$unitId/firefighters/f1'), isNotNull);
 
-      expect(a.state.unitFolderId, unitId);
+      expect(a.state.unitId, unitId);
       expect(a.state.isCurrentUserAdmin, isTrue);
-      expect(a.onServer, isTrue);
     });
 
     test('po ponownym uruchomieniu telefon pamięta jednostkę', () async {
       final a = await phone('a');
       final code = await create(a);
       final again = await phone('a');
-      expect(again.state.unitFolderId, await unitIdOf(code));
+      expect(again.state.unitId, await unitIdOf(code));
       expect(again.state.unitInviteCode, code);
       expect(again.state.status, SyncStatus.idle);
     });
@@ -198,7 +141,6 @@ void main() {
       final unit = (lookup as UnitFound).unit;
       expect(unit.unitName, 'OSP Test');
       expect(unit.ownerEmail, 'a@gmail.com');
-      expect(unit.onServer, isTrue);
     });
 
     test('dołączenie: rekord członka, zaproszenie zużyte, dane jednostki '
@@ -344,10 +286,11 @@ void main() {
       expect(members.firstWhere((m) => m.email == 'a@gmail.com').isOwner,
           isTrue);
 
-      final notes = await a.memberNotes();
-      expect(notes['b@gmail.com']?.appVersion, '2.0.0');
-      expect(notes['b@gmail.com']?.joinedAt, isNotNull);
-      expect(notes.containsKey('c@gmail.com'), isFalse);
+      // „Kto dołączył" wprost z rekordu członka.
+      final b = members.firstWhere((m) => m.email == 'b@gmail.com');
+      expect(b.appVersion, '2.0.0');
+      expect(b.joinedAt, isNotNull);
+      expect(b.uid, 'b');
     });
 
     test('nadanie administratora: rola na serwerze i uprawnienia u członka',
@@ -506,15 +449,14 @@ void main() {
       'zostają i idą do nowej jednostki na serwerze (Dawid, 27.11.2026)',
       () async {
     await openPhoneDb(root, 'stary');
-    await db.configBox.put(
-        SyncService.driveConfigKey, UnitConfig(namePrefix: 'folder-na-dysku'));
+    await db.configBox.put('driveSync', UnitConfig(namePrefix: 'folder-na-dysku'));
     await db.cacheAdminEmails(const ['kolega@gmail.com']);
     await db.addReport(report('r-stary', createdBy: 'kolega@gmail.com'));
 
     final a = await phone('stary', account: 'a@gmail.com', uid: 'a');
     expect(a.state.status, SyncStatus.disconnected);
-    expect(a.state.unitFolderId, isNull);
-    expect(db.configBox.get(SyncService.driveConfigKey), isNull);
+    expect(a.state.unitId, isNull);
+    expect(db.configBox.get('driveSync'), isNull);
     expect(db.cachedAdminEmails, isEmpty);
     expect(db.getReport('r-stary'), isNotNull);
 
@@ -525,6 +467,23 @@ void main() {
         reason: 'administrator przenosi cudze wpisy z autorem');
   });
 
+  test('jednostka zapisana przez wersję testową 2.0.0 (w polach '
+      'konfiguracji) wraca po aktualizacji', () async {
+    final a = await phone('a');
+    final code = await create(a);
+    final unitId = await unitIdOf(code);
+    await db.settingsBox.delete('serverUnit');
+    await db.configBox.put(
+        'serverSync', UnitConfig(namePrefix: unitId, locality: code));
+
+    final again = await phone('a');
+    expect(again.state.unitId, unitId);
+    expect(again.state.unitInviteCode, code);
+    expect(db.configBox.get('serverSync'), isNull);
+    await again.syncAll();
+    expect(again.state.status, SyncStatus.idle);
+  });
+
   test('jednostki konta — do propozycji „dołącz zamiast zakładać”', () async {
     final a = await phone('a');
     final code = await create(a);
@@ -533,6 +492,8 @@ void main() {
     expect(units, hasLength(1));
     expect(units.single.inviteCode, code);
     expect(units.single.unitName, 'OSP Test');
+    expect(await (await phone('nowy')).ownUnits(), isEmpty,
+        reason: 'nowe konto nie ma jednostek');
   });
 
   test('kolekcje, których dotyka aplikacja, zgadzają się z zasadami serwera',
@@ -545,7 +506,5 @@ void main() {
     ]) {
       expect(rules, contains(c), reason: c);
     }
-    expect(UnitMemberAccess(permissionId: 'x', email: 'e', isOwner: false)
-        .invited, isFalse);
   });
 }

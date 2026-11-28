@@ -283,7 +283,7 @@ class _GoogleSyncSectionState extends ConsumerState<_GoogleSyncSection> {
       });
 
   Future<void> _switchAccount(SyncState s) async {
-    if (s.unitFolderId != null) {
+    if (s.unitId != null) {
       final confirm = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -323,7 +323,7 @@ class _GoogleSyncSectionState extends ConsumerState<_GoogleSyncSection> {
 
   Future<void> _signOut(SyncState s) async {
     final code = s.unitInviteCode;
-    final hasUnit = s.unitFolderId != null;
+    final hasUnit = s.unitId != null;
     final choice = await showDialog<_SignOutChoice>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -472,7 +472,7 @@ class _GoogleSyncSectionState extends ConsumerState<_GoogleSyncSection> {
     }
     final email = syncState.userEmail ?? '';
     final signedIn = email.isNotEmpty;
-    final hasUnit = syncState.unitFolderId != null;
+    final hasUnit = syncState.unitId != null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

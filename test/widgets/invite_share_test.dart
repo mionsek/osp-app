@@ -30,7 +30,7 @@ void main() {
   const admin = SyncState(
     status: SyncStatus.idle,
     userEmail: 'dawid@gmail.com',
-    unitFolderId: 'folder',
+    unitId: 'folder',
     unitInviteCode: 'ABC234',
     founderEmail: 'dawid@gmail.com',
   );

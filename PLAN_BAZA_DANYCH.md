@@ -111,9 +111,10 @@ Reguły (sprawdzane przez serwer, z testami na emulatorze Firebase):
 ## Aplikacja — co zostaje, co się zmienia
 
 - **Zostaje:** lokalna baza Hive, wszystkie ekrany, druk, karty, scalanie po
-  stemplach i znaczniki usunięcia. Wymieniamy tylko „transport”: obok
-  dzisiejszego `SyncService` (Dysk) powstaje `ServerSyncService` (baza)
-  z tym samym zadaniem — wysłać zmiany, pobrać zmiany.
+  stemplach i znaczniki usunięcia. Wymieniamy tylko „transport”: najpierw
+  obok `SyncService` (Dysk) powstał `ServerSyncService` (baza), a po
+  rezygnacji z Dysku (chore/082, 28.11.2026) zostało jedno `SyncService` —
+  scalanie i serwer.
 - **Logowanie:** Firebase Auth — Google tylko z e-mailem i imieniem, do tego
   logowanie linkiem na e-mail (dla osób bez Gmaila). Tablet w wozie loguje się
   kontem jednostki, telefon swoim — bez przełączania (27.11.2026); wspólnym

@@ -33,7 +33,7 @@ void main() {
   const wojtekInUnit = SyncState(
     status: SyncStatus.idle,
     userEmail: 'wojtek@gmail.com',
-    unitFolderId: 'folder',
+    unitId: 'folder',
     unitInviteCode: 'URZEAZ',
     founderEmail: 'ospkielno@gmail.com',
   );

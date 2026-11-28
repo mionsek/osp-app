@@ -26,11 +26,8 @@ dependencies:
   # Utils
   uuid: ^4.5.1
   intl: ^0.20.2
-  # Google integration
+  # Logowanie kontem Google (tylko e-mail i imię) i serwer jednostek
   google_sign_in: ^6.2.2
-  googleapis: ^13.2.0
-  googleapis_auth: ^1.6.0
-  http: ^1.2.2
   connectivity_plus: ^6.1.0
   url_launcher: ^6.3.1
   package_info_plus: ^10.2.1

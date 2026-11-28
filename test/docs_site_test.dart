@@ -49,19 +49,14 @@ void main() {
     }
   });
 
-  test('polityka zgadza się z kodem: folder, zakres Dysku, kopia zapasowa', () {
-    final drive = read('lib/services/google_drive_service.dart');
-    final auth = read('lib/services/google_auth_service.dart');
+  // Polityka w docs/ opisuje jeszcze wersję 1.x na Dysku (ta jest w Sklepie
+  // Play). Kod od 2.0 nie ma już Dysku, więc sprawdzenia folderu i zakresu
+  // Dysku zniknęły razem z nim — politykę trzeba przepisać przed wydaniem
+  // 2.0 (BACKLOG, feature/081).
+  test('polityka zgadza się z kodem: kopia zapasowa Androida wyłączona', () {
     final manifest = read('android/app/src/main/AndroidManifest.xml');
-
-    expect(drive, contains("'OSP_App_\$unitName'"));
-    expect(auth, contains('drive.DriveApi.driveScope'),
-        reason: 'polityka tłumaczy pełny dostęp do Dysku');
     expect(manifest, contains('android:allowBackup="false"'),
         reason: 'polityka obiecuje brak kopii zapasowej Androida');
-    for (final key in ['pl', 'en']) {
-      expect(pages[key], contains('OSP_App_'), reason: key);
-    }
   });
 
   test('kontakt: adres aplikacji, nie prywatny adres autora (chore/063)', () {
@@ -135,13 +130,11 @@ void main() {
 
   test('polityka opisuje notatkę członka tak, jak zapisuje ją kod '
       '(feature/080)', () {
-    final note = read('lib/models/member_note.dart');
     final sync = read('lib/services/sync_service.dart');
-    // Kod zapisuje dokładnie te pola — polityka wymienia te same.
+    // Kod zapisuje w rekordzie członka te pola — polityka wymienia te same.
     for (final field in ["'email'", "'joinedAt'", "'lastSyncAt'", "'appVersion'"]) {
-      expect(note, contains(field), reason: field);
+      expect(sync, contains(field), reason: field);
     }
-    expect(sync, contains("_membersFolder = 'members'"));
     expect(pages['pl'], contains('Członkowie jednostki</strong>'));
     expect(pages['pl'], contains('wersję aplikacji'));
     expect(pages['pl'], isNot(contains('wyłącznie to, co wpisze użytkownik')),

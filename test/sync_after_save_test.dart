@@ -8,8 +8,7 @@ import 'package:osp_app/providers/providers.dart';
 import 'package:osp_app/services/database_service.dart';
 import 'package:osp_app/services/sync_service.dart';
 
-import 'helpers/fake_drive.dart';
-import 'helpers/phone_db.dart';
+import 'helpers/server_phones.dart';
 
 /// Wysyłka zaraz po zapisie, stan wysłania wyjazdu i numer przy dwóch
 /// telefonach.
@@ -17,21 +16,18 @@ import 'helpers/phone_db.dart';
 /// Test 1.7.4 na dwóch telefonach: wyjazd kolegi czekał na jego telefonie —
 /// zapis niczego nie wysyłał, a synchronizacja co 5 minut idzie tylko przy
 /// aplikacji otwartej na ekranie. W tych samych minutach drugi telefon nadał
-/// ten sam numer 0002/2026, bo wyjazdu kolegi nie było jeszcze na Dysku.
-/// A ekran wyjazdu kolegi pisał „Zapisano na Google Drive".
+/// ten sam numer 0002/2026, bo wyjazdu kolegi nie było jeszcze w jednostce.
 void main() {
   late Directory root;
-  late FakeDrive drive;
+  late ServerPhones phones;
   final db = DatabaseService();
   final year = DateTime.now().year;
 
-  setUpAll(() {
-    DatabaseService.registerAdapters();
-  });
+  setUpAll(DatabaseService.registerAdapters);
 
   setUp(() async {
     root = await Directory.systemTemp.createTemp('osp_sync_after_save');
-    drive = FakeDrive();
+    phones = ServerPhones(root);
   });
 
   tearDown(() async {
@@ -39,23 +35,8 @@ void main() {
     if (root.existsSync()) root.deleteSync(recursive: true);
   });
 
-  /// Przełącza „telefon" (własna baza, wspólny Dysk) zalogowany kontem
-  /// `<name>@gmail.com`.
-  Future<SyncService> phone(
-    String name, {
-    Duration delay = Duration.zero,
-  }) async {
-    await openPhoneDb(root, name);
-    drive.account = '$name@gmail.com';
-    final sync = SyncService(
-      db,
-      FakeAuth('$name@gmail.com'),
-      drive,
-      localChangeDelay: delay,
-    );
-    await sync.restoreState();
-    return sync;
-  }
+  Future<SyncService> phone(String name, {Duration delay = Duration.zero}) =>
+      phones.phone(name, localChangeDelay: delay);
 
   Report report(String id, String number) => Report(
         id: id,
@@ -71,8 +52,10 @@ void main() {
         updatedAt: DateTime(year, 8, 10),
       );
 
-  bool onDrive(String id) =>
-      drive.jsonIn('$year').any((j) => j['id'] == id);
+  /// Wyjazd [id] w obecnej wersji jest na serwerze.
+  bool sent(SyncService sync, String id) =>
+      db.getReport(id) != null &&
+      !sync.reportsAwaitingUpload(db.getAllReports()).contains(id);
 
   /// Czeka, aż wysyłka w tle dojdzie do skutku.
   Future<void> until(bool Function() done) async {
@@ -82,21 +65,19 @@ void main() {
     expect(done(), isTrue, reason: 'wysyłka w tle nie doszła do skutku');
   }
 
-  /// A zakłada jednostkę, B (wojtek) do niej dołącza i zostaje na ekranie.
+  /// A (ospkielno) zakłada jednostkę, B (wojtek) do niej dołącza i zostaje
+  /// na ekranie.
   Future<SyncService> colleagueInUnit({Duration delay = Duration.zero}) async {
-    final a = await phone('ospkielno');
-    final code = await a.createUnit('OSP Kielno');
-    final b = await phone('wojtek', delay: delay);
-    expect(await b.joinUnit(code), isTrue);
-    return b;
+    await phones.unitWith('ospkielno', 'wojtek', unitName: 'OSP Kielno');
+    return phone('wojtek', delay: delay);
   }
 
   /// Liczba przebiegów synchronizacji, które ruszyły na danym telefonie.
   int Function() countPasses(SyncService sync) {
     var passes = 0;
     var syncing = sync.state.isSyncing;
-    // Stan zmienia się też w trakcie przebiegu (np. lista administratorów),
-    // więc liczymy tylko przejścia do „synchronizuję".
+    // Stan zmienia się też w trakcie przebiegu (np. role), więc liczymy tylko
+    // przejścia do „synchronizuję".
     sync.onStateChanged = (s) {
       if (s.isSyncing && !syncing) passes++;
       syncing = s.isSyncing;
@@ -105,13 +86,13 @@ void main() {
   }
 
   group('wysyłka zaraz po zapisie', () {
-    test('wyjazd kolegi trafia na Dysk bez „Synchronizuj teraz"', () async {
+    test('wyjazd kolegi trafia na serwer bez „Synchronizuj teraz"', () async {
       final b = await colleagueInUnit();
       final reports = ReportsNotifier(db, onChanged: b.notifyLocalChange);
 
       await reports.add(report('r-b', '0002/$year'));
 
-      await until(() => onDrive('r-b') && b.state.status == SyncStatus.idle);
+      await until(() => sent(b, 'r-b') && b.state.status == SyncStatus.idle);
     });
 
     test('wyjazd i jego przejazdy w ewidencji idą jednym przebiegiem',
@@ -124,7 +105,7 @@ void main() {
       b.notifyLocalChange();
       b.notifyLocalChange();
 
-      await until(() => onDrive('r-b') && b.state.status == SyncStatus.idle);
+      await until(() => sent(b, 'r-b') && b.state.status == SyncStatus.idle);
       expect(passes(), 1);
     });
 
@@ -140,7 +121,7 @@ void main() {
       await first;
 
       await until(() => passes() == 2 && b.state.status == SyncStatus.idle);
-      expect(onDrive('r-b'), isTrue);
+      expect(sent(b, 'r-b'), isTrue);
     });
 
     test('bez jednostki zapis niczego nie uruchamia', () async {
@@ -157,9 +138,9 @@ void main() {
 
   group('stan wysłania wyjazdu', () {
     test('czeka, aż wyjdzie; po edycji czeka znowu; pobrany od kolegi '
-        'jest na Dysku', () async {
+        'jest na serwerze', () async {
       final a = await phone('ospkielno');
-      final code = await a.createUnit('OSP Kielno');
+      final code = await phones.create(a, 'OSP Kielno');
       await db.addReport(report('r1', '0001/$year'));
       expect(a.reportsAwaitingUpload(db.getAllReports()), {'r1'});
 
@@ -171,8 +152,9 @@ void main() {
         ..updatedAt = DateTime.now();
       await db.updateReport(edited);
       expect(a.reportsAwaitingUpload(db.getAllReports()), {'r1'},
-          reason: 'na Dysku jest wersja sprzed edycji');
+          reason: 'na serwerze jest wersja sprzed edycji');
       await a.syncAll();
+      await a.inviteMember('wojtek@gmail.com');
 
       final b = await phone('wojtek');
       expect(await b.joinUnit(code), isTrue);
@@ -184,19 +166,15 @@ void main() {
   group('numer wyjazdu przy dwóch telefonach', () {
     test('sprawdzenie przed zapisem widzi numer nadany w międzyczasie '
         'na innym telefonie', () async {
-      final a = await phone('ospkielno');
-      final code = await a.createUnit('OSP Kielno');
-      var b = await phone('wojtek');
-      expect(await b.joinUnit(code), isTrue);
+      var b = await colleagueInUnit();
       // Kolega otwiera „Nowy wyjazd" — dostaje 0001.
       final proposed = db.getNextReportNumber();
       expect(proposed, '0001/$year');
 
-      // W tym czasie A zapisuje swój wyjazd i (od tej wersji) od razu go
-      // wysyła.
-      final a2 = await phone('ospkielno');
+      // W tym czasie A zapisuje swój wyjazd i od razu go wysyła.
+      final a = await phone('ospkielno');
       await db.addReport(report('r-a', '0001/$year'));
-      await a2.syncAll();
+      await a.syncAll();
 
       // Kolega naciska „Zapisz": kreator pobiera wyjazdy jeszcze raz.
       b = await phone('wojtek');
@@ -249,14 +227,9 @@ void main() {
 
     String numberOf(String id) => db.getReport(id)!.reportNumber;
 
-    /// A (ospkielno) zakłada jednostkę, B (wojtek) dołącza. Zwraca kod.
-    Future<String> unit() async {
-      final a = await phone('ospkielno');
-      final code = await a.createUnit('OSP Kielno');
-      final b = await phone('wojtek');
-      expect(await b.joinUnit(code), isTrue);
-      return code;
-    }
+    /// A (ospkielno) zakłada jednostkę, B (wojtek) dołącza.
+    Future<void> unit() =>
+        phones.unitWith('ospkielno', 'wojtek', unitName: 'OSP Kielno');
 
     test('test 1.7.4: wcześniejszy alarm zatrzymuje 0002, późniejszy '
         'wypadek dostaje 0003 — na obu telefonach', () async {
@@ -363,7 +336,7 @@ void main() {
   });
 
   group('nowy numer dla powtórzonego', () {
-    test('dostaje pierwszy wolny numer w swoim roku i idzie na Dysk',
+    test('dostaje pierwszy wolny numer w swoim roku i idzie na serwer',
         () async {
       await phone('ospkielno');
       await db.addReport(report('r-a', '0002/$year'));
@@ -379,7 +352,7 @@ void main() {
       expect(db.getReport('r-b')!.reportNumber, '0003/$year');
       expect(db.reportsWithNumber('0002/$year', exceptId: 'r-a'), isEmpty);
       expect(db.findDuplicateReportNumbers(), isEmpty);
-      expect(changes, 1, reason: 'zmiana numeru idzie na Dysk');
+      expect(changes, 1, reason: 'zmiana numeru idzie na serwer');
     });
 
     test('numer z poprzedniego roku liczy się w tamtym roku', () async {

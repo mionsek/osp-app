@@ -288,7 +288,7 @@ class _HandoverFormScreenState extends ConsumerState<HandoverFormScreen> {
   /// ekranu szczegółów, skąd można wydrukować lub wysłać potwierdzenie.
   void _afterSave(String handoverId) {
     final syncState = ref.read(syncStateProvider);
-    final inUnit = syncState.isConnected && syncState.unitFolderId != null;
+    final inUnit = syncState.isConnected && syncState.unitId != null;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(inUnit

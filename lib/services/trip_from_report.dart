@@ -27,7 +27,7 @@ class TripFromReport {
   }) {
     final trips = <VehicleTrip>[];
     // Przy uzupełnianiu historii podajemy znacznik z raportu, a nie „teraz".
-    // Dzięki temu każde urządzenie wygeneruje identyczny rekord i Dysk nie
+    // Dzięki temu każde urządzenie wygeneruje identyczny rekord i serwer nie
     // wpadnie w pętlę „mój wpis jest nowszy" przy każdej synchronizacji.
     final now = timestamp ?? DateTime.now();
 

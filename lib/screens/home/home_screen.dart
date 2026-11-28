@@ -328,10 +328,10 @@ class _Greeting extends StatelessWidget {
   /// Zalogowany, ale bez jednostki — dane zostają na telefonie, a nikt
   /// poza nim ich nie zobaczy. Podpowiedź, gdzie dołączyć, jest pod paskiem.
   bool get needsUnit =>
-      syncState.isConnected && syncState.unitFolderId == null;
+      syncState.isConnected && syncState.unitId == null;
 
   String get _role {
-    if (!syncState.isConnected || syncState.unitFolderId == null) {
+    if (!syncState.isConnected || syncState.unitId == null) {
       return 'dane tylko na tym telefonie';
     }
     if (syncState.isCurrentUserAdmin) return 'administrator';

@@ -7,7 +7,7 @@ import 'package:osp_app/models/sync_state.dart';
 import 'package:osp_app/providers/providers.dart';
 import 'package:osp_app/screens/onboarding/onboarding_screen.dart';
 import 'package:osp_app/screens/settings/unit_members_section.dart';
-import 'package:osp_app/services/google_drive_service.dart';
+import 'package:osp_app/models/unit_member.dart';
 
 import '../helpers/test_app.dart';
 
@@ -26,7 +26,7 @@ void main() {
   const admin = SyncState(
     status: SyncStatus.idle,
     userEmail: 'dawid@gmail.com',
-    unitFolderId: 'folder',
+    unitId: 'folder',
     unitInviteCode: 'ABC234',
     founderEmail: 'dawid@gmail.com',
   );
@@ -34,23 +34,14 @@ void main() {
   Future<void> pumpMembers(WidgetTester tester, SyncState state) async {
     sync = fakeSync();
     when(() => sync.listMembers()).thenAnswer((_) async => const [
-          UnitMemberAccess(
-              permissionId: 'm:d',
+          UnitMember(
               email: 'dawid@gmail.com',
+              uid: 'd',
               isOwner: true,
               name: 'Dawid Mionskowski'),
-          UnitMemberAccess(
-              permissionId: 'm:t',
-              email: 'ospkielno@gmail.com',
-              isOwner: false,
-              name: 'OSP Kielno'),
-          UnitMemberAccess(
-              permissionId: 'i:jan@gmail.com',
-              email: 'jan@gmail.com',
-              isOwner: false,
-              invited: true),
+          UnitMember(email: 'ospkielno@gmail.com', uid: 't', name: 'OSP Kielno'),
+          UnitMember(email: 'jan@gmail.com'),
         ]);
-    when(() => sync.memberNotes()).thenAnswer((_) async => const {});
     when(() => sync.setSharedDevice(any(), any())).thenAnswer((_) async {});
 
     await tester.pumpWidget(testApp(
@@ -113,7 +104,7 @@ void main() {
         const SyncState(
           status: SyncStatus.idle,
           userEmail: 'dawid@gmail.com',
-          unitFolderId: 'folder',
+          unitId: 'folder',
           unitInviteCode: 'ABC234',
           founderEmail: 'dawid@gmail.com',
           sharedEmails: ['ospkielno@gmail.com'],
@@ -157,7 +148,7 @@ void main() {
   test('podsumowanie bez zaproszonych — sama liczba', () {
     expect(
       membersSummary(const [
-        UnitMemberAccess(permissionId: 'a', email: 'a@x.pl', isOwner: true),
+        UnitMember(email: 'a@x.pl', uid: 'a', isOwner: true),
       ]),
       'W jednostce: 1',
     );

@@ -83,7 +83,7 @@ class _StepBasicInfoState extends ConsumerState<StepBasicInfo>
     _notesController = TextEditingController(text: widget.notes);
   }
 
-  /// Kreator podmienia numer po pobraniu wyjazdów z Dysku. Pole trzymało
+  /// Kreator podmienia numer po pobraniu wyjazdów z serwera. Pole trzymało
   /// numer z chwili otwarcia, więc pokazywało inny niż ten, z którym
   /// wyjazd się zapisywał.
   @override

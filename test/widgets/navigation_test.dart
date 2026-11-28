@@ -11,12 +11,12 @@ import 'package:osp_app/core/theme/osp_theme.dart';
 import 'package:osp_app/models/models.dart';
 import 'package:osp_app/providers/providers.dart';
 import 'package:osp_app/services/database_service.dart';
-import 'package:osp_app/services/google_auth_service.dart';
+import 'package:osp_app/services/auth_service.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../helpers/test_app.dart';
 
-class _MockAuth extends Mock implements GoogleAuthService {}
+class _MockAuth extends Mock implements AuthService {}
 
 /// Nawigacja na prawdziwym drzewie tras aplikacji.
 ///

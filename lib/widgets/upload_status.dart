@@ -28,7 +28,7 @@ class UploadStatusBanner extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final sync = ref.watch(syncStateProvider);
-    if (!sync.isConnected || sync.unitFolderId == null) {
+    if (!sync.isConnected || sync.unitId == null) {
       return const SizedBox.shrink();
     }
 

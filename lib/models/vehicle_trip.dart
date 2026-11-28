@@ -198,7 +198,7 @@ class VehicleTrip extends HiveObject {
   /// Pola pochodzące z raportu, które ktoś poprawił ręcznie w ewidencji —
   /// wartości z [ReportLinkedField].
   ///
-  /// Uzgadnianie z raportem (przy starcie i po każdym pobraniu z Dysku) ich
+  /// Uzgadnianie z raportem (przy starcie i po każdym pobraniu z serwera) ich
   /// nie nadpisuje. Bez tego godzina czy kierowca poprawione w przejeździe
   /// wracały po cichu do wartości z raportu przy następnym uruchomieniu.
   @HiveField(24, defaultValue: <String>[])

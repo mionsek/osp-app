@@ -4,7 +4,6 @@ import 'package:hive_flutter/hive_flutter.dart';
 import '../core/constants/threat_types.dart';
 import '../core/utils/time_format.dart';
 import '../models/models.dart';
-import '../models/sync_state.dart' show RejectedChange;
 import 'sync_json.dart';
 import 'trip_from_report.dart';
 import 'trip_odometer.dart';
@@ -85,7 +84,7 @@ class DatabaseService {
   //
   // Trzymana lokalnie (settingsBox), a nie w UnitConfig, bo to preferencja
   // widoku konkretnego telefonu — nie ma powodu, żeby zamknięcie karty na
-  // jednym urządzeniu synchronizowało się przez Dysk na wszystkie inne.
+  // jednym urządzeniu synchronizowało się przez serwer na wszystkie inne.
   static const String _gettingStartedDismissedKey = 'gettingStartedDismissed';
 
   bool get isGettingStartedDismissed =>
@@ -96,8 +95,8 @@ class DatabaseService {
 
   // --- Administratorzy jednostki (kopia lokalna) ---
   //
-  // Źródłem prawdy jest `config/admins.json` na Dysku, ale trzymamy też
-  // kopię lokalnie: bez niej po restarcie aplikacji — a zwłaszcza bez
+  // Źródłem prawdy są role członków na serwerze, ale trzymamy też kopię
+  // lokalnie: bez niej po restarcie aplikacji — a zwłaszcza bez
   // zasięgu — nikt nie byłby administratorem i własna jednostka stałaby
   // się nieedytowalna.
   static const String _adminEmailsKey = 'adminEmails';
@@ -111,9 +110,9 @@ class DatabaseService {
   Future<void> cacheAdminEmails(List<String> emails) =>
       settingsBox.put(_adminEmailsKey, emails);
 
-  /// Konto założyciela jest wspólne — z tego samego pliku co lista
-  /// administratorów i z tego samego powodu trzymane też lokalnie: tablet
-  /// bez zasięgu nie może po restarcie wrócić do uprawnień administratora.
+  /// Konto założyciela jest wspólne — z tego samego powodu co lista
+  /// administratorów trzymane też lokalnie: tablet bez zasięgu nie może po
+  /// restarcie wrócić do uprawnień administratora.
   static const String _sharedFounderKey = 'sharedFounder';
 
   bool get cachedSharedFounder => settingsBox.get(_sharedFounderKey) == true;
@@ -133,50 +132,6 @@ class DatabaseService {
 
   Future<void> cacheSharedEmails(List<String> emails) =>
       settingsBox.put(_sharedEmailsKey, emails);
-
-  // --- Lista administratorów sprawdzona na tym telefonie (fix/067) ---
-  //
-  // Zmianę `admins.json` telefon przyjmuje tylko od właściciela folderu albo
-  // od administratora z listy, którą już zna. Telefon świeżo w jednostce nie
-  // zna żadnej — bierze pierwszą, jaką zastanie. Telefon po aktualizacji
-  // ma już listę z poprzednich synchronizacji, więc ją uznaje.
-  static const String _adminsTrustedKey = 'adminsTrusted';
-
-  bool get adminsTrusted =>
-      settingsBox.get(_adminsTrustedKey) == true ||
-      cachedAdminEmails.isNotEmpty;
-
-  Future<void> setAdminsTrusted(bool trusted) =>
-      settingsBox.put(_adminsTrustedKey, trusted);
-
-  // --- Zmiany z Dysku pominięte przez ten telefon (fix/067) ---
-  static const String _rejectedChangesKey = 'rejectedChanges';
-  static const int _rejectedChangesKept = 20;
-
-  /// Najnowsze pierwsze.
-  List<RejectedChange> get rejectedChanges {
-    final raw = settingsBox.get(_rejectedChangesKey);
-    if (raw is! String) return const [];
-    try {
-      return (jsonDecode(raw) as List)
-          .map(RejectedChange.fromJson)
-          .whereType<RejectedChange>()
-          .toList();
-    } catch (_) {
-      return const [];
-    }
-  }
-
-  Future<void> addRejectedChange(RejectedChange change) => settingsBox.put(
-        _rejectedChangesKey,
-        jsonEncode([
-          change.toJson(),
-          ...rejectedChanges.take(_rejectedChangesKept - 1).map((c) => c.toJson()),
-        ]),
-      );
-
-  Future<void> clearRejectedChanges() =>
-      settingsBox.delete(_rejectedChangesKey);
 
   // --- Dane jednostki: kiedy ostatnio zmienione na tym telefonie ---
   //
@@ -199,11 +154,11 @@ class DatabaseService {
   // Usunięty rekord znika z bazy, ale ślad po nim musi zostać: inaczej przy
   // najbliższej synchronizacji wracał z Dysku, bo plik nadal tam leżał, a
   // telefony kolegów wysyłały swoją kopię z powrotem. Znacznik to sam
-  // identyfikator i chwila usunięcia (`SyncJson.tombstone`) — trafia na Dysk
+  // identyfikator i chwila usunięcia (`SyncJson.tombstone`) — trafia na serwer
   // w miejsce rekordu. Od fix/062 bez treści rekordu, także te starsze.
   //
   // Trzymany jako tekst JSON: Hive oddaje zagnieżdżone mapy jako
-  // Map<dynamic, dynamic>, a znacznik ma wyglądać dokładnie jak plik na Dysku.
+  // Map<dynamic, dynamic>, a znacznik ma wyglądać dokładnie jak wpis na serwerze.
   static const String _tombstonesKey = 'syncTombstones';
 
   Map<String, String> get _tombstoneStore =>
@@ -225,7 +180,7 @@ class DatabaseService {
             jsonDecode(e.value) as Map<String, dynamic>,
       ];
 
-  /// Zapisuje znacznik — zawsze bez treści rekordu, także gdy z Dysku
+  /// Zapisuje znacznik — zawsze bez treści rekordu, także gdy z serwera
   /// przyszedł stary, pełny znacznik.
   Future<void> saveTombstone(
       String kind, String id, Map<String, dynamic> json) async {
@@ -235,7 +190,7 @@ class DatabaseService {
   }
 
   /// Usuwa treść rekordów ze znaczników zapisanych przed fix/062. Kolejna
-  /// synchronizacja wyśle te odchudzone znaczniki na Dysk w miejsce starych
+  /// synchronizacja wyśle te odchudzone znaczniki na serwer w miejsce starych
   /// plików z pełną treścią.
   Future<void> slimStoredTombstones() async {
     final store = _tombstoneStore;
@@ -261,7 +216,7 @@ class DatabaseService {
   Future<void> _tombstone(String kind, String id, Map<String, dynamic> json) =>
       saveTombstone(kind, id, SyncJson.tombstone(json, DateTime.now()));
 
-  /// Usunięcie, które przyszło z Dysku: kasuje rekord bez wystawiania
+  /// Usunięcie, które przyszło z serwera: kasuje rekord bez wystawiania
   /// nowego znacznika — zapisuje ten, który przyszedł.
   Future<void> applyRemoteDeletion(
       String kind, String id, Map<String, dynamic> tombstone) async {
@@ -290,7 +245,7 @@ class DatabaseService {
   /// identyfikatorach — przy dołączaniu do jednostki obowiązuje jej lista.
   ///
   /// Bez znaczników usunięcia: tych wpisów jednostka nigdy nie miała, więc
-  /// nie ma czego usuwać na Dysku. Wcześniej lokalne wpisy (np. testowy wóz
+  /// nie ma czego usuwać na serwerze. Wcześniej lokalne wpisy (np. testowy wóz
   /// z trybu offline) przy pierwszej synchronizacji dopisywały się do listy
   /// całej jednostki — także z telefonu bez uprawnień administratora.
   Future<void> keepOnlyListEntries(String kind, Set<String> ids) async {
@@ -310,10 +265,6 @@ class DatabaseService {
   }
 
   // --- Usunięcie danych jednostki z telefonu ---
-
-  /// Pamięć plików Dysku z ostatniej synchronizacji (prowadzi ją
-  /// `SyncService`).
-  static const String driveFileCacheKey = 'driveFileCache';
 
   /// Klucze `settings`, które opisują telefon, a nie jednostkę — zostają po
   /// usunięciu danych. Wszystko inne w `settings` jest danymi jednostki,
@@ -765,7 +716,7 @@ class DatabaseService {
     final reportId = trip.reportId;
     final report = reportId == null ? null : getReport(reportId);
     if (report == null) {
-      // Raportu chwilowo nie ma (np. skasowany tu, a wróci z Dysku) —
+      // Raportu chwilowo nie ma (np. skasowany tu, a wróci z serwera) —
       // poprawki muszą przetrwać do jego powrotu.
       trip.overriddenFields = ReportLinkedField.all
           .where((f) => trip.overriddenFields.contains(f) || touched.contains(f))
@@ -869,7 +820,7 @@ class DatabaseService {
   /// zostają, żeby statystyki dalej pokazywały je jako do poprawki.
   ///
   /// Bez zmiany `updatedAt`: każde urządzenie liczy to samo, więc nie ma
-  /// czego rozsyłać, a stempel „teraz" wywołałby lawinę zapisów na Dysk.
+  /// czego rozsyłać, a stempel „teraz" wywołałby lawinę zapisów na serwer.
   Future<int> fixOvernightReturnTimes() async {
     var fixed = 0;
     for (final report in reportsBox.values.toList()) {
@@ -913,7 +864,7 @@ class DatabaseService {
   /// Raporty już przepisane do ewidencji.
   ///
   /// Lista, a nie pojedyncza flaga „zrobione": raporty potrafią dojść później
-  /// z Dysku i one też muszą trafić do ewidencji, a jednocześnie przejazd
+  /// z serwera i one też muszą trafić do ewidencji, a jednocześnie przejazd
   /// skasowany ręcznie nie może wracać przy każdym uruchomieniu.
   static const String _backfilledReportIdsKey = 'tripsBackfilledReportIds';
 

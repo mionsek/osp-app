@@ -579,47 +579,4 @@ void main() {
       );
     });
   });
-
-  group('Przejazd ze starej wersji aplikacji', () {
-    VehicleTrip trip({
-      DateTime? ret,
-      String driver = '',
-      List<String> overrides = const [],
-    }) =>
-        VehicleTrip(
-          id: 'trip_r1_v1',
-          vehicleId: 'v1',
-          date: DateTime(2026, 8, 10),
-          departureTime: DateTime(2026, 8, 10, 8, 0),
-          returnTime: ret,
-          driverName: driver,
-          reportId: 'r1',
-          createdAt: DateTime(2026, 8, 10),
-          updatedAt: DateTime(2026, 8, 10),
-          overriddenFields: List.of(overrides),
-        );
-
-    test('cofniete przez stara wersje pola wracaja z telefonu', () {
-      final local = trip(
-        ret: DateTime(2026, 8, 10, 10, 0),
-        driver: 'Nowak Adam',
-        overrides: [ReportLinkedField.returnTime, ReportLinkedField.driver],
-      );
-      final remote = trip(ret: DateTime(2026, 8, 10, 11, 0), driver: 'Inny');
-
-      SyncService.keepLocalOverrides(remote, local);
-
-      expect(remote.returnTime, DateTime(2026, 8, 10, 10, 0));
-      expect(remote.driverName, 'Nowak Adam');
-      expect(remote.overriddenFields, local.overriddenFields);
-    });
-
-    test('bez lokalnych poprawek plik z Dysku wchodzi bez zmian', () {
-      final remote = trip(ret: DateTime(2026, 8, 10, 11, 0));
-
-      SyncService.keepLocalOverrides(remote, trip());
-
-      expect(remote.returnTime, DateTime(2026, 8, 10, 11, 0));
-    });
-  });
 }

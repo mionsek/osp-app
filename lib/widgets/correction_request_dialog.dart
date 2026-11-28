@@ -17,7 +17,7 @@ const _reasons = <String>[
 /// w danych ratownika.
 ///
 /// Zgłoszenie wychodzi zwykłą wiadomością (e-mail lub dowolny komunikator
-/// z listy udostępniania), a nie przez Dysk — administrator dostaje je
+/// z listy udostępniania), a nie przez synchronizację — administrator dostaje je
 /// tam, gdzie i tak zagląda, i nie trzeba budować obiegu zatwierdzania.
 Future<void> showCorrectionRequestDialog({
   required BuildContext context,

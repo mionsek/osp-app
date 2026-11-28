@@ -1,4 +1,5 @@
-/// Budowanie nazw plików bezpiecznych dla systemu plików i Dysku Google.
+/// Budowanie nazw plików (PDF, Excel) bezpiecznych dla systemu plików,
+/// poczty i okna udostępniania.
 ///
 /// Wydzielone, bo sanityzacja była powielona w czterech miejscach —
 /// i to **trzema różnymi wyrażeniami regularnymi**. Jedno usuwało tylko
@@ -11,7 +12,7 @@ class FileNames {
   /// Polskie znaki i ich odpowiedniki bez ogonków.
   ///
   /// Nazwy plików trzymamy w czystym ASCII, bo trafiają mailem do gminy i KP PSP,
-  /// na Dysk Google i do okna udostępniania Androida — a starsze klienty poczty
+  /// i do okna udostępniania Androida — a starsze klienty poczty
   /// potrafią poprzestawiać znaki w nazwie załącznika. Transliteracja daje
   /// nazwę odporną na to wszystko i **nadal czytelną**.
   ///
@@ -38,18 +39,6 @@ class FileNames {
     return cleaned.replaceAll(RegExp(r'_+'), '_').replaceAll(RegExp(r'^_|_$'), '');
   }
 
-  /// Sanityzacja sprzed wprowadzenia transliteracji — polskie znaki lądowały
-  /// jako podkreślenia i znikały z brzegów nazwy.
-  ///
-  /// Potrzebna **wyłącznie** do odnalezienia na Dysku plików zapisanych
-  /// starszą wersją aplikacji, żeby przy najbliższej synchronizacji zmienić im
-  /// nazwę zamiast utworzyć obok drugi plik z tą samą treścią. Do niczego
-  /// nowego jej nie używamy.
-  static String sanitizeLegacy(String s) {
-    final cleaned = s.replaceAll(RegExp(r'[^\w\-]+'), '_');
-    return cleaned.replaceAll(RegExp(r'_+'), '_').replaceAll(RegExp(r'^_|_$'), '');
-  }
-
   /// Data w formacie `2026-08-19` — sortowalna leksykograficznie, więc pliki
   /// w folderze układają się chronologicznie bez dodatkowej logiki.
   static String date(DateTime d) =>
@@ -60,18 +49,4 @@ class FileNames {
   /// Rok i miesiąc: `2026-08`.
   static String yearMonth(int year, int month) =>
       '${year.toString().padLeft(4, '0')}-${month.toString().padLeft(2, '0')}';
-
-  /// Krótki, stały skrót tekstu: 8 znaków szesnastkowych (FNV-1a, 32 bity).
-  ///
-  /// Nie `String.hashCode` — ten nie ma gwarancji, że da ten sam wynik na
-  /// innym telefonie czy w innej wersji Darta, a nazwa pliku na Dysku musi
-  /// wyjść identycznie na każdym urządzeniu.
-  static String shortHash(String s) {
-    var hash = 0x811c9dc5;
-    for (final unit in s.codeUnits) {
-      hash ^= unit;
-      hash = (hash * 0x01000193).toUnsigned(32);
-    }
-    return hash.toRadixString(16).padLeft(8, '0');
-  }
 }

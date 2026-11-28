@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import '../models/models.dart';
 
-/// Rodzaje rekordów synchronizowanych z Dyskiem — klucze znaczników
+/// Rodzaje rekordów synchronizowanych z serwerem — klucze znaczników
 /// usunięcia i pamięci plików.
 class SyncKind {
   SyncKind._();
@@ -16,7 +16,7 @@ class SyncKind {
   static const String equipmentWork = 'equipmentWork';
 }
 
-/// Zapis rekordów na Dysk i odczyt z powrotem.
+/// Zapis rekordów do synchronizacji i odczyt z powrotem.
 ///
 /// Osobno od `SyncService`, bo korzysta z tego także baza przy usuwaniu:
 /// znacznik usunięcia to ostatnia treść rekordu z dopiskiem `deleted`.
@@ -57,7 +57,7 @@ class SyncJson {
   static const _tombstoneFields = {'id', 'updatedAt', 'deleted', 'deletedAt'};
 
   /// Znacznik bez treści rekordu — także stary, pełny (sprzed fix/062),
-  /// który przyszedł z Dysku albo leży w telefonie.
+  /// który przyszedł z serwera albo leży w telefonie.
   static Map<String, dynamic> slimTombstone(Map<String, dynamic> json) => {
         for (final e in json.entries)
           if (_tombstoneFields.contains(e.key)) e.key: e.value,
@@ -70,7 +70,7 @@ class SyncJson {
     return raw is String ? DateTime.tryParse(raw) : null;
   }
 
-  /// Skrót treści (FNV-1a, 64 bity) — do sprawdzenia, czy plik na Dysku
+  /// Skrót treści (FNV-1a, 64 bity) — do sprawdzenia, czy wpis na serwerze
   /// różni się od wersji w telefonie. Wystarczy wykryć zmianę, nie chroni
   /// przed celowym podrabianiem.
   static String contentHash(Object json) {
@@ -287,7 +287,7 @@ class SyncJson {
       );
 
   /// Identyfikator ratownika z pliku — pusty albo innego typu traktujemy
-  /// jak brak, żeby zły wpis na Dysku nie zatrzymał synchronizacji.
+  /// jak brak, żeby zły wpis na serwerze nie zatrzymał synchronizacji.
   static String? _optionalId(Object? value) =>
       value is String && value.isNotEmpty ? value : null;
 

@@ -1,37 +1,32 @@
-import 'dart:convert';
 import 'dart:io';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
-import 'package:http/http.dart' as http;
 import 'package:osp_app/models/models.dart';
 import 'package:osp_app/models/sync_state.dart';
 import 'package:osp_app/services/database_service.dart';
 import 'package:osp_app/services/sync_json.dart';
 import 'package:osp_app/services/sync_service.dart';
 
-import 'helpers/fake_drive.dart';
-import 'helpers/phone_db.dart';
+import 'helpers/server_phones.dart';
 
-/// Listy ratowników i pojazdów, jednostki na koncie i to, co synchronizacja
+/// Listy ratowników, pojazdów i sprzętu jednostki i to, co synchronizacja
 /// mówi po skończeniu.
 ///
 /// Pytanie z testów 1.7.3: „kolega po dołączeniu powinien widzieć te same
 /// wozy i ratowników co ja, a bez uprawnień administratora nie powinien móc
-/// ich zmieniać". Z ekranu nie mógł — ale jego telefon wysyłał na Dysk
-/// własną kopię list, razem z wpisami sprzed dołączenia.
+/// ich zmieniać".
 void main() {
   late Directory root;
-  late FakeDrive drive;
+  late ServerPhones phones;
   final db = DatabaseService();
 
-  setUpAll(() {
-    DatabaseService.registerAdapters();
-  });
+  setUpAll(DatabaseService.registerAdapters);
 
   setUp(() async {
     root = await Directory.systemTemp.createTemp('osp_unit_lists');
-    drive = FakeDrive();
+    phones = ServerPhones(root);
   });
 
   tearDown(() async {
@@ -39,15 +34,7 @@ void main() {
     if (root.existsSync()) root.deleteSync(recursive: true);
   });
 
-  /// Przełącza „telefon" (własna baza, wspólny Dysk) zalogowany kontem
-  /// `<name>@gmail.com`.
-  Future<SyncService> phone(String name) async {
-    await openPhoneDb(root, name);
-    drive.account = '$name@gmail.com';
-    final sync = SyncService(db, FakeAuth('$name@gmail.com'), drive);
-    await sync.restoreState();
-    return sync;
-  }
+  Future<SyncService> phone(String name) => phones.phone(name);
 
   Firefighter ff(String id, String lastName) => Firefighter(
         id: id,
@@ -74,28 +61,26 @@ void main() {
         updatedAt: DateTime(2026, 8, 10),
       );
 
-  /// Nazwiska i nazwy na listach jednostki — tak, jak leżą na Dysku.
-  List<String> onDrive(String fileName) {
-    final file = drive.files.values.firstWhere((f) => f.name == fileName);
-    final data =
-        (jsonDecode(file.content!) as Map<String, dynamic>)['data'] as List;
-    return [
-      for (final e in data.cast<Map<String, dynamic>>())
-        if (!SyncJson.isTombstone(e)) (e['lastName'] ?? e['name']) as String,
-    ]..sort();
-  }
+  /// Nazwiska i nazwy na liście jednostki — tak, jak są na serwerze.
+  Future<List<String>> onServer(String code, String collection) async => [
+        for (final e in await phones.live(code, collection))
+          (e['lastName'] ?? e['name']) as String,
+      ]..sort();
 
-  /// A (ospkielno) zakłada jednostkę z jednym ratownikiem i jednym wozem.
+  /// A (ospkielno) zakłada jednostkę z jednym ratownikiem i jednym wozem
+  /// i zaprasza Wojtka.
   Future<String> unitWithLists() async {
     final a = await phone('ospkielno');
     await db.addFirefighter(ff('f1', 'Kowalski'));
     await db.addVehicle(vehicle('v1', 'GBA 2,5/16'));
-    return a.createUnit('OSP Kielno');
+    final code = await phones.create(a, 'OSP Kielno');
+    await a.inviteMember('wojtek@gmail.com');
+    return code;
   }
 
   group('dołączenie do jednostki', () {
     test('kolega widzi listy jednostki, a jego wpisy sprzed dołączenia '
-        'znikają z telefonu i nie trafiają na Dysk', () async {
+        'znikają z telefonu i nie trafiają na serwer', () async {
       final code = await unitWithLists();
 
       final b = await phone('wojtek');
@@ -104,12 +89,7 @@ void main() {
       await db.addVehicle(vehicle('x2', 'Ffgt'));
       await db.addReport(report('r-b'));
 
-      final unit = (await b.lookupUnit(code) as UnitFound).unit;
-      final localOnly = await b.localOnlyListEntries(unit.folderId);
-      expect(localOnly.firefighters, ['Testowy Jan']);
-      expect(localOnly.vehicles, ['Ffgt']);
-
-      await b.joinFoundUnit(unit, code);
+      expect(await b.joinUnit(code), isTrue);
       expect(db.getAllFirefighters().map((f) => f.id), ['f1']);
       expect(db.getAllVehicles().map((v) => v.id), ['v1']);
       expect(db.tombstonesOf(SyncKind.firefighter), isEmpty,
@@ -117,28 +97,32 @@ void main() {
 
       await b.syncAll();
       expect(b.state.status, SyncStatus.idle);
-      expect(onDrive('firefighters.json'), ['Kowalski']);
-      expect(onDrive('vehicles.json'), ['GBA 2,5/16']);
-      expect(drive.jsonIn('2026').any((j) => j['id'] == 'r-b'), isTrue,
+      expect(await onServer(code, 'firefighters'), ['Kowalski']);
+      expect(await onServer(code, 'vehicles'), ['GBA 2,5/16']);
+      expect((await phones.live(code, 'reports')).map((r) => r['id']),
+          contains('r-b'),
           reason: 'wyjazdy z telefonu nadal trafiają do jednostki');
     });
 
-    test('uszkodzona lista na Dysku nie czyści listy z telefonu', () async {
+    test('uszkodzony wpis listy na serwerze jest pomijany, reszta listy '
+        'dociera', () async {
       final code = await unitWithLists();
-      drive.files.values
-          .firstWhere((f) => f.name == 'firefighters.json')
-          .content = '{to nie jest json';
+      await phones.fs
+          .doc('units/${await phones.unitIdOf(code)}/firefighters/zepsuty')
+          .set({
+        'data': {'id': 'zepsuty', 'lastName': 42},
+        'deleted': false,
+        'serverAt': FieldValue.serverTimestamp(),
+        'by': 'ospkielno@gmail.com',
+      });
 
       final b = await phone('wojtek');
-      await db.addFirefighter(ff('x1', 'Testowy'));
-      final unit = (await b.lookupUnit(code) as UnitFound).unit;
-      expect((await b.localOnlyListEntries(unit.folderId)).firefighters,
-          isEmpty, reason: 'nie ostrzegamy o czymś, czego nie zrobimy');
-
-      await b.joinFoundUnit(unit, code);
-      expect(db.getFirefighter('x1'), isNotNull);
-      expect(db.getAllVehicles().map((v) => v.id), ['v1'],
-          reason: 'czytelna lista pojazdów zastępuje lokalną jak zwykle');
+      expect(await b.joinUnit(code), isTrue);
+      expect(db.getAllFirefighters().map((f) => f.id), ['f1']);
+      await b.syncAll();
+      expect(b.state.status, SyncStatus.idle);
+      expect(b.state.skippedFiles, 1,
+          reason: 'pominięty i policzony, ale nie zatrzymuje synchronizacji');
     });
 
     test('ponowne dołączenie do tej samej jednostki niczego nie usuwa',
@@ -147,80 +131,28 @@ void main() {
       final a = await phone('ospkielno');
       await a.syncAll();
 
-      final unit = (await a.lookupUnit(code) as UnitFound).unit;
-      expect((await a.localOnlyListEntries(unit.folderId)).isEmpty, isTrue);
-      await a.joinFoundUnit(unit, code);
+      expect(await a.joinUnit(code), isTrue);
       expect(db.getAllFirefighters().map((f) => f.id), ['f1']);
     });
   });
 
-  group('listy prowadzi administrator', () {
-    test('telefon bez uprawnień nie wysyła swojej kopii list', () async {
-      final code = await unitWithLists();
-      final b = await phone('wojtek');
-      expect(await b.joinUnit(code), isTrue);
-      expect(b.state.isCurrentUserAdmin, isFalse);
+  test('administrator nadany przez założyciela wysyła zmiany list',
+      () async {
+    final code = await unitWithLists();
+    var a = await phone('ospkielno');
+    await a.listMembers();
+    await a.grantAdmin('wojtek@gmail.com');
 
-      // Z ekranu się nie da — ale gdyby wpis jakoś powstał (np. stara
-      // wersja aplikacji), nie może trafić do całej jednostki.
-      await db.addFirefighter(ff('x1', 'Nowak'));
-      await b.syncAll();
+    final b = await phone('wojtek');
+    expect(await b.joinUnit(code), isTrue);
+    expect(b.state.isCurrentUserAdmin, isTrue);
+    await db.addFirefighter(ff('f2', 'Nowak'));
+    await b.syncAll();
 
-      expect(b.state.status, SyncStatus.idle);
-      expect(onDrive('firefighters.json'), ['Kowalski']);
-    });
-
-    test('administrator nadany przez założyciela wysyła zmiany list',
-        () async {
-      final code = await unitWithLists();
-      var a = await phone('ospkielno');
-      await a.grantAdmin('wojtek@gmail.com');
-
-      final b = await phone('wojtek');
-      expect(await b.joinUnit(code), isTrue);
-      expect(b.state.isCurrentUserAdmin, isTrue);
-      await db.addFirefighter(ff('f2', 'Nowak'));
-      await b.syncAll();
-
-      expect(onDrive('firefighters.json'), ['Kowalski', 'Nowak']);
-      a = await phone('ospkielno');
-      await a.syncAll();
-      expect(db.getFirefighter('f2'), isNotNull, reason: 'dotarło do A');
-    });
-  });
-
-  group('jednostki na koncie', () {
-    test('widać jednostki założone na tym koncie, z kodem, najnowsze '
-        'pierwsze — a nie cudze', () async {
-      // Jak w aplikacji: nazwa jednostki jest zapisana, zanim powstanie
-      // folder — synchronizacja bierze ją z ustawień telefonu.
-      Future<String> create(SyncService sync, String name) async {
-        await db.saveConfig(db.getConfig().copyWith(unitFullName: name));
-        return sync.createUnit(name);
-      }
-
-      var a = await phone('ospkielno');
-      final first = await create(a, 'OSP Kielno');
-      a = await phone('ospkielno');
-      final second = await create(a, 'OSP Kielno');
-      await create(await phone('obcy'), 'OSP Gdzieś');
-
-      a = await phone('ospkielno');
-      final units = await a.ownUnits();
-
-      expect(units.map((u) => u.inviteCode), unorderedEquals([first, second]));
-      expect(units.every((u) => u.unitName == 'OSP Kielno'), isTrue);
-      expect(
-        units.first.createdAt!.isAfter(units.last.createdAt!) ||
-            units.first.createdAt == units.last.createdAt,
-        isTrue,
-      );
-    });
-
-    test('nowe konto nie ma jednostek', () async {
-      final a = await phone('nowy');
-      expect(await a.ownUnits(), isEmpty);
-    });
+    expect(await onServer(code, 'firefighters'), ['Kowalski', 'Nowak']);
+    a = await phone('ospkielno');
+    await a.syncAll();
+    expect(db.getFirefighter('f2'), isNotNull, reason: 'dotarło do A');
   });
 
   group('wynik synchronizacji', () {
@@ -252,22 +184,20 @@ void main() {
       await unitWithLists();
       final a = await phone('ospkielno');
       await db.addReport(report('r1'));
-      drive.failWrites = http.ClientException(
-        'Software caused connection abort',
-        Uri.parse('https://www.googleapis.com/upload/drive/v3/files'),
-      );
+      phones.auth.failRefresh =
+          FirebaseException(plugin: 'cloud_firestore', code: 'unavailable');
 
       final before = DateTime.now();
       await a.syncAll();
 
       expect(a.state.status, SyncStatus.error);
       expect(a.state.errorMessage,
-          contains('Połączenie z internetem zostało przerwane'));
+          contains('Serwer jednostki chwilowo nie odpowiada'));
       expect(a.state.errorTime, isNotNull);
       expect(a.state.errorTime!.isBefore(before), isFalse);
       expect(db.getReport('r1'), isNotNull);
 
-      drive.failWrites = null;
+      phones.auth.failRefresh = null;
       await a.syncAll();
       expect(a.state.status, SyncStatus.idle);
       expect(a.state.errorMessage, isNull);

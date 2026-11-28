@@ -19,7 +19,7 @@ class HandoverDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final db = ref.watch(databaseServiceProvider);
-    // Po pobraniu nowszej wersji z Dysku.
+    // Po pobraniu nowszej wersji z serwera.
     ref.watch(handoversProvider);
     final handover = db.getHandover(handoverId);
     final firefighters = ref.watch(firefightersProvider);

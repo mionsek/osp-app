@@ -71,7 +71,7 @@ void main() {
   const founder = SyncState(
     status: SyncStatus.idle,
     userEmail: 'dawid@gmail.com',
-    unitFolderId: 'folder',
+    unitId: 'folder',
     founderEmail: 'dawid@gmail.com',
   );
 

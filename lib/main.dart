@@ -21,7 +21,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await DatabaseService.initialize();
   // Serwer jednostek (feature/081). Konfiguracja z google-services.json;
-  // bez niej aplikacja działa dalej (Dysk, tryb offline).
+  // bez niej aplikacja działa dalej, tylko na telefonie (tryb offline).
   try {
     await Firebase.initializeApp();
     // Kolejkę zmian bez sieci prowadzi już lokalna baza (Hive) — druga
@@ -128,7 +128,7 @@ class _OspAppState extends ConsumerState<OspApp> with WidgetsBindingObserver {
       await _runMigrations(ref);
 
       if (!mounted) return;
-      final authService = ref.read(googleAuthServiceProvider);
+      final authService = ref.read(authServiceProvider);
       await authService.trySilentSignIn();
       if (!mounted) return;
       await ref.read(syncStateProvider.notifier).initialize();

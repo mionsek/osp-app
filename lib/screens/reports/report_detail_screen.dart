@@ -20,7 +20,7 @@ class ReportDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final db = ref.watch(databaseServiceProvider);
-    // Po zmianie numeru albo po pobraniu nowszej wersji z Dysku.
+    // Po zmianie numeru albo po pobraniu nowszej wersji z serwera.
     ref.watch(reportsProvider);
     final report = db.getReport(reportId);
     final firefighters = ref.watch(firefightersProvider);
@@ -252,7 +252,7 @@ class _Row extends StatelessWidget {
 }
 
 /// Ten sam numer ma inny wyjazd — zwykle dwa telefony nadały go w tych
-/// samych minutach, zanim któryś wysłał swój wyjazd na Dysk.
+/// samych minutach, zanim któryś wysłał swój wyjazd na serwer.
 ///
 /// Wcześniej było o tym tylko 6 sekund paska na ekranie głównym.
 class _DuplicateNumberNotice extends ConsumerWidget {
