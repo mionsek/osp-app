@@ -375,7 +375,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 'Jednostka zostaje przy tym koncie, także gdy zmieni się '
                 'zarząd.',
             onTap: _isSigningIn ? () {} : _handleGoogleSignIn,
-            badge: isTabletLayout(context) ? 'zalecane na tablecie' : null,
+            badge: isTabletLayout(context) ? 'zalecane' : null,
           ),
           const SizedBox(height: 16),
           _ChoiceCard(
@@ -384,7 +384,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             subtitle: 'Na swój telefon — np. jan.kowalski@gmail.com.\n'
                 'Wyjazdy podpisują się Tobą.',
             onTap: _isSigningIn ? () {} : _handleGoogleSignIn,
-            badge: isTabletLayout(context) ? null : 'zalecane na telefonie',
+            badge: isTabletLayout(context) ? null : 'zalecane',
           ),
           if (_isSigningIn) ...[
             const SizedBox(height: 24),
